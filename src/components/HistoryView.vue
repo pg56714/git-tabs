@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { loadLog, loadDetail, select, openMenu, type RepoState } from '../store'
 import { layout, LANE_COLORS } from '../lib/graph'
@@ -13,11 +13,25 @@ const p = defineProps<{ r: RepoState }>()
 const ROW = 28
 const LANE = 16
 // Center of the first lane; the same margin is kept on the right of the last lane.
-const PAD = 14
+const PAD = 9
+// Room after the last lane: the dot sits close to the message, like Fork.
+const TAIL = 7
 const list = ref<HTMLElement | null>(null)
 const q = ref(p.r.logQuery)
 const graph = computed(() => (p.r.logQuery || p.r.logPath ? null : layout(p.r.commits)))
-const gw = computed(() => (graph.value ? (Math.min(10, Math.max(1, ...graph.value.map((g) => g.width))) - 1) * LANE + PAD * 2 : 20))
+const gw = computed(() => (graph.value ? (Math.min(10, Math.max(1, ...graph.value.map((g) => g.width))) - 1) * LANE + PAD + TAIL : 16))
+
+// The message column always gets the room; author and date drop out when the list is narrow.
+const listWidth = ref(1000)
+const showAuthor = computed(() => listWidth.value >= 720)
+const showDate = computed(() => listWidth.value >= 520)
+const cols = computed(() => [`${gw.value}px`, 'minmax(120px,1fr)', showAuthor.value ? '110px' : '', '64px', showDate.value ? '88px' : ''].filter(Boolean).join(' '))
+let ro: ResizeObserver | undefined
+onMounted(() => {
+  ro = new ResizeObserver(([e]) => (listWidth.value = e.contentRect.width))
+  if (list.value) ro.observe(list.value)
+})
+onBeforeUnmount(() => ro?.disconnect())
 
 const virt = useVirtualizer(
   computed(() => ({ count: p.r.commits.length, getScrollElement: () => list.value, estimateSize: () => ROW, overscan: 20 })),
@@ -106,7 +120,7 @@ function path(g: ReturnType<typeof layout>[number]) {
           :key="r.commits[it.index].sha"
           class="cr"
           :class="{ on: r.commits[it.index].sha === r.selCommit }"
-          :style="{ transform: `translateY(${it.start}px)`, gridTemplateColumns: `${gw}px minmax(0,1fr) 120px 64px 92px` }"
+          :style="{ transform: `translateY(${it.start}px)`, gridTemplateColumns: cols }"
           @click="pick(r.commits[it.index].sha)"
           @contextmenu.prevent="menu($event, r.commits[it.index].sha)"
         >
@@ -118,9 +132,9 @@ function path(g: ReturnType<typeof layout>[number]) {
           <span class="msg">
             <span v-for="x in r.commits[it.index].refs" :key="x.kind + x.name" class="ref" :class="refClass(x.kind)">{{ x.name }}</span>{{ r.commits[it.index].subject }}
           </span>
-          <span class="meta">{{ r.commits[it.index].author }}</span>
+          <span v-if="showAuthor" class="meta">{{ r.commits[it.index].author }}</span>
           <span class="meta mono">{{ short(r.commits[it.index].sha) }}</span>
-          <span class="meta" :title="dateTime(r.commits[it.index].time)">{{ ago(r.commits[it.index].time) }}</span>
+          <span v-if="showDate" class="meta" :title="dateTime(r.commits[it.index].time)">{{ ago(r.commits[it.index].time) }}</span>
         </div>
       </div>
     </div>
@@ -165,7 +179,7 @@ function path(g: ReturnType<typeof layout>[number]) {
 .search { max-width: 340px; }
 .pill { display: inline-flex; align-items: center; gap: 4px; background: var(--accentbg); color: var(--accenttx); padding: 2px 4px 2px 10px; border-radius: 12px; font-size: 12px; }
 .pill .x { border: 0; background: none; cursor: pointer; color: inherit; font-size: 14px; }
-.hist { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 46%); flex: 1; min-height: 0; }
+.hist { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 42%); flex: 1; min-height: 0; }
 .clist { overflow: auto; border-right: 1px solid var(--border); outline: none; position: relative; }
 .cr { position: absolute; left: 0; right: 0; top: 0; display: grid; align-items: center; height: 28px; padding-right: 10px; cursor: pointer; gap: 6px; }
 .cr:hover { background: var(--hover); }
