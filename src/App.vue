@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watchEffect } from 'vue'
 import { onRepoChanged } from './api'
-import { S, R, init, startTimers, onRepoChangedOnDisk, switchTab, moveSel, toggleSeen, refresh, closeModal } from './store'
+import { S, R, init, startTimers, onRepoChangedOnDisk, switchTab, moveSel, moveCommit, toggleSeen, refresh, closeModal } from './store'
 import { stageToggle } from './actions'
 import TabBar from './components/TabBar.vue'
 import Toolbar from './components/Toolbar.vue'
@@ -41,6 +41,8 @@ function onKey(e: KeyboardEvent) {
     if (S.menu) S.menu = null
     else if (S.palette) S.palette = false
     else if (S.modal) closeModal(null)
+    // Leaving a text box hands the keys back to the shortcuts.
+    else if (typing()) (document.activeElement as HTMLElement).blur()
     return
   }
   const ctrl = e.ctrlKey || e.metaKey
@@ -65,21 +67,27 @@ function onKey(e: KeyboardEvent) {
     if (repo.value) refresh(repo.value)
     return
   }
-  if (S.modal || S.palette || typing() || ctrl || e.altKey) return
+  if (S.modal || S.palette || S.menu || typing() || ctrl || e.altKey) return
   const r = repo.value
   if (!r) return
-  const k = e.key.toLowerCase()
-  if (k === 'j') moveSel(r, 1)
-  else if (k === 'k') moveSel(r, -1)
-  else if (k === 'v') toggleSeen(r)
-  else if (k === 's' && r.view === 'changes') stageToggle(r)
-  else if (k === 'n' || k === 'p') window.dispatchEvent(new CustomEvent('git-tabs:hunk', { detail: k === 'n' ? 1 : -1 }))
+  const review = r.view === 'changes' || r.view === 'range'
+  const k = e.key
+  if (k === 'ArrowDown' || k === 'ArrowUp') {
+    const d = k === 'ArrowDown' ? 1 : -1
+    if (review) moveSel(r, d)
+    else if (r.view === 'history') moveCommit(r, d)
+    else return
+  } else if (k === 'ArrowRight' || k === 'ArrowLeft') window.dispatchEvent(new CustomEvent('git-tabs:hunk', { detail: k === 'ArrowRight' ? 1 : -1 }))
+  // Enter would also "click" whatever button kept focus, so it is taken here first.
+  else if (k === 'Enter' && review) toggleSeen(r)
+  else if ((k === 's' || k === 'S') && r.view === 'changes') stageToggle(r)
   else return
   e.preventDefault()
+  e.stopPropagation()
 }
 
 onMounted(async () => {
-  window.addEventListener('keydown', onKey)
+  window.addEventListener('keydown', onKey, true)
   window.addEventListener('focus', () => repo.value && refresh(repo.value))
   await onRepoChanged(onRepoChangedOnDisk)
   await init()

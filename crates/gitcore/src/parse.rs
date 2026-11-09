@@ -310,6 +310,8 @@ pub fn parse_name_status(out: &str) -> Vec<ChangedFile> {
 
 /// Fills add/del counts from `--numstat -z` output (binary files stay None).
 pub fn apply_numstat(files: &mut [ChangedFile], out: &str) {
+    // Index by path once: a commit touching thousands of files must not be O(n²).
+    let index: std::collections::HashMap<String, usize> = files.iter().enumerate().map(|(k, f)| (f.path.clone(), k)).collect();
     let mut it = out.split('\0');
     let mut i = 0;
     while let Some(rec) = it.next() {
@@ -324,7 +326,7 @@ pub fn apply_numstat(files: &mut [ChangedFile], out: &str) {
         } else {
             p.to_string()
         };
-        let idx = files.iter().position(|x| x.path == path).or_else(|| (i < files.len()).then_some(i));
+        let idx = index.get(&path).copied().or_else(|| (i < files.len()).then_some(i));
         if let Some(k) = idx {
             files[k].add = a.parse().ok();
             files[k].del = d.parse().ok();

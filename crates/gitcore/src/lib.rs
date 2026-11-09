@@ -103,6 +103,12 @@ pub fn dispatch(ctx: &Ctx, cmd: &str, a: Value) -> Result<Value, String> {
         }
         "ssh_test" => ok(identity::ssh_test(s(&a, "key"), s(&a, "host"))),
         "ssh_keygen" => ok(identity::keygen(s(&a, "path"), s(&a, "email"), s(&a, "passphrase"))?),
+        "identities_detect" => {
+            let home = PathBuf::from(std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default());
+            let cfg = config::load(&ctx.config_dir);
+            let ours: Vec<String> = cfg.managed.iter().map(|m| m.value.clone()).collect();
+            ok(identity::detect(&home, &ours))
+        }
         "home_dir" => ok(std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default()),
         "git_version" => {
             let o = runner::run(None, &["--version"], None, false);

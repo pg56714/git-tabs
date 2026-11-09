@@ -8,11 +8,14 @@ export type TreeRow = { kind: 'dir'; name: string; depth: number; dir: string } 
 
 /** Same order as the tree: in each folder, sub-folders first, then files, both A→Z. */
 export function treeSort<T extends { path: string }>(files: T[]): T[] {
-  const key = (p: string) => {
-    const s = p.split('/')
-    return s.map((x, i) => (i < s.length - 1 ? '0' : '1') + x.toLowerCase()).join('/')
-  }
-  return [...files].sort((a, b) => (key(a.path) < key(b.path) ? -1 : 1))
+  // Build each sort key once (not twice per comparison).
+  return files
+    .map((f) => {
+      const s = f.path.split('/')
+      return { f, k: s.map((x, i) => (i < s.length - 1 ? '0' : '1') + x.toLowerCase()).join('/') }
+    })
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))
+    .map((x) => x.f)
 }
 
 interface Node {

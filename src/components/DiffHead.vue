@@ -30,7 +30,7 @@ function more(e: MouseEvent) {
     <span class="add-n">+{{ st[0] }}</span><span class="del-n">−{{ st[1] }}</span>
     <span class="grow" />
     <slot />
-    <label v-if="canSeen" class="btn sm" :class="{ on: seen }" title="看完勾起來，會跳到下一個沒看的檔案（V）">
+    <label v-if="canSeen" class="btn sm" :class="{ on: seen }" title="看完勾起來，會跳到下一個沒看的檔案（Enter）">
       <input type="checkbox" :checked="seen" style="margin: 0" @click.prevent="toggleSeen(r)" /> 已看
     </label>
     <div class="seg">

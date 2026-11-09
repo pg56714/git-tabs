@@ -168,6 +168,137 @@ pub fn keygen(path: &str, email: &str, passphrase: &str) -> Result<String, Strin
     std::fs::read_to_string(format!("{}.pub", path.trim())).map(|s| s.trim().to_string()).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize, Default)]
+pub struct FoundKey {
+    pub path: String,
+    /// The comment at the end of the .pub line (often an email).
+    pub comment: String,
+    /// `Host` aliases in ~/.ssh/config that use this key, with their HostName.
+    pub hosts: Vec<(String, String)>,
+}
+
+#[derive(Serialize, Default)]
+pub struct FoundInclude {
+    pub condition: String,
+    pub path: String,
+    pub name: String,
+    pub email: String,
+    pub key: String,
+}
+
+#[derive(Serialize, Default)]
+pub struct Found {
+    pub name: String,
+    pub email: String,
+    pub keys: Vec<FoundKey>,
+    pub includes: Vec<FoundInclude>,
+}
+
+fn global(key: &str) -> String {
+    let o = run(None, &["config", "--global", "--get", key], None, false);
+    o.stdout.trim().to_string()
+}
+
+fn from_file(file: &str, key: &str) -> String {
+    let o = run(None, &["config", "-f", file, "--get", key], None, false);
+    o.stdout.trim().to_string()
+}
+
+/// `-i <path>` out of an ssh command line.
+fn key_of(ssh: &str) -> String {
+    let mut it = ssh.split_whitespace();
+    while let Some(a) = it.next() {
+        if a == "-i" {
+            return it.next().unwrap_or_default().trim_matches(['"', '\'']).to_string();
+        }
+    }
+    String::new()
+}
+
+fn expand(p: &str, home: &Path) -> String {
+    let p = p.trim().trim_matches('"');
+    match p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
+        Some(rest) => home.join(rest.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR)).display().to_string(),
+        None => p.to_string(),
+    }
+}
+
+/// What this computer already has: SSH keys in ~/.ssh, ~/.ssh/config hosts, and the global
+/// git identity including any includeIf files. `skip` lists include files this app wrote.
+pub fn detect(home: &Path, skip: &[String]) -> Found {
+    let ssh = home.join(".ssh");
+    let mut keys: Vec<FoundKey> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(&ssh) {
+        let mut paths: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        paths.sort();
+        for p in paths {
+            let Some(pub_text) = p.extension().filter(|e| *e == "pub").and_then(|_| std::fs::read_to_string(&p).ok()) else { continue };
+            let private = p.with_extension("");
+            if !private.is_file() {
+                continue;
+            }
+            let comment = pub_text.split_whitespace().nth(2).unwrap_or_default().to_string();
+            keys.push(FoundKey { path: private.display().to_string(), comment, hosts: vec![] });
+        }
+    }
+    // ~/.ssh/config: Host blocks with an IdentityFile point that key at a host.
+    if let Ok(cfg) = std::fs::read_to_string(ssh.join("config")) {
+        let mut hosts: Vec<String> = vec![];
+        let mut hostname = String::new();
+        let mut file = String::new();
+        let flush = |hosts: &Vec<String>, hostname: &str, file: &str, keys: &mut Vec<FoundKey>| {
+            if file.is_empty() {
+                return;
+            }
+            let f = expand(file, home);
+            let k = match keys.iter_mut().find(|k| k.path.replace('\\', "/").eq_ignore_ascii_case(&f.replace('\\', "/"))) {
+                Some(k) => k,
+                None => {
+                    keys.push(FoundKey { path: f.clone(), ..Default::default() });
+                    keys.last_mut().unwrap()
+                }
+            };
+            for h in hosts {
+                k.hosts.push((h.clone(), if hostname.is_empty() { h.clone() } else { hostname.to_string() }));
+            }
+        };
+        for line in cfg.lines() {
+            let l = line.trim();
+            let (k, v) = l.split_once(|c: char| c.is_whitespace() || c == '=').map(|(a, b)| (a.to_ascii_lowercase(), b.trim().to_string())).unwrap_or_default();
+            match k.as_str() {
+                "host" | "match" => {
+                    flush(&hosts, &hostname, &file, &mut keys);
+                    hosts = if k == "host" { v.split_whitespace().filter(|h| !h.contains('*')).map(String::from).collect() } else { vec![] };
+                    hostname.clear();
+                    file.clear();
+                }
+                "hostname" => hostname = v,
+                "identityfile" => file = v,
+                _ => {}
+            }
+        }
+        flush(&hosts, &hostname, &file, &mut keys);
+    }
+    let mut includes = Vec::new();
+    let o = run(None, &["config", "--global", "--get-regexp", r"^includeif\..*\.path$"], None, false);
+    for line in o.stdout.lines() {
+        let Some((k, v)) = line.split_once(' ') else { continue };
+        let cond = k.trim_start_matches("includeif.").trim_end_matches(".path").to_string();
+        let path = expand(v, home);
+        if skip.iter().any(|s| s.replace('\\', "/").eq_ignore_ascii_case(&path.replace('\\', "/"))) {
+            continue;
+        }
+        includes.push(FoundInclude {
+            name: from_file(&path, "user.name"),
+            email: from_file(&path, "user.email"),
+            key: key_of(&from_file(&path, "core.sshCommand")),
+            condition: cond,
+            path,
+        });
+    }
+    Found { name: global("user.name"), email: global("user.email"), keys, includes }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

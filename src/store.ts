@@ -4,7 +4,7 @@ import { reactive } from 'vue'
 import { call, isTauri, watchRepos } from './api'
 import type { AppConfig, ChangedFile, Commit, CommitDetail, FileDiff, Identity, LogEntry, ReflogEntry, Refs, StatusEntry, Summary } from './types'
 import { diffHash } from './lib/diff'
-import { matchIdentity } from './lib/identity'
+import { fromFound, matchIdentity, type Found } from './lib/identity'
 import { baseName } from './lib/format'
 import { treeSort } from './lib/tree'
 
@@ -35,6 +35,11 @@ export interface RepoState {
   busy: string | null
   error: string | null
   collapsed: string[]
+  /** git calls queued by quick actions (stage/unstage), run one at a time */
+  queue: Promise<void>
+  queued: number
+  /** ignore file-watcher events caused by our own git calls until this time */
+  quietUntil: number
 }
 
 export interface Toast {
@@ -184,6 +189,9 @@ function newRepo(path: string): RepoState {
     busy: null,
     error: null,
     collapsed: [],
+    queue: Promise.resolve(),
+    queued: 0,
+    quietUntil: 0,
   }
 }
 
@@ -203,6 +211,22 @@ export async function init() {
   const r = R()
   if (r) await openRepo(r)
   watchRepos(S.repos.map((r) => r.path))
+  offerDetectedIdentities()
+}
+
+/** First launch only: fill the identity settings from SSH keys and gitconfig already on this computer. */
+async function offerDetectedIdentities() {
+  const FLAG = 'git-tabs:identities-offered'
+  try {
+    if (S.cfg.identities.length || localStorage.getItem(FLAG)) return
+    localStorage.setItem(FLAG, '1')
+  } catch {
+    return
+  }
+  const found = await call<Found>('identities_detect').catch(() => null)
+  if (!found) return
+  const detected = fromFound(found)
+  if (detected.ids.length) openModal('settings', { tab: 'ids', detected })
 }
 
 // ---------- loading ----------
@@ -244,6 +268,7 @@ async function doRefresh(r: RepoState) {
     r.status = snap.status
     r.refs = snap.refs
     r.error = null
+    pruneSeen(r)
   } catch (e) {
     r.error = String(e).replace(/^Error: /, '')
     return
@@ -288,8 +313,12 @@ export async function loadDetail(r: RepoState) {
     return
   }
   if (r.detail?.sha === r.selCommit) return loadDiff(r)
+  const sha = r.selCommit
   try {
-    r.detail = await call<CommitDetail>('commit_detail', { repo: r.path, sha: r.selCommit })
+    const d = await call<CommitDetail>('commit_detail', { repo: r.path, sha })
+    // Holding ↓ fires many loads; only the latest selection may land.
+    if (r.selCommit !== sha) return
+    r.detail = d
     const want = r.logPath && r.detail.files.find((f) => f.path === r.logPath)
     r.sel = r.detail.files.length ? { list: 'c', path: want ? want.path : r.detail.files[0].path } : null
     await loadDiff(r)
@@ -395,6 +424,19 @@ export const isSeen = (r: RepoState, list: ListKind, path: string) => {
   const k = seenKey(r, list, path)
   return !!k && !!S.seen[k]
 }
+/** Drops "reviewed" marks of files that are no longer changed, so the saved map doesn't grow forever. */
+function pruneSeen(r: RepoState) {
+  const prefix = `${r.path}|w|`
+  const live = new Set(r.status.map((f) => f.path))
+  let changed = false
+  for (const k of Object.keys(S.seen))
+    if (k.startsWith(prefix) && !live.has(k.slice(prefix.length))) {
+      delete S.seen[k]
+      changed = true
+    }
+  if (changed) persistSeen()
+}
+
 function persistSeen() {
   try {
     localStorage.setItem('git-tabs:seen', JSON.stringify(S.seen))
@@ -438,6 +480,14 @@ export function moveSel(r: RepoState, d: number) {
   let i = files.findIndex((f) => r.sel && f.list === r.sel.list && f.path === r.sel.path)
   i = Math.max(0, Math.min(files.length - 1, i + d))
   select(r, files[i].list, files[i].path)
+}
+
+export function moveCommit(r: RepoState, d: number) {
+  const i = r.commits.findIndex((c) => c.sha === r.selCommit)
+  const c = r.commits[Math.max(0, Math.min(r.commits.length - 1, i + d))]
+  if (!c || c.sha === r.selCommit) return
+  r.selCommit = c.sha
+  loadDetail(r)
 }
 
 // ---------- identity ----------
@@ -503,6 +553,48 @@ export async function op<T>(r: RepoState, label: string, fn: () => Promise<T>, o
 }
 
 export const git = (r: RepoState, cmd: string, args: Record<string, unknown> = {}) => call(cmd, { repo: r.path, ...args })
+
+// ---------- quick actions ----------
+
+/** Just the file list (one git call), for after stage/unstage where nothing else changed. */
+export async function refreshStatus(r: RepoState) {
+  const st = await call<StatusEntry[]>('status', { repo: r.path }).catch(() => null)
+  if (!st) return refresh(r)
+  r.status = st
+  pruneSeen(r)
+  if (r.summary) {
+    r.summary.changes = st.length
+    r.summary.conflicts = st.filter((f) => f.conflicted).length
+  }
+  if (r.view === 'changes') {
+    ensureSel(r)
+    await loadDiff(r)
+  }
+}
+
+/**
+ * Updates the screen first (`apply`), then runs the git call in the background, queued so
+ * two quick key presses never fight over .git/index.lock. Only the last call in a burst
+ * reloads the status.
+ */
+export function quick(r: RepoState, label: string, apply: () => void, fn: () => Promise<unknown>): Promise<void> {
+  apply()
+  r.queued++
+  r.queue = r.queue.then(async () => {
+    try {
+      await fn()
+    } catch (e) {
+      toast(`${label}失敗`, 'err', String(e).replace(/^Error: /, ''))
+    }
+    r.queued--
+    await pullLog()
+    if (!r.queued) {
+      await refreshStatus(r)
+      r.quietUntil = Date.now() + 1500
+    }
+  })
+  return r.queue
+}
 
 // ---------- repos ----------
 
@@ -594,7 +686,7 @@ export function startTimers() {
     () => {
       tick++
       const r = R()
-      if (r && !r.busy && document.visibilityState === 'visible') refresh(r)
+      if (r && !r.busy && !r.queued && document.visibilityState === 'visible') refresh(r)
       if (tick % 6 === 0) S.repos.forEach((x) => x !== r && refreshSummary(x))
     },
     isTauri ? 30000 : 4000,
@@ -617,7 +709,7 @@ export async function fetchAll(quiet = false) {
 
 export function onRepoChangedOnDisk(path: string) {
   const r = S.repos.find((x) => x.path.replace(/\\/g, '/').toLowerCase() === path.replace(/\\/g, '/').toLowerCase())
-  if (!r) return
+  if (!r || r.busy || r.queued || Date.now() < r.quietUntil) return
   if (r === R()) refresh(r)
   else refreshSummary(r)
 }

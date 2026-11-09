@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { S, closeModal, type Field } from '../store'
+import type { Identity } from '../types'
 import SettingsModal from './SettingsModal.vue'
 import AddRepoModal from './AddRepoModal.vue'
 import BlameModal from './BlameModal.vue'
@@ -42,7 +43,7 @@ type Choice = { value: string; label: string; primary?: boolean; danger?: boolea
 
 <template>
   <div v-if="m" class="shade" @mousedown.self="closeModal(null)">
-    <SettingsModal v-if="m.kind === 'settings'" :tab="(m.props.tab as string) ?? 'ids'" />
+    <SettingsModal v-if="m.kind === 'settings'" :tab="(m.props.tab as string) ?? 'ids'" :detected="m.props.detected as { ids: Identity[]; def: string | null } | undefined" />
     <AddRepoModal v-else-if="m.kind === 'addrepo'" />
     <BlameModal v-else-if="m.kind === 'blame'" :repo="m.props.repo as string" :path="m.props.path as string" :rev="m.props.rev as string | undefined" />
     <div v-else ref="box" class="modal" @keydown="onKey">

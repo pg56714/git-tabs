@@ -3,14 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { call, pickFile, openUrl, copyText } from '../api'
 import { S, closeModal, saveConfig, toast, setFetchTimer, pullLog } from '../store'
 import type { Identity, SshTest } from '../types'
-import { COLORS, autoShort, tagOf, matchIdentity, newIdentity, normUrl, ruleForUrl } from '../lib/identity'
+import { COLORS, autoShort, tagOf, matchIdentity, newIdentity, normUrl, ruleForUrl, fromFound, type Found } from '../lib/identity'
 import { baseName } from '../lib/format'
 
-const p = defineProps<{ tab: string }>()
+const p = defineProps<{ tab: string; detected?: { ids: Identity[]; def: string | null } }>()
 const tab = ref(p.tab)
 const draft = reactive({
-  ids: JSON.parse(JSON.stringify(S.cfg.identities)) as Identity[],
-  def: S.cfg.default_identity ?? '',
+  ids: (p.detected?.ids ?? JSON.parse(JSON.stringify(S.cfg.identities))) as Identity[],
+  def: p.detected?.def ?? S.cfg.default_identity ?? '',
   theme: S.cfg.theme,
   git: S.cfg.git_path,
   fetch: String(S.cfg.fetch_minutes),
@@ -41,6 +41,20 @@ function assign(repoPath: string, idx: string) {
   const r = S.repos.find((x) => x.path === repoPath)!
   const rule = r.summary?.remote_url ? ruleForUrl(r.summary.remote_url) : null
   draft.ids[+idx].rules.push(rule ? { t: 'remote', v: rule } : { t: 'dir', v: r.path })
+}
+
+const scanning = ref(false)
+
+/** Adds identities for SSH keys / includeIf files on this computer that aren't listed yet. */
+async function scan() {
+  scanning.value = true
+  const found = await call<Found>('identities_detect').catch(() => null)
+  scanning.value = false
+  if (!found) return toast('讀不到這台電腦的設定', 'err')
+  const { ids, def } = fromFound(found, draft.ids)
+  draft.ids.push(...ids)
+  if (!draft.def && def) draft.def = def
+  toast(ids.length ? `找到 ${ids.length} 個新的身分，確認後按儲存` : '沒有找到新的 SSH key 或身分設定', 'info')
 }
 
 function add() {
@@ -147,6 +161,7 @@ const copyPub = async (s: string) => {
     </div>
     <div class="body">
       <template v-if="tab === 'ids'">
+        <div v-if="detected" class="okline">已從這台電腦找到 {{ detected.ids.length }} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。</div>
         <div class="sub">依照 remote 網址或資料夾自動選身分。儲存時會寫進 git 全域設定的 <span class="mono">includeIf</span>，所以在終端機或 Claude 執行的 git 也會用同一個身分。</div>
         <div v-if="!draft.ids.length" class="emptybox">還沒有身分。按「＋ 新增身分」，填好 SSH key 和 email。</div>
         <div v-for="(id, i) in draft.ids" :key="id.id" class="card">
@@ -215,6 +230,7 @@ const copyPub = async (s: string) => {
         </div>
         <div class="line">
           <button class="btn" @click="add">＋ 新增身分</button>
+          <button class="btn" :disabled="scanning" title="找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf" @click="scan">{{ scanning ? '尋找中…' : '從這台電腦找' }}</button>
           <span class="grow" />
           <template v-if="draft.ids.length">
             <span class="sub">都沒對應時用</span>

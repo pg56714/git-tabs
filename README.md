@@ -7,7 +7,7 @@ A desktop git client with one tab per repository, built for reviewing changes qu
 ## What it does
 
 - **Repo tabs**: each tab shows the branch, ahead/behind, uncommitted changes and which identity the repo uses. Drag to reorder, `Ctrl+1…9` / `Ctrl+Tab` to switch.
-- **Review**: file tree with a "reviewed" checkbox and progress, unified or side-by-side diff, syntax colors, changed words highlighted inside a line. `J`/`K` next/previous file, `N`/`P` next/previous hunk, `V` mark reviewed (and jump to the next unreviewed file).
+- **Review**: file tree with a "reviewed" checkbox and progress, unified or side-by-side diff, syntax colors, changed words highlighted inside a line. `↑`/`↓` next/previous file, `←`/`→` previous/next hunk, `Enter` mark reviewed (and jump to the next unreviewed file), `S` stage/unstage.
 - **Staging**: stage, unstage or discard a whole file, one hunk, or selected lines (click the line, drag or Shift-click for more, then `S`).
 - **Commit**: commit, commit and push, amend (`Ctrl+Enter`, `Ctrl+Shift+Enter`).
 - **History**: commit graph across all branches, search by message or SHA, commit details, per-file diff, cherry-pick, revert, checkout, reset (soft / mixed / hard), tag, new branch. File history and blame.
@@ -37,21 +37,20 @@ crates/gitcore     all git logic (runs the system git), one dispatch(cmd, args) 
 crates/devserver   dev only: the same commands over HTTP on 127.0.0.1, for testing the UI in a browser
 src-tauri          desktop shell: one `call` IPC command + a file watcher
 src                Vue 3 UI
-prototype          the clickable HTML prototype the UI was designed from
 ```
 
 ## Development
 
-Requirements: Rust (stable), Node 22+, git 2.36+ (for `hasconfig:` includes), and on Windows the MSVC build tools and WebView2 (built into Windows 11).
+Requirements: Rust (stable), Bun 1.4+, git 2.36+ (for `hasconfig:` includes), and on Windows the MSVC build tools and WebView2 (built into Windows 11).
 
 ```bash
-npm install
-npm run tauri dev        # desktop app with hot reload
-npm run dev:web          # UI in a browser at http://127.0.0.1:5320 against crates/devserver
+bun install
+bun run tauri dev        # desktop app with hot reload
+bun run dev:web          # UI in a browser at http://127.0.0.1:5320 against crates/devserver
 npm test                 # vitest + cargo tests
-npm run typecheck        # vue-tsc (TypeScript 6) + tsc 7 on the .ts files
-npm run lint             # oxlint
-npx tauri build          # release build (add --no-bundle for just the exe)
+bun run typecheck        # vue-tsc (TypeScript 6) + tsc 7 on the .ts files
+bun run lint             # oxlint
+bun run tauri build      # release build (add --no-bundle for just the exe)
 ```
 
 `crates/devserver` accepts `--config-dir <dir>` and `--git-global <file>`; point the latter at a scratch file so testing never touches your real gitconfig.

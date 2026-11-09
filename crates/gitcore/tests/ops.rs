@@ -220,3 +220,34 @@ fn identities_write_include_if_and_pin() {
     assert!(!after.contains("includeIf"));
     assert!(!after.contains("include"), "{after}");
 }
+
+#[test]
+fn detects_keys_ssh_hosts_and_includes() {
+    let _s = serial();
+    isolate();
+    let home = tempfile::tempdir().unwrap();
+    let ssh = home.path().join(".ssh");
+    std::fs::create_dir_all(&ssh).unwrap();
+    std::fs::write(ssh.join("id_ed25519"), "x").unwrap();
+    std::fs::write(ssh.join("id_ed25519.pub"), "ssh-ed25519 AAAA me@home.com\n").unwrap();
+    std::fs::write(ssh.join("id_work"), "x").unwrap();
+    std::fs::write(ssh.join("id_work.pub"), "ssh-ed25519 BBBB\n").unwrap();
+    std::fs::write(ssh.join("known_hosts"), "").unwrap();
+    std::fs::write(ssh.join("config"), "Host github-work\n  HostName github.com\n  IdentityFile ~/.ssh/id_work\n\nHost *\n  AddKeysToAgent yes\n").unwrap();
+    let inc = home.path().join("work.gitconfig");
+    std::fs::write(&inc, "[user]\n\temail = me@corp.com\n[core]\n\tsshCommand = ssh -i \"C:/k/id_work\" -o IdentitiesOnly=yes\n").unwrap();
+    let g = isolate().join("gitconfig");
+    let before = std::fs::read_to_string(&g).unwrap();
+    git(home.path(), &["config", "--global", "includeIf.gitdir/i:D:/work/.path", &inc.display().to_string()]);
+    let f = gitcore::identity::detect(home.path(), &[]);
+    std::fs::write(&g, before).unwrap();
+    assert_eq!(f.email, "test@example.com");
+    assert_eq!(f.keys.len(), 2);
+    assert_eq!(f.keys[0].comment, "me@home.com");
+    let work = f.keys.iter().find(|k| k.path.ends_with("id_work")).unwrap();
+    assert_eq!(work.hosts, vec![("github-work".to_string(), "github.com".to_string())]);
+    assert_eq!(f.includes.len(), 1);
+    assert_eq!(f.includes[0].condition, "gitdir/i:D:/work/");
+    assert_eq!(f.includes[0].email, "me@corp.com");
+    assert_eq!(f.includes[0].key, "C:/k/id_work");
+}

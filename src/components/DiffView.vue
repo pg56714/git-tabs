@@ -52,10 +52,9 @@ watch(
 
 const key = (h: number, i: number) => `${h}:${i}`
 
-function segs(hi: number, r: Row) {
-  const base = toks.value?.[hi]?.[r.i] ?? [{ text: r.text }]
-  return splitTokens(base, r.word)
-}
+// Token runs per line, built once per diff/highlight. Selecting lines must not redo this.
+const segsAll = computed(() => rows.value.map((rs, hi) => rs.map((r) => splitTokens(toks.value?.[hi]?.[r.i] ?? [{ text: r.text }], r.word))))
+const segs = (hi: number, r: Row) => segsAll.value[hi][r.i]
 
 function pick(hi: number, r: Row, e: MouseEvent) {
   if (!editable.value || r.t === ' ') return
@@ -97,11 +96,27 @@ function applyHunk(hi: number, action: 'stage' | 'unstage' | 'discard') {
   emit('apply', action, v)
 }
 
+/** Scrolls to the next/previous hunk relative to what is on screen now (the user may have scrolled). */
+// Hunk headers are sticky, so their offsetTop moves; the zero-height .hunk-top markers before them don't.
+const hunkTops = () => [...(body.value?.querySelectorAll<HTMLElement>('.hunk-top') ?? [])].map((a) => a.offsetTop)
+let ownScrollUntil = 0
+
+/** Moves the current hunk; works even when the whole diff fits on screen and nothing can scroll. */
 function gotoHunk(d: number) {
-  const hs = body.value?.querySelectorAll<HTMLElement>('.hh')
-  if (!hs?.length) return
-  curHunk.value = Math.max(0, Math.min(hs.length - 1, curHunk.value + d))
-  body.value!.scrollTo({ top: hs[curHunk.value].offsetTop - 4, behavior: 'smooth' })
+  const el = body.value
+  const tops = hunkTops()
+  if (!el || !tops.length) return
+  curHunk.value = Math.max(0, Math.min(tops.length - 1, curHunk.value + d))
+  ownScrollUntil = Date.now() + 600
+  el.scrollTo({ top: tops[curHunk.value], behavior: 'smooth' })
+}
+
+/** After the user scrolls by hand, the current hunk is the last one whose top is on or above the view. */
+function onScroll() {
+  if (Date.now() < ownScrollUntil || !body.value) return
+  const y = body.value.scrollTop + 4
+  const i = hunkTops().findLastIndex((t) => t <= y)
+  curHunk.value = Math.max(0, i)
 }
 const onHunkEvent = (e: Event) => gotoHunk((e as CustomEvent<number>).detail)
 
@@ -127,7 +142,7 @@ defineExpose({ gotoHunk })
   <div v-if="!diff" class="empty"><div><span class="big">◇</span>選一個檔案來看修改</div></div>
   <div v-else-if="diff.binary" class="empty"><div><span class="big">⬚</span>二進位檔案，無法顯示文字差異</div></div>
   <div v-else-if="!diff.hunks.length" class="empty"><div><span class="big">≡</span>沒有內容差異<br /><span class="sub">可能只改了檔案權限，或是空檔案</span></div></div>
-  <div v-else ref="body" class="dbody" :class="{ wrap: S.wrap, side: S.side }">
+  <div v-else ref="body" class="dbody" :class="{ wrap: S.wrap, side: S.side }" @scroll.passive="onScroll">
     <div v-if="sel.size" class="selbar">
       已選 {{ sel.size }} 行
       <template v-if="mode === 'u'">
@@ -138,6 +153,7 @@ defineExpose({ gotoHunk })
       <button class="btn sm ghost" @click="sel = new Set()">清除選取</button>
     </div>
     <template v-for="vh in visibleHunks" :key="vh.hi">
+      <div class="hunk-top" />
       <div class="hh" :class="{ cur: vh.hi === curHunk }">
         <span class="hdr">{{ diff.hunks[vh.hi].header }}</span>
         <span class="grow" />
@@ -151,6 +167,7 @@ defineExpose({ gotoHunk })
         <div
           v-for="r in vh.rows"
           :key="r.i"
+          v-memo="[sel.has(key(vh.hi, r.i)), segs(vh.hi, r)]"
           class="dl"
           :class="{ add: r.t === '+', del: r.t === '-', pick: sel.has(key(vh.hi, r.i)), can: editable && r.t !== ' ' }"
           @mousedown="down(vh.hi, r, $event)"
@@ -161,7 +178,7 @@ defineExpose({ gotoHunk })
         </div>
       </template>
       <template v-else>
-        <div v-for="(pair, k) in sideRows(vh.rows)" :key="k" class="sr">
+        <div v-for="(pair, k) in sideRows(vh.rows)" :key="k" v-memo="[pair[0] && sel.has(key(vh.hi, pair[0].i)), pair[1] && sel.has(key(vh.hi, pair[1].i)), pair[0] && segs(vh.hi, pair[0]), pair[1] && segs(vh.hi, pair[1])]" class="sr">
           <div
             v-for="(x, side) in pair"
             :key="side"
@@ -188,8 +205,9 @@ defineExpose({ gotoHunk })
 .dbody { flex: 1; overflow: auto; font: 12.5px/1.6 var(--mono); position: relative; min-height: 0; }
 .selbar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--accentbg); color: var(--accenttx); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; }
 .hh { display: flex; align-items: center; gap: 6px; background: var(--hunk); color: var(--muted); padding: 2px 10px; position: sticky; top: 0; z-index: 2; min-height: 28px; font-size: 12px; }
-.selbar + .hh { top: 36px; }
-.hh.cur { box-shadow: inset 3px 0 var(--accent); }
+.hunk-top { height: 0; }
+.selbar ~ .hh { top: 36px; }
+.hh.cur { box-shadow: inset 4px 0 var(--accent); background: var(--accentbg); color: var(--accenttx); }
 .hh .btn { font-family: 'Segoe UI', system-ui, sans-serif; opacity: 0.85; }
 .hdr { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dl { display: grid; grid-template-columns: 48px 48px 16px minmax(0, 1fr); }

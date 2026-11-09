@@ -73,3 +73,27 @@ describe('highlight', () => {
     expect(t.map((x) => [x.text, !!x.mark])).toEqual([['let ', false], ['a', false], ['b', true], ['c', false]])
   })
 })
+
+describe('detected identities', () => {
+  it('turns includes and keys into identities', async () => {
+    const { fromFound } = await import('./identity')
+    const r = fromFound({
+      name: 'Sam',
+      email: 'sam@me.com',
+      keys: [
+        { path: String.raw`C:\Users\u\.ssh\id_ed25519`, comment: 'sam@me.com', hosts: [] },
+        { path: String.raw`C:\Users\u\.ssh\id_ed25519_emu`, comment: '', hosts: [['github-emu', 'github.com']] },
+        { path: String.raw`C:\Users\u\.ssh\id_ed25519_work`, comment: 'x', hosts: [] },
+      ],
+      includes: [
+        { condition: 'hasconfig:remote.*.url:git@github.com:acme/**', path: 'C:/Users/u/.gitconfig-work', name: '', email: 'sam@acme.com', key: 'C:/Users/u/.ssh/id_ed25519_work' },
+        { condition: 'gitdir/i:D:/acme/', path: 'C:/Users/u/.gitconfig-work', name: '', email: 'sam@acme.com', key: 'C:/Users/u/.ssh/id_ed25519_work' },
+      ],
+    })
+    expect(r.ids.map((i) => i.name)).toEqual(['work', '預設 key', 'github-emu'])
+    expect(r.ids[0].rules).toEqual([{ t: 'remote', v: 'github.com/acme/*' }, { t: 'dir', v: String.raw`D:\acme` }])
+    expect(r.ids[1].email).toBe('sam@me.com')
+    expect(r.ids[2].email).toBe('sam@me.com')
+    expect(r.def).toBe(r.ids[1].id)
+  })
+})

@@ -58,14 +58,6 @@ watch(
   },
 )
 
-function onKey(e: KeyboardEvent) {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-  e.preventDefault()
-  const i = p.r.commits.findIndex((c) => c.sha === p.r.selCommit)
-  const n = Math.max(0, Math.min(p.r.commits.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
-  if (p.r.commits[n]) pick(p.r.commits[n].sha)
-}
-
 function menu(e: MouseEvent, sha: string) {
   const r = p.r
   pick(sha)
@@ -106,7 +98,7 @@ function path(g: ReturnType<typeof layout>[number]) {
     <span v-if="r.logLoading" class="sub">載入中…</span>
   </div>
   <div class="hist">
-    <div ref="list" class="clist" tabindex="0" @scroll="onScroll" @keydown="onKey">
+    <div ref="list" class="clist" @scroll="onScroll">
       <div v-if="!r.commits.length && !r.logLoading" class="empty">{{ r.logQuery ? '找不到符合的 commit' : '還沒有任何 commit' }}</div>
       <div :style="{ height: virt.getTotalSize() + 'px', position: 'relative' }">
         <div

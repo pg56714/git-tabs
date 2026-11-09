@@ -7,7 +7,7 @@
 ## 功能
 
 - **Repo 分頁**：每個分頁顯示分支、領先／落後幾個 commit、有沒有未提交的修改，以及這個 repo 用的身分。可以拖曳排序，用 `Ctrl+1…9`／`Ctrl+Tab` 切換。
-- **Review**：檔案樹可以勾「已看」並顯示進度；diff 可切換單欄或並排，有語法上色，同一行裡改動的字會特別標出。`J`/`K` 下/上個檔案，`N`/`P` 下/上個改動，`V` 標記已看（並跳到下一個沒看的檔案）。
+- **Review**：檔案樹可以勾「已看」並顯示進度；diff 可切換單欄或並排，有語法上色，同一行裡改動的字會特別標出。`↑`/`↓` 上/下一個檔案，`←`/`→` 上/下一段改動，`Enter` 標記已看（並跳到下一個沒看的檔案），`S` Stage／取消 Stage。
 - **Stage**：可以 stage、取消 stage 或捨棄整個檔案、單一區段，或選取的幾行（點一行，拖曳或按住 Shift 選多行，再按 `S`）。
 - **Commit**：commit、commit 並 push、amend（`Ctrl+Enter`、`Ctrl+Shift+Enter`）。
 - **歷史**：涵蓋所有分支的 commit 圖，可用訊息或 SHA 搜尋；有 commit 詳細資訊、每個檔案的 diff，以及 cherry-pick、revert、checkout、reset（soft／mixed／hard）、加 tag、開新分支。也有單一檔案的歷史和 blame。
@@ -37,21 +37,20 @@ crates/gitcore     所有 git 邏輯（呼叫系統的 git），單一 dispatch(
 crates/devserver   只供開發：在 127.0.0.1 用 HTTP 提供同樣的指令，方便在瀏覽器測試介面
 src-tauri          桌面外殼：一個 `call` IPC 指令＋檔案監看
 src                Vue 3 介面
-prototype          設計介面時用的可操作 HTML 原型
 ```
 
 ## 開發
 
-需要：Rust（stable）、Node 22 以上、git 2.36 以上（`hasconfig:` include 需要），Windows 上還需要 MSVC 編譯工具和 WebView2（Windows 11 已內建）。
+需要：Rust（stable）、Bun 1.4 以上、git 2.36 以上（`hasconfig:` include 需要），Windows 上還需要 MSVC 編譯工具和 WebView2（Windows 11 已內建）。
 
 ```bash
-npm install
-npm run tauri dev        # 桌面 app，支援熱更新
-npm run dev:web          # 在瀏覽器開 http://127.0.0.1:5320，後端是 crates/devserver
+bun install
+bun run tauri dev        # 桌面 app，支援熱更新
+bun run dev:web          # 在瀏覽器開 http://127.0.0.1:5320，後端是 crates/devserver
 npm test                 # vitest + cargo 測試
-npm run typecheck        # vue-tsc（TypeScript 6）＋ tsc 7 檢查 .ts 檔
-npm run lint             # oxlint
-npx tauri build          # release 版（加 --no-bundle 只產生 exe）
+bun run typecheck        # vue-tsc（TypeScript 6）＋ tsc 7 檢查 .ts 檔
+bun run lint             # oxlint
+bun run tauri build      # release 版（加 --no-bundle 只產生 exe）
 ```
 
 `crates/devserver` 接受 `--config-dir <dir>` 和 `--git-global <file>`；後者指到一個暫存檔，測試時就不會動到你真正的 gitconfig。

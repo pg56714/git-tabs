@@ -145,7 +145,7 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
       </template>
       <div v-else class="empty"><div>選一個檔案</div></div>
       <div class="hint">
-        <span><kbd>J</kbd>/<kbd>K</kbd> 下/上個檔案</span><span><kbd>N</kbd>/<kbd>P</kbd> 下/上個改動</span><span><kbd>S</kbd> Stage</span><span><kbd>V</kbd> 已看</span>
+        <span><kbd>↑</kbd>/<kbd>↓</kbd> 上/下一個檔案</span><span><kbd>←</kbd>/<kbd>→</kbd> 上/下一段改動</span><span><kbd>S</kbd> Stage</span><span><kbd>Enter</kbd> 已看</span>
         <span>點行號旁可選取單行，按住拖曳或 Shift 選多行</span><span class="grow" /><span v-if="S.side">並排</span>
       </div>
     </div>

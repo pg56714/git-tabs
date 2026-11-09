@@ -64,7 +64,7 @@ const isCurrent = computed(() => p.r.summary?.branch === p.r.rangeHead)
           <DiffHead :r="r" :diff="r.diff" list="r" :path="r.sel.path" :status="selFile.status" />
           <DiffView :diff="r.diffFor === 'r:' + r.sel.path ? r.diff : null" mode="ro" />
         </template>
-        <div class="hint"><span><kbd>J</kbd>/<kbd>K</kbd> 下/上個檔案</span><span><kbd>N</kbd>/<kbd>P</kbd> 下/上個改動</span><span><kbd>V</kbd> 已看</span><span class="grow" /><span v-if="S.side">並排</span></div>
+        <div class="hint"><span><kbd>↑</kbd>/<kbd>↓</kbd> 上/下一個檔案</span><span><kbd>←</kbd>/<kbd>→</kbd> 上/下一段改動</span><span><kbd>Enter</kbd> 已看</span><span class="grow" /><span v-if="S.side">並排</span></div>
       </div>
     </div>
   </template>

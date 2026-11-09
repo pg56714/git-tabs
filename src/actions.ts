@@ -1,17 +1,60 @@
 // User-facing actions: asks for confirmation or input where needed, then runs the git op.
 
 import { call, copyText } from './api'
-import { S, op, git, confirm, prompt, openModal, toast, refresh, pullLog, loadLog, setView, select, addRepos, identityOf, staged, unstaged, type RepoState } from './store'
+import { S, op, quick, git, confirm, prompt, openModal, toast, refresh, pullLog, loadLog, setView, select, orderedFiles, addRepos, identityOf, staged, unstaged, type RepoState } from './store'
 import { short } from './lib/format'
 import { lineSel } from './lineSel'
 
 const branchName = (v: string) => (!v.trim() ? '輸入分支名稱' : /\s|\.\.|[~^:?*[\\]|^-|\/$|\.lock$/.test(v.trim()) ? '分支名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元' : null)
 
-export async function stageFiles(r: RepoState, paths: string[]) {
-  if (paths.length) await op(r, 'Stage', () => git(r, 'stage', { paths }), { quiet: true })
+/** When the selected file leaves a list, select the next file in that list (or follow it). */
+function followSelection(r: RepoState, moved: Set<string>, from: 'u' | 's', to: 'u' | 's') {
+  if (!r.sel || r.sel.list !== from || !moved.has(r.sel.path)) return
+  const list = orderedFiles(r).filter((f) => f.list === from)
+  const i = list.findIndex((f) => f.path === r.sel!.path)
+  const next = list.slice(i + 1).find((f) => !moved.has(f.path)) ?? list.slice(0, i).reverse().find((f) => !moved.has(f.path))
+  if (next) select(r, from, next.path)
+  else r.sel = { list: to, path: r.sel.path }
 }
-export async function unstageFiles(r: RepoState, paths: string[]) {
-  if (paths.length) await op(r, '取消 Stage', () => git(r, 'unstage', { paths }), { quiet: true })
+
+export function stageFiles(r: RepoState, paths: string[]) {
+  if (!paths.length) return
+  const set = new Set(paths)
+  return quick(
+    r,
+    'Stage',
+    () => {
+      followSelection(r, set, 'u', 's')
+      for (const f of r.status) {
+        if (!set.has(f.path) || f.conflicted) continue
+        f.x = f.untracked ? 'A' : f.y !== '.' ? f.y : f.x
+        f.y = '.'
+        f.untracked = false
+      }
+    },
+    () => git(r, 'stage', { paths }),
+  )
+}
+
+export function unstageFiles(r: RepoState, paths: string[]) {
+  if (!paths.length) return
+  const set = new Set(paths)
+  return quick(
+    r,
+    '取消 Stage',
+    () => {
+      followSelection(r, set, 's', 'u')
+      for (const f of r.status) {
+        if (!set.has(f.path)) continue
+        if (f.x === 'A') {
+          f.untracked = true
+          f.y = '?'
+        } else if (f.y === '.') f.y = f.x
+        f.x = '.'
+      }
+    },
+    () => git(r, 'unstage', { paths }),
+  )
 }
 export const stageAll = (r: RepoState) => stageFiles(r, unstaged(r).filter((f) => !f.conflicted).map((f) => f.path))
 export const unstageAll = (r: RepoState) => unstageFiles(r, staged(r).map((f) => f.path))
@@ -36,10 +79,12 @@ export async function applyLines(r: RepoState, path: string, action: 'stage' | '
   if (!lines.length) return
   if (action === 'discard' && !(await confirm('捨棄選取的行？', `<span class="mono">${esc(path)}</span> 選取的 ${lines.length} 行修改會被丟掉，<b>無法復原</b>。`, '捨棄', true))) return
   const label = { stage: 'Stage 選取的行', unstage: '取消 Stage 選取的行', discard: '捨棄選取的行' }[action]
-  await op(r, label, () => git(r, 'apply_lines', { path, action, lines }), { quiet: true })
+  await quick(r, label, () => {}, () => git(r, 'apply_lines', { path, action, lines }))
 }
 
 export async function commit(r: RepoState, message: string, amend: boolean, push: boolean): Promise<boolean> {
+  // Let queued stage/unstage calls land first.
+  await r.queue
   const who = identityOf(r)
   if (S.cfg.identities.length && !who.id) {
     const def = S.cfg.identities.find((i) => i.id === S.cfg.default_identity)

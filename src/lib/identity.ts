@@ -29,7 +29,13 @@ export function normUrl(u: string | null | undefined): string {
     .replace(/^https?:\/\/(?:[^@/]+@)?/, '')
 }
 
-const globRe = (g: string) => new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*') + '$', 'i')
+// Tabs re-check their identity on every refresh; compile each rule's pattern once.
+const reCache = new Map<string, RegExp>()
+const globRe = (g: string) => {
+  let re = reCache.get(g)
+  if (!re) reCache.set(g, (re = new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*') + '$', 'i')))
+  return re
+}
 
 const normDir = (p: string) => p.replace(/\\/g, '/').replace(/\/?$/, '/').toLowerCase()
 
@@ -56,6 +62,68 @@ export function ruleForUrl(remoteUrl: string): string | null {
   const parts = u.split('/')
   if (!parts[0].includes('.')) return null
   return parts.length >= 3 ? `${parts[0]}/${parts[1]}/*` : u
+}
+
+export interface Found {
+  name: string
+  email: string
+  keys: { path: string; comment: string; hosts: [string, string][] }[]
+  includes: { condition: string; path: string; name: string; email: string; key: string }[]
+}
+
+const normPath = (p: string) => p.replace(/\\/g, '/').toLowerCase()
+
+/** includeIf condition -> our rule, when it is one we understand. */
+export function ruleFromCondition(c: string): Identity['rules'][number] | null {
+  const dir = c.match(/^gitdir(?:\/i)?:(.+)$/)
+  if (dir) return { t: 'dir', v: dir[1].replace(/\/$/, '').replace(/\//g, '\\') }
+  const url = c.match(/^hasconfig:remote\.\*\.url:(.+)$/)
+  if (url) return { t: 'remote', v: normUrl(url[1]).replace(/\*\*$/, '*') }
+  return null
+}
+
+/**
+ * Identities for what is already on this computer: one per existing includeIf file, then one
+ * per SSH key no include uses. The default key (id_ed25519 / id_rsa) becomes the fallback.
+ */
+export function fromFound(f: Found, existing: Identity[] = []): { ids: Identity[]; def: string | null } {
+  const ids: Identity[] = []
+  const add = (partial: Partial<Identity>) => {
+    const id = { ...newIdentity([...existing, ...ids]), rules: [], ...partial }
+    ids.push(id)
+    return id
+  }
+  const byFile = new Map<string, Identity>()
+  for (const inc of f.includes) {
+    const rule = ruleFromCondition(inc.condition)
+    let id = byFile.get(normPath(inc.path))
+    if (!id) {
+      const base = inc.path.split(/[\\/]/).pop()!.replace(/\.(git)?config$|^\.gitconfig[-_.]?/g, '') || inc.email.split('@')[1] || '身分'
+      id = add({ name: base, user: inc.name || f.name, email: inc.email || f.email, key: inc.key })
+      byFile.set(normPath(inc.path), id)
+    }
+    if (rule) id.rules.push(rule)
+  }
+  const used = new Set([...existing, ...ids].map((i) => normPath(i.key)).filter(Boolean))
+  let def: string | null = null
+  for (const k of f.keys) {
+    if (used.has(normPath(k.path))) continue
+    const file = k.path.split(/[\\/]/).pop()!
+    const isDefault = /^id_(ed25519|rsa|ecdsa)$/.test(file)
+    const alias = k.hosts.find(([h, n]) => h !== n)?.[0]
+    const name = isDefault ? '預設 key' : alias ?? file.replace(/^id_(ed25519|rsa|ecdsa)_?/, '') ?? file
+    const id = add({
+      name: name || file,
+      user: f.name,
+      // Key comments are often user@hostname, which is not an email; need a dotted domain.
+      email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(k.comment) ? k.comment : f.email,
+      key: k.path,
+      host: k.hosts[0]?.[1] ?? 'github.com',
+      rules: [{ t: 'remote', v: '' }],
+    })
+    if (isDefault && !def) def = id.id
+  }
+  return { ids, def: def ?? ids.find((i) => !i.rules.some((r) => r.v))?.id ?? null }
 }
 
 export function newIdentity(existing: Identity[]): Identity {

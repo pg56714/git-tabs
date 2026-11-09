@@ -14,6 +14,10 @@ const busy = ref(false)
 const err = ref('')
 const open = computed(() => new Set(S.repos.map((r) => r.path.replace(/\//g, '\\').toLowerCase())))
 const fresh = computed(() => found.value.filter((p) => !open.value.has(p.replace(/\//g, '\\').toLowerCase())))
+const allPicked = computed(() => fresh.value.length > 0 && fresh.value.every((p) => picked.value.has(p)))
+function toggleAll() {
+  picked.value = allPicked.value ? new Set() : new Set(fresh.value)
+}
 
 async function scan() {
   err.value = ''
@@ -85,7 +89,12 @@ onMounted(async () => {
         <button class="btn" @click="scan">掃描</button>
         <button class="btn" @click="browse">選資料夾…</button>
       </div>
-      <div class="sub">在這個資料夾底下找到 {{ found.length }} 個 repo，其中 {{ fresh.length }} 個還沒開：</div>
+      <div class="line">
+        <label v-if="fresh.length" class="all">
+          <input type="checkbox" :checked="allPicked" :indeterminate="picked.size > 0 && !allPicked" @change="toggleAll" /> 全選
+        </label>
+        <span class="sub">在這個資料夾底下找到 {{ found.length }} 個 repo，其中 {{ fresh.length }} 個還沒開<template v-if="picked.size">，已選 {{ picked.size }} 個</template></span>
+      </div>
       <div class="list">
         <label v-for="p in fresh" :key="p" class="item">
           <input type="checkbox" :checked="picked.has(p)" @change="picked.has(p) ? picked.delete(p) : picked.add(p)" />
@@ -121,6 +130,7 @@ onMounted(async () => {
 
 <style scoped>
 .line { display: flex; gap: 6px; align-items: center; }
+.all { display: flex; gap: 6px; align-items: center; padding: 0 4px; font-weight: 600; cursor: pointer; flex: none; }
 .list { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
 .item { display: flex; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; }
 .item b { flex: none; }
