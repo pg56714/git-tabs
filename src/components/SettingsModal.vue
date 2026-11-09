@@ -31,10 +31,11 @@ function matched(id: Identity) {
   return S.repos.filter((r) => {
     const pin = pinOf(r.path)
     if (pin) return pin === id.id
-    return matchIdentity(draft.ids, r.path, r.summary?.remote_url ?? null)?.id === id.id
+    return (matchIdentity(draft.ids, r.path, r.summary?.remote_url ?? null)?.id ?? (draft.def || null)) === id.id
   })
 }
 const unmatched = computed(() => S.repos.filter((r) => !pinOf(r.path) && !matchIdentity(draft.ids, r.path, r.summary?.remote_url ?? null)))
+const defName = computed(() => draft.ids.find((i) => i.id === draft.def)?.name ?? '')
 
 function assign(repoPath: string, idx: string) {
   if (idx === '') return
@@ -241,8 +242,9 @@ const copyPub = async (s: string) => {
           </template>
         </div>
         <template v-if="draft.ids.length">
-          <div v-for="r in unmatched" :key="r.path" class="warnline line">
-            <span><b>{{ r.name }}</b>（{{ normUrl(r.summary?.remote_url) || '沒有 remote' }}）沒有對應的身分</span>
+          <div v-if="unmatched.length && defName" class="sub">這些 repo 沒有符合的規則，會用預設的「{{ defName }}」；要換成別的身分可以在這裡指定：</div>
+          <div v-for="r in unmatched" :key="r.path" class="line" :class="defName ? 'infoline' : 'warnline'">
+            <span><b>{{ r.name }}</b>（{{ normUrl(r.summary?.remote_url) || '沒有 remote' }}）{{ defName ? '用預設' : '沒有對應的身分' }}</span>
             <span class="grow" />
             <select class="field" style="width: auto" @change="assign(r.path, ($event.target as HTMLSelectElement).value)">
               <option value="">指定給…</option>
@@ -284,6 +286,7 @@ const copyPub = async (s: string) => {
 .rule { display: grid; grid-template-columns: 160px 1fr auto; gap: 6px; align-items: center; }
 .sw { width: 18px; height: 18px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; background: var(--ct); }
 .sw.on { outline: 2px solid var(--text); outline-offset: 2px; }
+.infoline { font-size: 12px; color: var(--muted); background: var(--panel2); border-radius: 6px; padding: 4px 8px; }
 .okline { font-size: 12px; color: var(--ok); background: var(--okbg); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
 .warnline { font-size: 12px; color: var(--warn); background: var(--warnbg); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
 .gen { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; }

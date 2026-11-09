@@ -41,7 +41,7 @@ function idMenu(e: MouseEvent) {
   const w = who.value
   const items: MenuItem[] = [
     { header: true, label: `這個 repo（${r.name}）用哪個身分` },
-    { label: '自動（依規則）', checked: !w.pinned, hint: w.auto ? '目前是 ' + w.auto.name : '沒有符合的規則', on: () => w.pinned && setPin(r, null) },
+    { label: '自動（依規則）', checked: !w.pinned, hint: w.auto ? (w.fallback ? `沒有符合的規則，用預設：${w.auto.name}` : '目前是 ' + w.auto.name) : '沒有符合的規則', on: () => w.pinned && setPin(r, null) },
     ...S.cfg.identities.map((id) => ({ label: `${tagOf(id)}　${id.name}`, checked: w.pinned && w.id?.id === id.id, hint: id.account || id.email || '未設定', on: () => setPin(r, id.id) })),
     { sep: true },
     { label: '管理身分…', icon: '⚙', on: () => openModal('settings', { tab: 'ids' }) },

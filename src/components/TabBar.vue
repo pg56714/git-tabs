@@ -1,10 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { S, switchTab, closeRepo, moveTab, openMenu, openModal, refresh } from '../store'
+import { nextTick, ref, watch } from 'vue'
+import { S, switchTab, closeRepo, moveTab, openMenu, menuAt, openModal, refresh } from '../store'
 import { openFolder, openTerminal, copy } from '../actions'
 import IdChip from './IdChip.vue'
 
 const drag = ref<number | null>(null)
+const bar = ref<HTMLElement | null>(null)
+
+// A plain mouse wheel scrolls the tab row sideways (there is nothing to scroll vertically).
+function onWheel(e: WheelEvent) {
+  if (!bar.value) return
+  bar.value.scrollLeft += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+}
+
+// Keep the active tab in view, e.g. after Ctrl+Tab or adding a repo.
+watch(
+  // Branch labels arrive after the first render and widen the tabs, so re-check then too.
+  () => [S.active, S.repos.length, S.repos.map((r) => r.summary?.branch ?? '').join()],
+  async () => {
+    await nextTick()
+    bar.value?.querySelector('.tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  },
+  { immediate: true },
+)
+
+function allTabs(e: MouseEvent) {
+  menuAt(
+    e.currentTarget as Element,
+    S.repos.map((r, i) => ({ label: r.name, checked: i === S.active, hint: r.summary?.branch ?? '', on: () => switchTab(i) })),
+    'right',
+  )
+}
 
 function menu(e: MouseEvent, i: number) {
   const r = S.repos[i]
@@ -25,7 +51,8 @@ function drop(i: number) {
 </script>
 
 <template>
-  <div class="tabs">
+  <div class="tabbar">
+  <div ref="bar" class="tabs" @wheel.prevent="onWheel">
     <div
       v-for="(r, i) in S.repos"
       :key="r.path"
@@ -51,12 +78,15 @@ function drop(i: number) {
       </span>
       <button class="x" title="關閉分頁" @click.stop="closeRepo(i)">×</button>
     </div>
-    <div class="tab add" title="加入 repo" @click="openModal('addrepo')">＋</div>
+  </div>
+  <div class="tab add" title="加入 repo" @click="openModal('addrepo')">＋</div>
+  <div class="tab add" title="所有分頁" @click="allTabs">⌄</div>
   </div>
 </template>
 
 <style scoped>
-.tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; background: var(--bg); overflow-x: auto; scrollbar-width: none; }
+.tabbar { display: flex; align-items: flex-end; background: var(--bg); padding-right: 4px; min-width: 0; }
+.tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; height: 100%; }
 .tab { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px 0 12px; border-radius: 8px 8px 0 0; color: var(--muted); cursor: pointer; white-space: nowrap; user-select: none; max-width: 300px; flex: none; }
 .tab:hover { background: var(--hover); }
 .tab.on { background: var(--panel); color: var(--text); }
