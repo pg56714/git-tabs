@@ -82,6 +82,9 @@ pub fn command(program: &str) -> Command {
     let mut c = Command::new(program);
     // Never wait on a prompt nobody can answer; editors accept the default message.
     c.env("GIT_TERMINAL_PROMPT", "0").env("GIT_EDITOR", "true").env("GIT_SEQUENCE_EDITOR", "true").env("LC_ALL", "C");
+    // `git status` otherwise rewrites .git/index to refresh stat info, which the file watcher
+    // sees as a change and answers with another refresh.
+    c.env("GIT_OPTIONAL_LOCKS", "0");
     c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     {
