@@ -119,11 +119,11 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
         <input v-model="subject" class="field" placeholder="Commit 標題" @input="err = ''" />
         <textarea v-model="desc" class="field" placeholder="說明（可留空）" />
         <div v-if="err" class="err">{{ err }}</div>
-        <label class="sub amend"><input v-model="amend" type="checkbox" /> Amend（改寫上一個 commit）</label>
+        <label class="sub amend" title="改寫上一個 commit"><input v-model="amend" type="checkbox" /> Amend（改寫上一個 commit）</label>
+        <!-- Buttons share the row and wrap when the panel is narrow, instead of spilling into the diff. -->
         <div class="row">
-          <span class="sub"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span><span class="grow" />
           <button class="btn" :disabled="committing" title="Ctrl+Shift+Enter" @click="doCommit(true)">Commit 並 Push</button>
-          <button class="btn primary" :disabled="committing" @click="doCommit(false)">{{ amend ? 'Amend' : 'Commit' }}</button>
+          <button class="btn primary" :disabled="committing" title="Ctrl+Enter" @click="doCommit(false)">{{ amend ? 'Amend' : 'Commit' }}</button>
         </div>
       </div>
     </div>
@@ -156,7 +156,7 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
 
 <style scoped>
 .review { display: grid; flex: 1; min-height: 0; }
-.fp { display: flex; flex-direction: column; min-height: 0; }
+.fp { min-width: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .top { padding: 8px 10px 4px; }
 .prog { height: 3px; background: var(--border); margin: 0 10px 4px; border-radius: 2px; }
 .prog div { height: 3px; background: var(--accent); border-radius: 2px; transition: width 0.2s; }
@@ -165,8 +165,9 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
 .none { padding: 2px 16px; color: var(--faint); font-size: 12px; }
 .cbox { border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .cbox textarea { height: 56px; resize: vertical; }
-.amend { white-space: nowrap; }
-.row { display: flex; align-items: center; gap: 8px; }
+.amend { display: flex; gap: 4px; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+.row .btn { flex: 1 1 110px; justify-content: center; }
 .dv { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .hint { font-size: 11.5px; color: var(--faint); padding: 4px 10px; border-top: 1px solid var(--border); display: flex; gap: 12px; flex-wrap: wrap; }
 </style>

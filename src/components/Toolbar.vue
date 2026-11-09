@@ -77,11 +77,11 @@ function cycleTheme() {
     <span v-if="r.busy" class="sub busy">{{ r.busy }} 執行中…</span>
     <span class="grow" />
     <button v-if="S.cfg.identities.length" class="btn" title="切換這個 repo 用的身分" @click="idMenu">
-      👤 <span v-if="who.id">{{ who.id.account || who.id.email || who.id.name }}</span><span v-else class="down">沒有對應的身分</span>
+      👤 <span v-if="who.id" class="lbl">{{ who.id.account || who.id.email || who.id.name }}</span><span v-else class="down">沒有對應的身分</span>
       <IdChip :r="r" /> ▾
     </button>
-    <button v-else class="btn" title="設定 SSH key 和身分" @click="openModal('settings', { tab: 'ids' })">👤 設定身分</button>
-    <button class="btn" title="搜尋指令、repo、分支、commit" @click="S.palette = true">🔍 <kbd>Ctrl K</kbd></button>
+    <button v-else class="btn" title="設定 SSH key 和身分" @click="openModal('settings', { tab: 'ids' })">👤 <span class="lbl">設定身分</span></button>
+    <button class="btn" title="搜尋指令、repo、分支、commit" @click="S.palette = true">🔍 <kbd class="lbl">Ctrl K</kbd></button>
     <button class="btn icon" title="在檔案總管開啟" @click="openFolder(r.path)">📂</button>
     <button class="btn icon" title="開終端機" @click="openTerminal(r.path)">⌨</button>
     <button class="btn icon" :title="'外觀：' + { system: '跟系統', light: '淺色', dark: '深色' }[S.cfg.theme]" @click="cycleTheme">{{ { system: '◐', light: '☀', dark: '☾' }[S.cfg.theme] }}</button>
@@ -90,7 +90,13 @@ function cycleTheme() {
 </template>
 
 <style scoped>
-.bar { display: flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.bar > * { flex: none; }
+.bar > .grow { flex: 1; }
+/* On a narrow window, drop the labels first; anything still too wide scrolls instead of being cut off. */
+@media (max-width: 1100px) {
+  .lbl { display: none; }
+}
 .grp { display: inline-flex; }
 .grp .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .grp .split { margin-left: -1px; }

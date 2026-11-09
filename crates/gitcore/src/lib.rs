@@ -199,24 +199,48 @@ fn open_terminal(p: &Path) -> Result<Value, String> {
             spawn("cmd", &["/c", "start", "", "cmd", "/K"], Some(p))?;
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    spawn("open", &["-a", "Terminal", &d], None)?;
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let _ = &d;
-        spawn("x-terminal-emulator", &[], Some(p))?;
+        // Debian/Ubuntu's alternative, then the common desktops' own terminals.
+        let found = ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"].iter().any(|t| has(t) && spawn(t, &[], Some(p)).is_ok());
+        if !found {
+            return Err("找不到終端機程式".into());
+        }
     }
     ok(true)
 }
 
-/// Opens a file in VS Code when available, else with the default app.
-fn open_file(p: &Path) -> Result<Value, String> {
-    let d = p.display().to_string();
+/// Whether a program is on PATH.
+fn has(program: &str) -> bool {
+    let finder = if cfg!(windows) { "where" } else { "which" };
+    let mut c = std::process::Command::new(finder);
+    c.arg(program).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
-        if spawn("cmd", &["/c", "code", &d], None).is_err() {
-            spawn("explorer", &[&d], None)?;
-        }
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
     }
-    #[cfg(not(windows))]
-    spawn("code", &[&d], None)?;
+    c.status().map(|s| s.success()).unwrap_or(false)
+}
+
+/// Opens a file in VS Code when it is installed, else with the system's default app.
+fn open_file(p: &Path) -> Result<Value, String> {
+    let d = p.display().to_string();
+    if has("code") {
+        // On Windows `code` is a .cmd script, so it has to go through cmd.
+        #[cfg(windows)]
+        return spawn("cmd", &["/c", "code", &d], None).and_then(|_| ok(true));
+        #[cfg(not(windows))]
+        return spawn("code", &[&d], None).and_then(|_| ok(true));
+    }
+    #[cfg(windows)]
+    spawn("explorer", &[&d], None)?;
+    #[cfg(target_os = "macos")]
+    spawn("open", &[&d], None)?;
+    #[cfg(all(unix, not(target_os = "macos")))]
+    spawn("xdg-open", &[&d], None)?;
     ok(true)
 }

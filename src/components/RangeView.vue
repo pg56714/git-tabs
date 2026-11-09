@@ -74,7 +74,7 @@ const isCurrent = computed(() => p.r.summary?.branch === p.r.rangeHead)
 
 <style scoped>
 .review { display: grid; flex: 1; min-height: 0; }
-.fp { display: flex; flex-direction: column; min-height: 0; }
+.fp { min-width: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
 .prog { height: 3px; background: var(--border); margin: 8px 10px 6px; border-radius: 2px; }
 .prog div { height: 3px; background: var(--accent); border-radius: 2px; transition: width 0.2s; }
 .scroll { flex: 1; overflow: auto; }

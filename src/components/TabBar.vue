@@ -79,8 +79,13 @@ function drop(i: number) {
       <button class="x" title="關閉分頁" @click.stop="closeRepo(i)">×</button>
     </div>
   </div>
-  <div class="tab add" title="加入 repo" @click="openModal('addrepo')">＋</div>
-  <div class="tab add" title="所有分頁" @click="allTabs">⌄</div>
+  <!-- Icons are drawn as SVG: font glyphs like ＋ and ⌄ sit at different heights. -->
+  <div class="tab add" title="加入 repo" @click="openModal('addrepo')">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+  </div>
+  <div class="tab add" title="所有分頁" @click="allTabs">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
+  </div>
   </div>
 </template>
 
@@ -91,7 +96,7 @@ function drop(i: number) {
 .tab:hover { background: var(--hover); }
 .tab.on { background: var(--panel); color: var(--text); }
 .tab.dragging { opacity: 0.5; }
-.tab.add { padding: 0 12px; }
+.tab.add { padding: 0; width: 32px; justify-content: center; }
 .name { overflow: hidden; text-overflow: ellipsis; }
 .x { opacity: 0; border: 0; background: none; cursor: pointer; color: var(--faint); padding: 0 3px; border-radius: 4px; font-size: 14px; line-height: 1; }
 .x:hover { background: var(--hover); color: var(--text); }
