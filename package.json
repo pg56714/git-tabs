@@ -1,0 +1,36 @@
+{
+  "name": "git-tabs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:web": "concurrently -k -n api,web \"cargo run -p git-tabs-devserver\" \"vite --mode web\"",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "vue-tsc --noEmit && node node_modules/typescript7/bin/tsc -p tsconfig.ts7.json",
+    "lint": "oxlint src",
+    "fmt": "oxfmt src",
+    "test": "vitest run && cargo test -p gitcore",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "concurrently": "^10.0.7",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.92.0",
+    "typescript": "^6.0.3",
+    "typescript7": "npm:typescript@^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.3.14"
+  },
+  "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.52",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "shiki": "^4.6.0",
+    "vue": "^3.5.45"
+  }
+}
