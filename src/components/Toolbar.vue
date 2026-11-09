@@ -80,12 +80,12 @@ function cycleTheme() {
       👤 <span v-if="who.id">{{ who.id.account || who.id.email || who.id.name }}</span><span v-else class="down">沒有對應的身分</span>
       <IdChip :r="r" /> ▾
     </button>
-    <button v-else class="btn ghost" title="設定 SSH key 和身分" @click="openModal('settings', { tab: 'ids' })">👤 設定身分</button>
-    <button class="btn ghost" title="搜尋指令、repo、分支、commit" @click="S.palette = true">🔍 <kbd>Ctrl K</kbd></button>
-    <button class="btn ghost" title="在檔案總管開啟" @click="openFolder(r.path)">📂</button>
-    <button class="btn ghost" title="開終端機" @click="openTerminal(r.path)">⌨</button>
-    <button class="btn ghost" :title="'外觀：' + { system: '跟系統', light: '淺色', dark: '深色' }[S.cfg.theme]" @click="cycleTheme">{{ { system: '◐', light: '☀', dark: '☾' }[S.cfg.theme] }}</button>
-    <button class="btn ghost" title="設定" @click="openModal('settings', { tab: 'ids' })">⚙</button>
+    <button v-else class="btn" title="設定 SSH key 和身分" @click="openModal('settings', { tab: 'ids' })">👤 設定身分</button>
+    <button class="btn" title="搜尋指令、repo、分支、commit" @click="S.palette = true">🔍 <kbd>Ctrl K</kbd></button>
+    <button class="btn icon" title="在檔案總管開啟" @click="openFolder(r.path)">📂</button>
+    <button class="btn icon" title="開終端機" @click="openTerminal(r.path)">⌨</button>
+    <button class="btn icon" :title="'外觀：' + { system: '跟系統', light: '淺色', dark: '深色' }[S.cfg.theme]" @click="cycleTheme">{{ { system: '◐', light: '☀', dark: '☾' }[S.cfg.theme] }}</button>
+    <button class="btn icon" title="設定" @click="openModal('settings', { tab: 'ids' })">⚙</button>
   </div>
 </template>
 

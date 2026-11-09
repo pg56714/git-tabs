@@ -11,11 +11,13 @@ import DiffHead from './DiffHead.vue'
 defineOptions({ name: 'HistoryView' })
 const p = defineProps<{ r: RepoState }>()
 const ROW = 28
-const LANE = 14
+const LANE = 16
+// Center of the first lane; the same margin is kept on the right of the last lane.
+const PAD = 14
 const list = ref<HTMLElement | null>(null)
 const q = ref(p.r.logQuery)
 const graph = computed(() => (p.r.logQuery || p.r.logPath ? null : layout(p.r.commits)))
-const gw = computed(() => (graph.value ? Math.min(10, Math.max(1, ...graph.value.map((g) => g.width))) * LANE + 10 : 14))
+const gw = computed(() => (graph.value ? (Math.min(10, Math.max(1, ...graph.value.map((g) => g.width))) - 1) * LANE + PAD * 2 : 20))
 
 const virt = useVirtualizer(
   computed(() => ({ count: p.r.commits.length, getScrollElement: () => list.value, estimateSize: () => ROW, overscan: 20 })),
@@ -86,7 +88,7 @@ const body = computed(() => d.value?.message.split('\n').slice(1).join('\n').tri
 const selFile = computed(() => d.value?.files.find((f) => f.path === p.r.sel?.path))
 
 function path(g: ReturnType<typeof layout>[number]) {
-  const x = (c: number) => 7 + c * LANE
+  const x = (c: number) => PAD + c * LANE
   const y = (v: number) => (v * ROW) / 2
   return g.segs.map((s) => {
     const [x1, y1, x2, y2] = [x(s.x1), y(s.y1), x(s.x2), y(s.y2)]
@@ -118,7 +120,7 @@ function path(g: ReturnType<typeof layout>[number]) {
         >
           <svg v-if="graph" :width="gw" :height="ROW" aria-hidden="true">
             <path v-for="(s, k) in path(graph[it.index])" :key="k" :d="s.d" :stroke="s.c" stroke-width="2" fill="none" />
-            <circle :cx="7 + graph[it.index].col * LANE" :cy="ROW / 2" r="4.5" fill="var(--panel)" :stroke="LANE_COLORS[graph[it.index].color % LANE_COLORS.length]" stroke-width="2.5" />
+            <circle :cx="PAD + graph[it.index].col * LANE" :cy="ROW / 2" r="4.5" :fill="LANE_COLORS[graph[it.index].color % LANE_COLORS.length]" stroke="var(--panel)" stroke-width="1.5" />
           </svg>
           <span v-else class="dot">●</span>
           <span class="msg">

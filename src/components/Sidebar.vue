@@ -125,15 +125,16 @@ function tagMenu(e: MouseEvent, name: string) {
 .nav:hover { background: var(--hover); }
 .nav.on { background: var(--accentbg); color: var(--accenttx); }
 .n { margin-left: auto; font-size: 11.5px; flex: none; }
-.sh { display: flex; align-items: center; gap: 4px; padding: 10px 14px 3px; font-size: 11.5px; color: var(--faint); cursor: pointer; }
-.sh:hover { color: var(--muted); }
-.si { display: flex; align-items: center; gap: 6px; margin: 0 8px; padding: 3px 8px 3px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); white-space: nowrap; min-height: 26px; }
+.sh { display: flex; align-items: center; gap: 4px; padding: 12px 14px 3px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.sh .n { font-weight: 400; color: var(--faint); }
+.sh:hover { color: var(--text); }
+.si { display: flex; align-items: center; gap: 6px; margin: 0 8px; padding: 3px 8px 3px 22px; border-radius: 6px; cursor: pointer; color: var(--text); white-space: nowrap; min-height: 26px; }
 .si:hover { background: var(--hover); }
 .si.cur { color: var(--text); font-weight: 600; }
-.si.deep { padding-left: 24px; }
-.si.sub2 { cursor: default; }
+.si.deep { padding-left: 38px; }
+.si.sub2 { cursor: default; color: var(--muted); }
 .si.sub2:hover { background: none; }
-.si.none { color: var(--faint); cursor: default; }
+.si.none { color: var(--faint); cursor: default; font-size: 12px; }
 .si.none:hover { background: none; }
 .ck { width: 10px; flex: none; color: var(--ok); }
 .nm { overflow: hidden; text-overflow: ellipsis; }
