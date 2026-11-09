@@ -10,12 +10,13 @@ A desktop git client with one tab per repository, built for reviewing changes qu
 - **Review**: file tree with a "reviewed" checkbox and progress, unified or side-by-side diff, syntax colors, changed words highlighted inside a line. `↑`/`↓` next/previous file, `←`/`→` previous/next hunk, `Enter` mark reviewed (and jump to the next unreviewed file), `S` stage/unstage.
 - **Staging**: stage, unstage or discard a whole file, one hunk, or selected lines (click the line, drag or Shift-click for more, then `S`).
 - **Commit**: commit, commit and push, amend (`Ctrl+Enter`, `Ctrl+Shift+Enter`).
-- **History**: commit graph across all branches, search by message or SHA, commit details, per-file diff, cherry-pick, revert, checkout, reset (soft / mixed / hard), tag, new branch. File history and blame.
+- **History** (laid out like Fork's All Commits: list on top, Commit / Changes tabs below): commit graph across all branches, search by message or SHA, commit details, per-file diff, cherry-pick, revert, checkout, reset (soft / mixed / hard), tag, new branch. File history and blame.
 - **Branch vs main**: everything a branch changed compared with the default branch, with the same review flow, then merge.
 - **Remotes**: Sync (fetch → pull → push), fetch, pull (fast-forward, rebase or merge), push (normal or `--force-with-lease`), background fetch.
 - **Branches, tags, stashes, worktrees, reflog** in the sidebar. A worktree opens as its own tab.
 - **Conflicts**: a banner while a merge/rebase/cherry-pick is in progress, conflict regions highlighted, "use mine" / "use theirs" / "mark resolved", continue or abort.
 - **Identities**: several SSH keys / names / emails, picked automatically by remote URL or folder, or pinned per repo. Test a key against GitHub, generate a new ed25519 key.
+- Panes can be resized by dragging the dividers; sizes are remembered. Lots of tabs scroll sideways with the mouse wheel.
 - **Command palette** (`Ctrl+K`), command log of every git command that changed something, light/dark theme.
 
 ## How identities work

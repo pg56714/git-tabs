@@ -120,7 +120,7 @@ function tagMenu(e: MouseEvent, name: string) {
 </template>
 
 <style scoped>
-.side { background: var(--panel2); border-right: 1px solid var(--border); overflow: auto; padding: 8px 0; user-select: none; }
+.side { background: var(--panel2); overflow: auto; padding: 8px 0; user-select: none; }
 .nav { display: flex; align-items: center; gap: 8px; margin: 1px 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--muted); }
 .nav:hover { background: var(--hover); }
 .nav.on { background: var(--accentbg); color: var(--accenttx); }

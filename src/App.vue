@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, watchEffect } from 'vue'
+import { computed, onMounted, watch, watchEffect } from 'vue'
 import { onRepoChanged } from './api'
-import { S, R, init, startTimers, onRepoChangedOnDisk, switchTab, moveSel, moveCommit, toggleSeen, refresh, closeModal } from './store'
+import { S, R, savePrefs, init, startTimers, onRepoChangedOnDisk, switchTab, moveSel, moveCommit, toggleSeen, refresh, closeModal } from './store'
 import { stageToggle } from './actions'
 import TabBar from './components/TabBar.vue'
 import Toolbar from './components/Toolbar.vue'
@@ -16,6 +16,7 @@ import Toasts from './components/Toasts.vue'
 import Palette from './components/Palette.vue'
 import ModalHost from './components/ModalHost.vue'
 import Welcome from './components/Welcome.vue'
+import Splitter from './components/Splitter.vue'
 
 const repo = computed(() => R())
 const dark = window.matchMedia('(prefers-color-scheme: dark)')
@@ -26,6 +27,8 @@ function applyTheme() {
   document.documentElement.dataset.theme = t
 }
 watchEffect(applyTheme)
+// Remember view choices (unified/side-by-side, wrap, history tab) across restarts.
+watch(() => [S.side, S.wrap, S.histTab], savePrefs)
 dark.addEventListener('change', (e) => {
   sysDark.v = e.matches
   applyTheme()
@@ -100,8 +103,9 @@ onMounted(async () => {
     <TabBar />
     <template v-if="repo">
       <Toolbar :r="repo" />
-      <div class="main">
+      <div class="main" :style="{ gridTemplateColumns: `${S.sizes.sideBar}px 5px minmax(0, 1fr)` }">
         <Sidebar :r="repo" />
+        <Splitter v-model="S.sizes.sideBar" :min="150" :max="420" side="left" @done="savePrefs" />
         <section class="content">
           <div v-if="repo.error" class="banner err">
             <span>{{ repo.error }}</span><span class="grow" />
@@ -124,8 +128,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.app { display: grid; grid-template-rows: 36px 42px minmax(0, 1fr) auto; height: 100vh; }
+.app { display: grid; grid-template-rows: 36px 42px minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); height: 100vh; }
 .app:has(> .welcome) { grid-template-rows: 36px minmax(0, 1fr) auto; }
-.main { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; }
+.main { display: grid; min-height: 0; }
 .content { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }
 </style>

@@ -83,6 +83,10 @@ export const S = reactive({
   repos: [] as RepoState[],
   active: 0,
   side: !!prefs.side,
+  /** which tab the history detail shows, like Fork's Commit / Changes */
+  histTab: (prefs.histTab === 'changes' ? 'changes' : 'commit') as 'commit' | 'changes',
+  /** pane sizes in px, set by dragging the splitters */
+  sizes: { sideBar: 220, files: 300, histTop: 340, histFiles: 300, ...prefs.sizes } as { sideBar: number; files: number; histTop: number; histFiles: number },
   wrap: !!prefs.wrap,
   logOpen: false,
   log: [] as LogEntry[],
@@ -106,7 +110,7 @@ if (import.meta.env.DEV) (window as unknown as { __S: typeof S }).__S = S
 
 export function savePrefs() {
   try {
-    localStorage.setItem('git-tabs:prefs', JSON.stringify({ side: S.side, wrap: S.wrap }))
+    localStorage.setItem('git-tabs:prefs', JSON.stringify({ side: S.side, wrap: S.wrap, sizes: S.sizes, histTab: S.histTab }))
   } catch {
     /* private mode */
   }
@@ -176,7 +180,7 @@ function newRepo(path: string): RepoState {
     logQuery: '',
     logPath: null,
     logLoading: false,
-    view: 'changes',
+    view: 'history',
     sel: null,
     selCommit: null,
     detail: null,
@@ -284,10 +288,6 @@ async function doRefresh(r: RepoState) {
 export async function openRepo(r: RepoState) {
   await refresh(r)
   if (r.view === 'history' && !r.commits.length) await loadLog(r, true)
-  if (r.view === 'changes' && !r.status.length && !r.summary?.state) {
-    r.view = 'history'
-    await loadLog(r, true)
-  }
 }
 
 export async function loadLog(r: RepoState, reset = false) {
@@ -377,7 +377,23 @@ function ensureSel(r: RepoState) {
 }
 
 let diffSeq = 0
-export async function loadDiff(r: RepoState) {
+/** Most recently used commit file diffs (insertion order = age). */
+const commitDiffs = new Map<string, FileDiff>()
+let diffInflight: { key: string; p: Promise<void> } | null = null
+
+/** Loads the selected file's diff. A second call for the same file while one is running joins it. */
+export function loadDiff(r: RepoState): Promise<void> {
+  const sel = r.sel
+  const key = sel ? `${r.path}|${sel.list}:${sel.path}|${r.detail?.sha ?? ''}|${r.rangeHead ?? ''}` : ''
+  if (sel && diffInflight?.key === key) return diffInflight.p
+  const p = fetchDiff(r).finally(() => {
+    if (diffInflight?.p === p) diffInflight = null
+  })
+  if (sel) diffInflight = { key, p }
+  return p
+}
+
+async function fetchDiff(r: RepoState) {
   const sel = r.sel
   if (!sel) {
     r.diff = null
@@ -390,7 +406,12 @@ export async function loadDiff(r: RepoState) {
     if (sel.list === 'c') {
       if (!r.detail) return
       const f = r.detail.files.find((x) => x.path === sel.path)
-      d = await call<FileDiff>('commit_file_diff', { repo: r.path, sha: r.detail.sha, path: sel.path, old_path: f?.old_path })
+      // A commit's diff never changes, so revisiting a file is instant.
+      const ck = `${r.path}|${r.detail.sha}|${sel.path}`
+      d = commitDiffs.get(ck) ?? (await call<FileDiff>('commit_file_diff', { repo: r.path, sha: r.detail.sha, path: sel.path, old_path: f?.old_path }))
+      commitDiffs.delete(ck)
+      commitDiffs.set(ck, d)
+      if (commitDiffs.size > 300) commitDiffs.delete(commitDiffs.keys().next().value!)
     } else if (sel.list === 'r') {
       const f = r.rangeFiles.find((x) => x.path === sel.path)
       d = await call<FileDiff>('range_file_diff', { repo: r.path, base: rangeBase(r), head: r.rangeHead, path: sel.path, old_path: f?.old_path })
@@ -496,11 +517,18 @@ export function pinOf(r: RepoState): string | null {
   return S.cfg.repos.find((x) => x.path === r.path)?.pin ?? null
 }
 
-export function identityOf(r: RepoState): { id: Identity | null; pinned: boolean; auto: Identity | null } {
-  const auto = matchIdentity(S.cfg.identities, r.path, r.summary?.remote_url ?? null)
+/**
+ * The identity git will use for this repo: a pin, else the first matching rule, else the
+ * fallback identity (written as a plain `include.path`, so it applies when no rule does).
+ * `fallback` is true when the fallback was used.
+ */
+export function identityOf(r: RepoState): { id: Identity | null; pinned: boolean; auto: Identity | null; fallback: boolean } {
+  const rule = matchIdentity(S.cfg.identities, r.path, r.summary?.remote_url ?? null)
+  const def = rule ? null : (S.cfg.identities.find((i) => i.id === S.cfg.default_identity) ?? null)
+  const auto = rule ?? def
   const pin = pinOf(r)
   const pinned = pin ? S.cfg.identities.find((i) => i.id === pin) ?? null : null
-  return { id: pinned ?? auto, pinned: !!pinned, auto }
+  return { id: pinned ?? auto, pinned: !!pinned, auto, fallback: !pinned && !!def }
 }
 
 export async function setPin(r: RepoState, id: string | null) {
@@ -510,7 +538,7 @@ export async function setPin(r: RepoState, id: string | null) {
   if (e) e.pin = id
   await saveConfig()
   const now = identityOf(r)
-  toast(id ? `${r.name} 改用 ${ident?.name}（${ident?.account || ident?.email}）` : `${r.name} 改回自動` + (now.auto ? `：${now.auto.name}` : '（沒有符合的規則）'))
+  toast(id ? `${r.name} 改用 ${ident?.name}（${ident?.account || ident?.email}）` : `${r.name} 改回自動` + (now.auto ? `：${now.auto.name}${now.fallback ? '（預設）' : ''}` : '（沒有符合的規則）'))
 }
 
 // ---------- running operations ----------

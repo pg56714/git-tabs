@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { S, staged, unstaged, select, isSeen, openMenu, git, type RepoState } from '../store'
+import { S, savePrefs, staged, unstaged, select, isSeen, openMenu, git, type RepoState } from '../store'
 import { stageFiles, unstageFiles, stageAll, unstageAll, discardFiles, applyLines, commit, resolveConflict, abortOrContinue, openFile, fileHistory, blame, copy } from '../actions'
 import type { StatusEntry } from '../types'
 import FileTree from './FileTree.vue'
+import Splitter from './Splitter.vue'
 import DiffView from './DiffView.vue'
 import DiffHead from './DiffHead.vue'
 
@@ -94,7 +95,7 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
   <div v-if="!r.status.length" class="empty">
     <div><span class="big">✓</span>沒有未提交的修改<br /><span class="sub">工作目錄是乾淨的</span></div>
   </div>
-  <div v-else class="review">
+  <div v-else class="review" :style="{ gridTemplateColumns: `${S.sizes.files}px 5px minmax(0, 1fr)` }">
     <div class="fp">
       <div class="top">
         <span class="sub">已看 {{ seenN }} / {{ allPaths.length }} 個檔案</span>
@@ -126,7 +127,8 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
         </div>
       </div>
     </div>
-    <div class="dv">
+    <Splitter v-model="S.sizes.files" :min="180" :max="700" side="left" @done="savePrefs" />
+      <div class="dv">
       <template v-if="sel">
         <DiffHead :r="r" :diff="r.diff" :list="sel.list" :path="sel.path" :status="selStatus">
           <template v-if="selEntry?.conflicted">
@@ -153,8 +155,8 @@ function fileMenu(e: MouseEvent, list: 'u' | 's', path: string) {
 </template>
 
 <style scoped>
-.review { display: grid; grid-template-columns: 300px minmax(0, 1fr); flex: 1; min-height: 0; }
-.fp { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.review { display: grid; flex: 1; min-height: 0; }
+.fp { display: flex; flex-direction: column; min-height: 0; }
 .top { padding: 8px 10px 4px; }
 .prog { height: 3px; background: var(--border); margin: 0 10px 4px; border-radius: 2px; }
 .prog div { height: 3px; background: var(--accent); border-radius: 2px; transition: width 0.2s; }

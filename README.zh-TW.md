@@ -10,12 +10,13 @@
 - **Review**：檔案樹可以勾「已看」並顯示進度；diff 可切換單欄或並排，有語法上色，同一行裡改動的字會特別標出。`↑`/`↓` 上/下一個檔案，`←`/`→` 上/下一段改動，`Enter` 標記已看（並跳到下一個沒看的檔案），`S` Stage／取消 Stage。
 - **Stage**：可以 stage、取消 stage 或捨棄整個檔案、單一區段，或選取的幾行（點一行，拖曳或按住 Shift 選多行，再按 `S`）。
 - **Commit**：commit、commit 並 push、amend（`Ctrl+Enter`、`Ctrl+Shift+Enter`）。
-- **歷史**：涵蓋所有分支的 commit 圖，可用訊息或 SHA 搜尋；有 commit 詳細資訊、每個檔案的 diff，以及 cherry-pick、revert、checkout、reset（soft／mixed／hard）、加 tag、開新分支。也有單一檔案的歷史和 blame。
+- **歷史**（版面跟 Fork 的 All Commits 一樣：上面是列表，下面是 Commit／Changes 分頁）：涵蓋所有分支的 commit 圖，可用訊息或 SHA 搜尋；有 commit 詳細資訊、每個檔案的 diff，以及 cherry-pick、revert、checkout、reset（soft／mixed／hard）、加 tag、開新分支。也有單一檔案的歷史和 blame。
 - **分支 vs main**：一次看完一條分支相對預設分支改了什麼，用同樣的 review 流程，看完就能 merge。
 - **遠端**：Sync（fetch → pull → push）、fetch、pull（只快轉、rebase 或 merge）、push（一般或 `--force-with-lease`）、背景定時 fetch。
 - 側欄有**分支、tag、stash、worktree、reflog**。worktree 可以直接開成新分頁。
 - **衝突**：merge／rebase／cherry-pick 進行中會顯示提示列，衝突區塊用顏色標出，可選「用我的」／「用對方的」／「標記已解決」，再繼續或中止。
 - **身分**：可設定多組 SSH key／名字／email，依 remote 網址或資料夾自動選擇，也能針對單一 repo 手動指定。可以測試 key 連 GitHub 對應哪個帳號，也能產生新的 ed25519 key。
+- 各個面板之間的分隔線可以拖曳調整，大小會記住。分頁很多時，用滑鼠滾輪就能左右捲動。
 - **指令面板**（`Ctrl+K`）、會改變東西的 git 指令都記在指令紀錄裡、深色／淺色主題。
 
 ## 身分怎麼運作

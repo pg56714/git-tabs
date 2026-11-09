@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { S, select, isSeen, loadRange, loadDiff, rangeBase, rangeCandidates, setView, loadDetail, type RepoState } from '../store'
+import { S, savePrefs, select, isSeen, loadRange, loadDiff, rangeBase, rangeCandidates, setView, loadDetail, type RepoState } from '../store'
 import { mergeInto, switchBranch } from '../actions'
 import { short, ago } from '../lib/format'
 import FileTree from './FileTree.vue'
+import Splitter from './Splitter.vue'
 import DiffView from './DiffView.vue'
 import DiffHead from './DiffHead.vue'
 
@@ -46,7 +47,7 @@ const isCurrent = computed(() => p.r.summary?.branch === p.r.rangeHead)
       <span v-else-if="r.rangeHead && r.rangeCommits.length && r.summary?.branch !== base" class="sub" title="要 merge 請先切到 main">（切到 {{ base }} 之後可以直接 merge）</span>
     </div>
     <div v-if="!r.rangeFiles.length" class="empty"><div>{{ r.rangeHead }} 跟 {{ base }} 沒有差異</div></div>
-    <div v-else class="review">
+    <div v-else class="review" :style="{ gridTemplateColumns: `${S.sizes.files}px 5px minmax(0, 1fr)` }">
       <div class="fp">
         <div class="prog"><div :style="{ width: Math.round((seenN / Math.max(1, r.rangeFiles.length)) * 100) + '%' }" /></div>
         <div class="scroll">
@@ -59,6 +60,7 @@ const isCurrent = computed(() => p.r.summary?.branch === p.r.rangeHead)
           </div>
         </div>
       </div>
+      <Splitter v-model="S.sizes.files" :min="180" :max="700" side="left" @done="savePrefs" />
       <div class="dv">
         <template v-if="r.sel && selFile">
           <DiffHead :r="r" :diff="r.diff" list="r" :path="r.sel.path" :status="selFile.status" />
@@ -71,8 +73,8 @@ const isCurrent = computed(() => p.r.summary?.branch === p.r.rangeHead)
 </template>
 
 <style scoped>
-.review { display: grid; grid-template-columns: 300px minmax(0, 1fr); flex: 1; min-height: 0; }
-.fp { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.review { display: grid; flex: 1; min-height: 0; }
+.fp { display: flex; flex-direction: column; min-height: 0; }
 .prog { height: 3px; background: var(--border); margin: 8px 10px 6px; border-radius: 2px; }
 .prog div { height: 3px; background: var(--accent); border-radius: 2px; transition: width 0.2s; }
 .scroll { flex: 1; overflow: auto; }
