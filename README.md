@@ -1,8 +1,6 @@
-# git-tabs
+# <img src="public/icon.svg" width="32" height="32" alt="" align="top"> git-tabs
 
 A desktop git client with one tab per repository, built for reviewing changes quickly.
-
-![icon](public/icon.svg)
 
 ## What it does
 
