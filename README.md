@@ -2,6 +2,12 @@
 
 **English** | [繁體中文](README.zh-TW.md)
 
+> [!WARNING]
+> **The app is not code-signed**, so the system blocks it the first time. Do this once:
+> - **Windows**: "Windows protected your PC" → **More info** → **Run anyway**
+> - **macOS**: System Settings → Privacy & Security → find git-tabs and click **Open Anyway**, or run `xattr -cr /Applications/git-tabs.app` in Terminal
+> - **Linux**: run `chmod +x` on the AppImage first; the .deb installs as usual
+
 A desktop git client with one tab per repository, built for reviewing changes quickly.
 
 ## What it does
@@ -55,6 +61,10 @@ bun run tauri build      # release build (add --no-bundle for just the exe)
 ```
 
 `crates/devserver` accepts `--config-dir <dir>` and `--git-global <file>`; point the latter at a scratch file so testing never touches your real gitconfig.
+
+### Releasing
+
+Actions → **Release** → **Run workflow**. It picks the next version from the Conventional Commits since the last tag (`feat` → minor, `fix`/`perf` → patch, breaking → minor before 1.0), writes `CHANGELOG.md`, commits and tags `chore(release): vX.Y.Z`, builds Windows (installer + portable exe), macOS (universal dmg) and Linux (AppImage + deb), and publishes the release when all three have uploaded. With nothing new since the last tag it stops without releasing. `bun scripts/release.ts --dry-run` shows what it would do.
 
 ### Toolchain
 

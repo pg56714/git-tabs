@@ -2,6 +2,12 @@
 
 [English](README.md) | **繁體中文**
 
+> [!WARNING]
+> **程式沒有簽章**，第一次打開時系統會擋一下，照下面做一次就好：
+> - **Windows**：出現「Windows 已保護您的電腦」→ 按「其他資訊」→「仍要執行」
+> - **macOS**：系統設定 → 隱私權與安全性 → 找到 git-tabs 按「強制打開」，或在終端機執行 `xattr -cr /Applications/git-tabs.app`
+> - **Linux**：AppImage 先 `chmod +x` 再執行；deb 直接安裝
+
 一個桌面 git 用戶端：每個 repo 一個分頁，專為快速 review 修改而設計。
 
 ## 功能
@@ -55,6 +61,10 @@ bun run tauri build      # release 版（加 --no-bundle 只產生 exe）
 ```
 
 `crates/devserver` 接受 `--config-dir <dir>` 和 `--git-global <file>`；後者指到一個暫存檔，測試時就不會動到你真正的 gitconfig。
+
+### 發布
+
+到 Actions → **Release** → **Run workflow**。它會依上一個 tag 之後的 Conventional Commits 決定新版本（`feat` → 第二位 +1，`fix`/`perf` → 第三位 +1，1.0 前的破壞性改動 → 第二位 +1），寫入 `CHANGELOG.md`，commit 並打上 `chore(release): vX.Y.Z` tag，在 Windows（安裝檔＋免安裝 exe）、macOS（通用 dmg）、Linux（AppImage＋deb）上編譯，三個都上傳完就直接公開。上一個 tag 之後沒有新東西時會直接停止。`bun scripts/release.ts --dry-run` 可以先看它會怎麼做。
 
 ### 工具鏈
 
