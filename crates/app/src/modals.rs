@@ -392,7 +392,7 @@ impl GitTabs {
         });
     }
 
-    pub fn settings_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn settings_save(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::Settings(m)) = &mut self.modal else { return };
         m.err = None;
         let mut ids: Vec<Identity> = Vec::new();
@@ -423,7 +423,6 @@ impl GitTabs {
         let fetch: u32 = m.fetch.parse().unwrap_or(0);
         let ctx = self.ctx.clone();
         let (ids2, def2) = (ids.clone(), def.clone());
-        let handle = window.window_handle();
         cx.notify();
         self.work(cx, move || gitcore::dispatch(&ctx, "identities_apply", json!({ "identities": ids2, "default": def2 })), move |this, res, cx| {
             match res {

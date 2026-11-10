@@ -341,7 +341,7 @@ const TABLE: &[(&str, &str)] = &[
     ("Reset 到這裡", "Reset to here"),
     ("沒有紀錄", "No entries"),
     ("一般", "General"),
-    ("依照 remote 網址或資料夾自動選身分。儲存時會寫進 git 全域設定的 includeIf，所以在終端機或 Claude 執行的 git 也會用同一個身分。", "The identity is picked automatically from the remote URL or the folder. Saving writes includeIf entries into git's global config, so git run in a terminal uses the same identity."),
+    ("依照 remote 網址或資料夾自動選身分。儲存時會寫進 git 全域設定的 includeIf，所以在終端機執行的 git 也會用同一個身分。", "The identity is picked automatically from the remote URL or the folder. Saving writes includeIf entries into git's global config, so git run in a terminal uses the same identity."),
     ("還沒有身分。按「＋ 新增身分」，填好 SSH key 和 email。", "No identities yet. Press \"＋ New identity\" and fill in the SSH key and email."),
     ("＋ 新增身分", "＋ New identity"),
     ("尋找中…", "Searching…"),

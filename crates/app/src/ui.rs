@@ -16,10 +16,6 @@ pub enum Bk {
     On,
 }
 
-pub fn text(s: impl Into<SharedString>) -> gpui_kit::SharedString {
-    s.into()
-}
-
 /// `.btn` / `.btn.sm`
 pub fn btn(p: &Pal, id: impl Into<ElementId>, kind: Bk, small: bool, label: impl IntoElement) -> Stateful<Div> {
     let (bg, fg, border) = match kind {

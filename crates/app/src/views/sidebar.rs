@@ -33,7 +33,10 @@ impl GitTabs {
             .bg(if on { p.accent_bg } else { gpui_kit::Hsla::transparent_black() })
             .text_color(if on { p.accent_tx } else { p.muted })
             .hover(move |s| s.bg(if on { p.accent_bg } else { p.hover }))
-            .on_click(cx.listener(move |this, _, _, cx| this.set_view(view, cx)))
+            .on_click(cx.listener(move |this, _, w, cx| {
+                this.set_view(view, cx);
+                this.nav_focus.focus(w, cx);
+            }))
             .child(label)
             .when_some(count.filter(|c| *c > 0), |d, c| d.child(div().ml_auto().text_size(px(11.5)).child(c.to_string())))
             .into_any_element()

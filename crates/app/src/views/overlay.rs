@@ -108,35 +108,6 @@ impl GitTabs {
 
     // ----- dialogs -----
 
-    fn shade(&self, wide: f32, cx: &mut Context<Self>) -> gpui_kit::Div {
-        let p = self.pal;
-        let ww = f32::from(self.window_size.width);
-        let w = wide.min(ww * 0.94);
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .bg(Hsla { h: 0.6, s: 0.2, l: 0.05, a: 0.35 })
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, w, cx| this.close_modal(w, cx)))
-            .child(
-                div()
-                    .absolute()
-                    .top(gpui_kit::relative(0.10))
-                    .left(px(((ww - w) / 2.).max(0.)))
-                    .w(px(w))
-                    .max_h(gpui_kit::relative(0.82))
-                    .flex()
-                    .flex_col()
-                    .overflow_hidden()
-                    .rounded(px(12.))
-                    .border_1()
-                    .border_color(p.border)
-                    .bg(p.panel)
-                    .shadow_lg()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-            )
-    }
-
     /// Wraps a dialog: title, scrolling body, footer buttons.
     pub fn dialog(&self, title: AnyElement, body: AnyElement, foot: Vec<AnyElement>, wide: f32, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
@@ -473,8 +444,11 @@ impl GitTabs {
                     .child(match last {
                         Some(l) => div()
                             .flex()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
                             .gap(px(8.))
-                            .child(div().text_color(p.text).font_family("Cascadia Mono").overflow_hidden().text_ellipsis().child(l.cmd.clone()))
+                            .child(div().min_w_0().overflow_hidden().text_ellipsis().text_color(p.text).font_family("Cascadia Mono").child(l.cmd.clone()))
                             .child(div().text_color(if l.ok { p.ok } else { p.danger }).child(format!("{} {:.1}s", if l.ok { "✓" } else { "✕" }, l.ms as f32 / 1000.)))
                             .into_any_element(),
                         None => div().child(crate::i18n::t("還沒有執行任何會改變東西的指令")).into_any_element(),

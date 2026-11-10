@@ -16,7 +16,7 @@ use gitcore::Ctx;
 use gpui_kit::component::diff::{DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::{
-    AppContext as _, Context, Entity, FocusHandle, Render, SharedString, Subscription, Task, Window, WindowAppearance,
+    AppContext as _, Context, Entity, FocusHandle, Render, Subscription, Task, Window, WindowAppearance,
 };
 use notify_debouncer_mini::{
     DebounceEventResult, Debouncer, new_debouncer, notify::RecommendedWatcher, notify::RecursiveMode,
@@ -122,7 +122,6 @@ pub struct GitTabs {
     pub detail_scroll: gpui_kit::ScrollHandle,
     pub commit_scroll: gpui_kit::UniformListScrollHandle,
     pub log_scroll: gpui_kit::ScrollHandle,
-    pub blame_scroll: gpui_kit::ScrollHandle,
     commit_diffs: VecDeque<(String, FileDiff)>,
     inflight: HashSet<PathBuf>,
     again: HashSet<PathBuf>,
@@ -237,7 +236,6 @@ impl GitTabs {
             detail_scroll: Default::default(),
             commit_scroll: Default::default(),
             log_scroll: Default::default(),
-            blame_scroll: Default::default(),
             commit_diffs: VecDeque::new(),
             inflight: HashSet::new(),
             again: HashSet::new(),
@@ -251,6 +249,7 @@ impl GitTabs {
             _subs: subs,
         };
         this.apply_diff_view(cx);
+        this.nav_focus.focus(window, cx);
         this.watch(cx);
         this.start_timers(cx);
         this.work(cx, || gitcore::runner::run(None, &["--version"], None, false), |this, o, cx| {
@@ -349,10 +348,6 @@ impl GitTabs {
 
     pub fn ok(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
         self.toast(text, ToastKind::Ok, None, cx);
-    }
-
-    pub fn is_dark(&self) -> bool {
-        self.pal.dark
     }
 
     /// Re-reads the theme setting and the system appearance (no window needed).
@@ -1229,6 +1224,3 @@ impl Render for GitTabs {
     }
 }
 
-pub fn shared(s: impl Into<String>) -> SharedString {
-    SharedString::from(s.into())
-}

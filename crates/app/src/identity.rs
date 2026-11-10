@@ -176,7 +176,7 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> (Vec<Identity>, Optio
     let (f_name, f_email) = (text(found, "name"), text(found, "email"));
     let mut ids: Vec<Identity> = Vec::new();
     let mut by_file: Vec<(String, usize)> = Vec::new();
-    let mut add = |ids: &mut Vec<Identity>, existing: &[Identity], make: &dyn Fn(&mut Identity)| -> usize {
+    let add = |ids: &mut Vec<Identity>, existing: &[Identity], make: &dyn Fn(&mut Identity)| -> usize {
         let all: Vec<Identity> = existing.iter().cloned().chain(ids.iter().cloned()).collect();
         let mut id = new_identity(&all);
         id.rules.clear();

@@ -282,7 +282,6 @@ pub struct SshResult {
 pub struct KeyGen {
     pub open: bool,
     pub path: String,
-    pub pass: String,
     pub public: Option<String>,
     pub err: Option<String>,
     pub busy: bool,

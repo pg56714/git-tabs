@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+
 
 use gitcore::config::Identity;
 use gitcore::ops::{self, LineAction};
@@ -876,11 +876,5 @@ impl GitTabs {
         self.active = self.repos.iter().position(|r| r.path == cur).unwrap_or(0);
         self.save_config();
         cx.notify();
-    }
-
-    pub fn quiet_for(&mut self, path: &Path, ms: u64) {
-        if let Some(r) = self.repo_by_path(path) {
-            r.quiet_until = Some(Instant::now() + Duration::from_millis(ms));
-        }
     }
 }

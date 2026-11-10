@@ -13,7 +13,7 @@ use crate::app::*;
 use crate::format::{ago, date_time, short};
 use crate::graph::GraphRow;
 use crate::model::*;
-use crate::theme::{Pal, lane_color};
+use crate::theme::lane_color;
 use crate::tree::TreeFile;
 use crate::ui::*;
 use crate::views::{SplitKind, diffpane::PaneMode, on_split, splitter};

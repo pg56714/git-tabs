@@ -94,7 +94,9 @@ impl GitTabs {
                         .bg(if on { p.accent_bg } else { gpui_kit::Hsla::transparent_black() })
                         .text_color(if on { p.accent_tx } else { p.text })
                         .hover(move |s| s.bg(if on { p.accent_bg } else { p.hover }))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                        .on_click(cx.listener(move |this, ev: &ClickEvent, w, cx| {
+                            // The arrow keys and S act on the file list, so it takes the focus.
+                            this.nav_focus.focus(w, cx);
                             this.select(kind, p1.clone(), cx);
                             if ev.click_count() >= 2 {
                                 match kind {

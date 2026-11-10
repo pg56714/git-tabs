@@ -1,7 +1,7 @@
 //! The tab bar (TabBar.vue).
 
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render, ScrollWheelEvent, SharedString,
+    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render, ScrollEvent, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, point, prelude::FluentBuilder as _, px,
 };
 
@@ -190,7 +190,7 @@ impl GitTabs {
                     .overflow_x_scroll()
                     .track_scroll(&self.tab_scroll)
                     // A plain mouse wheel scrolls the row sideways: there is nothing to scroll vertically.
-                    .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
+                    .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| {
                         let d = ev.delta.pixel_delta(px(16.));
                         let o = this.tab_scroll.offset();
                         let dx = if d.y.abs() > d.x.abs() { d.y } else { d.x };
