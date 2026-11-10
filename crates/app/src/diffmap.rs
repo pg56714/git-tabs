@@ -175,4 +175,44 @@ mod tests {
         assert!(p.contains("--- /dev/null") && p.contains("new file mode"));
         assert_eq!(DiffFile::parse(&p).unwrap()[0].additions(), 2);
     }
+
+    fn git(dir: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git").args(args).current_dir(dir).output().expect("git runs");
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    /// The whole staging chain on a real repo: diff -> pick one line by number -> apply_lines.
+    #[test]
+    fn staging_one_selected_line_changes_only_that_line_in_the_index() {
+        let dir = std::env::temp_dir().join(format!("git-tabs-e2e-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.name", "T"]);
+        git(&dir, &["config", "user.email", "t@t.t"]);
+        git(&dir, &["config", "core.autocrlf", "false"]);
+        let base: String = (1..=30).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(dir.join("a.txt"), &base).unwrap();
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-q", "-m", "init"]);
+        // two edits far apart => two hunks
+        std::fs::write(dir.join("a.txt"), base.replace("line 3\n", "line 3 CHANGED\n").replace("line 25\n", "line 25 CHANGED\n")).unwrap();
+
+        let fd = gitcore::ops::diff_file(&dir, "a.txt", false, false).unwrap();
+        assert_eq!(fd.hunks.len(), 2);
+        // the user clicks the new line 25 in the second hunk
+        let pairs = selected_pairs(&fd, (DiffSide::Modified, 25), (DiffSide::Modified, 25));
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, 1, "line 25 is in the second hunk");
+        gitcore::ops::apply_lines(&dir, "a.txt", gitcore::ops::LineAction::Stage, &pairs).unwrap();
+
+        let cached = git(&dir, &["diff", "--cached", "-U0"]);
+        assert!(cached.contains("+line 25 CHANGED"), "{cached}");
+        assert!(!cached.contains("line 3 CHANGED"), "{cached}");
+        // and the other edit is still only in the working tree
+        let work = git(&dir, &["diff", "-U0"]);
+        assert!(work.contains("+line 3 CHANGED") && !work.contains("line 25 CHANGED"), "{work}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

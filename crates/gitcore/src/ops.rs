@@ -29,7 +29,7 @@ fn git_dir(repo: &Path) -> Option<PathBuf> {
 
 // ---------- summary / status ----------
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Summary {
     pub path: String,
     pub name: String,
