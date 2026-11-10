@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1 (2026-11-10)
+
+### Fixes
+
+- **ci:** get the draft release id from the create call so assets upload ([69585d6](https://github.com/pg56714/git-tabs/commit/69585d6ada4c80425cfc855dc3e5d22e2739eb24))
+
 ## v0.1.0 (2026-11-10)
 
 ### Features

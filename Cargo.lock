@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "git-tabs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gitcore",
  "notify",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "git-tabs-devserver"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "gitcore",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "gitcore"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
