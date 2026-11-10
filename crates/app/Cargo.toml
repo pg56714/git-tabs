@@ -14,3 +14,4 @@ gitcore.workspace = true
 gpui-kit = { version = "0.9.1", features = ["tree-sitter-rust", "tree-sitter-toml", "tree-sitter-markdown", "tree-sitter-javascript", "tree-sitter-typescript"] }
 dirs = "6"
 notify-debouncer-mini = "0.7"
+serde_json.workspace = true

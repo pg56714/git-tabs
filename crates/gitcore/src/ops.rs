@@ -83,7 +83,7 @@ fn make_summary(repo: &Path, b: parse::BranchInfo, files: &[StatusEntry], remote
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     pub summary: Summary,
     pub status: Vec<StatusEntry>,
@@ -383,7 +383,7 @@ pub fn log(repo: &Path, skip: usize, limit: usize, all: bool, query: &str, path:
     Ok(parse::parse_log(&o.stdout))
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CommitDetail {
     pub sha: String,
     pub parents: Vec<String>,
@@ -420,7 +420,7 @@ pub fn commit_detail(repo: &Path, sha: &str) -> Result<CommitDetail, String> {
     })
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RefsAll {
     #[serde(flatten)]
     pub refs: Refs,
@@ -548,7 +548,7 @@ pub fn stash_push(repo: &Path, message: &str, include_untracked: bool) -> Result
 
 // ---------- blame ----------
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct BlameLine {
     pub sha: String,
     pub author: String,

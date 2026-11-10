@@ -1914,6 +1914,7 @@ dependencies = [
  "gitcore",
  "gpui-kit",
  "notify-debouncer-mini",
+ "serde_json",
 ]
 
 [[package]]

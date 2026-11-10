@@ -1,5 +1,16 @@
+mod actions;
 mod app;
 mod diffmap;
+mod format;
+mod graph;
+mod identity;
+mod model;
+mod modals;
+mod overlays;
+mod theme;
+mod tree;
+mod ui;
+mod views;
 
 use gpui_kit::{AppContext as _, WindowBounds, WindowOptions, px, size};
 use std::path::PathBuf;
@@ -42,7 +53,7 @@ fn main() {
     let ctx = Arc::new(gitcore::Ctx::new(dir));
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        app::bind_keys(cx);
+        views::bind_keys(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
             ..Default::default()
