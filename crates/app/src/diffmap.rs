@@ -29,8 +29,12 @@ pub fn to_patch(d: &FileDiff) -> String {
     s.push_str(&if d.new_file { "--- /dev/null\n".to_string() } else { format!("--- a/{old}\n") });
     s.push_str(&if d.deleted { "+++ /dev/null\n".to_string() } else { format!("+++ b/{new}\n") });
     for h in &d.hunks {
-        s.push_str(&h.header);
-        s.push('\n');
+        // Counts come from the lines themselves: the synthetic conflict view has a header that
+        // does not add up, and a wrong count makes the parser reject the whole file.
+        let ctx = h.lines.iter().filter(|l| l.t == ' ').count();
+        let old_n = ctx + h.lines.iter().filter(|l| l.t == '-').count();
+        let new_n = ctx + h.lines.iter().filter(|l| l.t == '+').count();
+        s.push_str(&format!("@@ -{},{} +{},{} @@\n", h.old_start, old_n, h.new_start, new_n));
         for l in &h.lines {
             s.push(l.t);
             s.push_str(&l.text);
@@ -214,5 +218,17 @@ mod tests {
         let work = git(&dir, &["diff", "-U0"]);
         assert!(work.contains("+line 3 CHANGED") && !work.contains("line 25 CHANGED"), "{work}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_conflict_view_parses_even_though_its_header_counts_do_not_add_up() {
+        use gitcore::parse::{DiffLine, FileDiff, Hunk};
+        let line = |t: char, x: &str| DiffLine { t, text: x.into(), no_eol: false };
+        let lines = vec![line(' ', "<<<<<<< HEAD"), line('-', "mine"), line(' ', "======="), line('+', "theirs"), line(' ', ">>>>>>> x")];
+        let n = lines.len() as u32;
+        let d = FileDiff { path: "a.txt".into(), hunks: vec![Hunk { header: "@@ conflict @@".into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines }], ..Default::default() };
+        let files = DiffFile::parse(&to_patch(&d)).expect("parses");
+        assert_eq!(files.len(), 1);
+        assert_eq!((files[0].additions(), files[0].deletions()), (1, 1));
     }
 }
