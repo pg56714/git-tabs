@@ -488,3 +488,140 @@ const TABLE: &[(&str, &str)] = &[
     ("遠端", "Remote"),
     ("正在 {state_name}", "{state_name} in progress"),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The names and the number of `{}` holes of a template, in order.
+    fn holes(s: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut rest = s;
+        while let Some(i) = rest.find('{') {
+            let Some(j) = rest[i..].find('}') else { break };
+            out.push(rest[i + 1..i + j].to_string());
+            rest = &rest[i + j + 1..];
+        }
+        out
+    }
+
+    #[test]
+    fn english_keeps_the_same_holes_as_the_chinese_source() {
+        for (zh, en) in TABLE {
+            let (mut a, mut b) = (holes(zh), holes(en));
+            a.sort();
+            b.sort();
+            assert_eq!(a, b, "holes differ for {zh:?} -> {en:?}");
+        }
+    }
+
+    /// Every Chinese literal that goes through `t(...)` / `tr(...)` has an English entry.
+    #[test]
+    fn every_translated_literal_has_an_english_text() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut missing = Vec::new();
+        let mut stack = vec![dir];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                    continue;
+                }
+                if p.extension().is_none_or(|x| x != "rs") || p.ends_with("i18n.rs") {
+                    continue;
+                }
+                let src = std::fs::read_to_string(&p).unwrap();
+                for marker in ["i18n::t(\"", "i18n::tr(\""] {
+                    let mut rest = src.as_str();
+                    while let Some(i) = rest.find(marker) {
+                        rest = &rest[i + marker.len()..];
+                        let mut lit = String::new();
+                        let mut chars = rest.chars();
+                        while let Some(c) = chars.next() {
+                            match c {
+                                '\\' => match chars.next() {
+                                    Some('n') => lit.push('\n'),
+                                    Some(x) => lit.push(x),
+                                    None => break,
+                                },
+                                '"' => break,
+                                x => lit.push(x),
+                            }
+                        }
+                        if !TABLE.iter().any(|(zh, _)| *zh == lit) {
+                            missing.push(format!("{}: {lit:?}", p.file_name().unwrap().to_string_lossy()));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "no English text for:\n{}", missing.join("\n"));
+    }
+
+    #[test]
+    fn templates_are_filled_in_both_languages() {
+        set_from_setting("zh-TW");
+        assert_eq!(tr("已 fetch {name}", &[("name", "r".into())], &[]), "已 fetch r");
+        set_from_setting("en");
+        assert_eq!(tr("已 fetch {name}", &[("name", "r".into())], &[]), "Fetched r");
+        assert_eq!(tr("{} 分鐘前", &[], &["5".into()]), "5 min ago");
+        set_from_setting("zh-TW");
+    }
+
+    /// No Chinese text slips into the UI without going through `t` / `tr`.
+    #[test]
+    fn no_chinese_literal_is_left_untranslated() {
+        let is_cjk = |c: char| ('\u{3000}'..='\u{9fff}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c);
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut bad = Vec::new();
+        let mut stack = vec![dir];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                    continue;
+                }
+                let name = p.file_name().unwrap().to_string_lossy().to_string();
+                // identity.rs holds names that are saved into the settings, not interface text.
+                if p.extension().is_none_or(|x| x != "rs") || name == "i18n.rs" || name == "identity.rs" {
+                    continue;
+                }
+                let full = std::fs::read_to_string(&p).unwrap();
+                let src = full.split("#[cfg(test)]").next().unwrap();
+                let b: Vec<char> = src.chars().collect();
+                let mut i = 0;
+                while i < b.len() {
+                    if b[i] == '/' && b.get(i + 1) == Some(&'/') {
+                        while i < b.len() && b[i] != '\n' {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    if b[i] == '"' {
+                        let start = i;
+                        i += 1;
+                        while i < b.len() && b[i] != '"' {
+                            if b[i] == '\\' {
+                                i += 1;
+                            }
+                            i += 1;
+                        }
+                        let lit: String = b[start..=i.min(b.len() - 1)].iter().collect();
+                        // The language names are shown the same in every language.
+                        let own_name = lit == "\"繁體中文\"" || lit == "\"語言 / Language\"";
+                        if lit.chars().any(is_cjk) && !own_name {
+                            let before: String = b[start.saturating_sub(14)..start].iter().collect();
+                            if !(before.ends_with("i18n::t(") || before.ends_with("i18n::tr(") || before.ends_with("i18n::t (")) {
+                                bad.push(format!("{name}: {lit}"));
+                            }
+                        }
+                    }
+                    i += 1;
+                }
+            }
+        }
+        assert!(bad.is_empty(), "Chinese text outside t()/tr():\n{}", bad.join("\n"));
+    }
+}

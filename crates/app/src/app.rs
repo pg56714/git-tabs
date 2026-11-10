@@ -384,10 +384,9 @@ impl GitTabs {
         crate::i18n::set_from_setting(lang);
         self.save_prefs();
         // Text boxes keep the placeholder they were made with.
-        let t = crate::i18n::t;
-        self.subject.update(cx, |s, cx| s.set_placeholder(t("Commit 標題"), window, cx));
-        self.desc.update(cx, |s, cx| s.set_placeholder(t("說明（可留空）"), window, cx));
-        self.search.update(cx, |s, cx| s.set_placeholder(t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
+        self.subject.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Commit 標題"), window, cx));
+        self.desc.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("說明（可留空）"), window, cx));
+        self.search.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
         cx.notify();
     }
 
