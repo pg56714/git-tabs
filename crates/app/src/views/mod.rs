@@ -135,7 +135,7 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
                 .text_color(p.danger)
                 .child(div().child(err))
                 .child(div().flex_1())
-                .child(btn(&p, "retry", Bk::Normal, true, "重試").on_click(cx.listener(|this, _, _, cx| this.refresh_active(cx))))
+                .child(btn(&p, "retry", Bk::Normal, true, crate::i18n::t("重試")).on_click(cx.listener(|this, _, _, cx| this.refresh_active(cx))))
                 .into_any_element(),
             Some((View::Changes, _)) => this.render_changes(window, cx),
             Some((View::History, _)) => this.render_history(window, cx),
@@ -159,9 +159,9 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
             .bg(p.panel)
             .child(div().size(px(72.)).rounded(px(16.)).bg(p.accent).flex().items_center().justify_center().text_color(gpui_kit::white()).text_size(px(34.)).child("⑂"))
             .child(div().text_size(px(22.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child("git-tabs"))
-            .child(muted(&p, "每個 repo 一個分頁。先加入你的 repo。"))
-            .child(btn(&p, "welcome-add", Bk::Primary, false, "＋ 加入 repo").on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))))
-            .child(div().flex().items_center().gap_1().child(sub(&p, "之後可以用")).child(kbd(&p, "Ctrl")).child(sub(&p, "+")).child(kbd(&p, "K")).child(sub(&p, "搜尋所有指令")))
+            .child(muted(&p, crate::i18n::t("每個 repo 一個分頁。先加入你的 repo。")))
+            .child(btn(&p, "welcome-add", Bk::Primary, false, crate::i18n::t("＋ 加入 repo")).on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))))
+            .child(div().flex().items_center().gap_1().child(sub(&p, crate::i18n::t("之後可以用"))).child(kbd(&p, "Ctrl")).child(sub(&p, "+")).child(kbd(&p, "K")).child(sub(&p, crate::i18n::t("搜尋所有指令"))))
             .into_any_element()
     };
     div()

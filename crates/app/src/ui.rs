@@ -210,3 +210,37 @@ impl TipExt for Stateful<Div> {
         self.tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(t).build(window, cx))
     }
 }
+
+/// A 12x12 icon drawn from strokes, the way the Vue build draws its SVG icons, so it sits
+/// exactly in the middle of its box (font glyphs such as ＋ and ⌄ sit at different heights).
+pub fn stroke_icon(color: Hsla, strokes: &'static [&'static [(f32, f32)]]) -> impl IntoElement {
+    use gpui_kit::{PathBuilder, canvas, point};
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            for pts in strokes {
+                let mut pb = PathBuilder::stroke(px(1.6));
+                for (k, (x, y)) in pts.iter().enumerate() {
+                    let p = point(bounds.origin.x + px(*x), bounds.origin.y + px(*y));
+                    if k == 0 {
+                        pb.move_to(p);
+                    } else {
+                        pb.line_to(p);
+                    }
+                }
+                if let Ok(path) = pb.build() {
+                    window.paint_path(path, color);
+                }
+            }
+        },
+    )
+    .size(px(12.))
+}
+
+pub fn icon_plus(color: Hsla) -> impl IntoElement {
+    stroke_icon(color, &[&[(6., 1.), (6., 11.)], &[(1., 6.), (11., 6.)]])
+}
+
+pub fn icon_chevron_down(color: Hsla) -> impl IntoElement {
+    stroke_icon(color, &[&[(2., 4.5), (6., 8.5), (10., 4.5)]])
+}

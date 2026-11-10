@@ -26,9 +26,9 @@ impl GitTabs {
         let Some(r) = self.repo() else { return div().into_any_element() };
         let base = Self::range_base(r);
         let cands = Self::range_candidates(r);
-        let Some(base) = base else { return empty(&p, "⇄", "找不到 main / master 分支可以比較", None) };
+        let Some(base) = base else { return empty(&p, "⇄", crate::i18n::t("找不到 main / master 分支可以比較"), None) };
         if cands.is_empty() {
-            return empty(&p, "⇄", &format!("{} 只有 {base}，沒有其他分支可以比較", r.name), None);
+            return empty(&p, "⇄", &crate::i18n::tr("{} 只有 {base}，沒有其他分支可以比較", &[("base", (base).to_string())], &[(r.name).to_string()]), None);
         }
         let head = r.range_head.clone().unwrap_or_default();
         let files: Vec<TreeFile> = r.range_files.iter().map(|f| TreeFile { path: f.path.clone(), status: f.status }).collect();
@@ -64,26 +64,26 @@ impl GitTabs {
                 }).collect();
                 this.open_menu(ev.position(), items, false, cx);
             })))
-            .child(sub(&p, format!("vs {base} · {} 個 commit · {total} 個檔案 · 已看 {seen_n}", commits.len())))
+            .child(sub(&p, crate::i18n::tr("vs {base} · {} 個 commit · {total} 個檔案 · 已看 {seen_n}", &[("base", (base).to_string()), ("total", (total).to_string()), ("seen_n", (seen_n).to_string())], &[(commits.len()).to_string()])))
             .child(div().flex_1())
             .when(!is_current && !head.is_empty(), |d| {
-                d.child(btn(&p, "range-switch", Bk::Normal, true, format!("切換到 {h1}")).on_click(cx.listener(move |this, _, _, cx| {
+                d.child(btn(&p, "range-switch", Bk::Normal, true, crate::i18n::tr("切換到 {h1}", &[("h1", (h1).to_string())], &[])).on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(pth) = this.active_path() {
                         this.switch_branch(&pth, &h1, cx);
                     }
                 })))
             })
             .when(on_base && !commits.is_empty(), |d| {
-                d.child(btn(&p, "range-merge", Bk::Primary, true, format!("把 {h2} merge 進 {b1}")).on_click(cx.listener(move |this, _, _, cx| this.merge_into(h2.clone(), cx))))
+                d.child(btn(&p, "range-merge", Bk::Primary, true, crate::i18n::tr("把 {h2} merge 進 {b1}", &[("h2", (h2).to_string()), ("b1", (b1).to_string())], &[])).on_click(cx.listener(move |this, _, _, cx| this.merge_into(h2.clone(), cx))))
             })
-            .when(!on_base && !commits.is_empty(), |d| d.child(sub(&p, format!("（切到 {base} 之後可以直接 merge）"))));
+            .when(!on_base && !commits.is_empty(), |d| d.child(sub(&p, crate::i18n::tr("（切到 {base} 之後可以直接 merge）", &[("base", (base).to_string())], &[]))));
 
         if total == 0 {
-            return div().flex().flex_col().flex_1().min_h_0().child(cbar).child(empty(&p, "", &format!("{h3} 跟 {base} 沒有差異"), None)).into_any_element();
+            return div().flex().flex_col().flex_1().min_h_0().child(cbar).child(empty(&p, "", &crate::i18n::tr("{h3} 跟 {base} 沒有差異", &[("h3", (h3).to_string()), ("base", (base).to_string())], &[]), None)).into_any_element();
         }
         let right: AnyElement = match status {
             Some(st) => div().flex().flex_col().flex_1().min_w_0().min_h_0().child(self.render_diff_head(st, vec![], cx)).child(self.render_diff_area(PaneMode::ReadOnly, cx)).child(self.render_diff_hint(false)).into_any_element(),
-            None => div().flex().flex_col().flex_1().child(empty(&p, "", "選一個檔案", None)).child(self.render_diff_hint(false)).into_any_element(),
+            None => div().flex().flex_col().flex_1().child(empty(&p, "", crate::i18n::t("選一個檔案"), None)).child(self.render_diff_hint(false)).into_any_element(),
         };
         let left = div()
             .flex()
@@ -113,7 +113,7 @@ impl GitTabs {
                     .border_t_1()
                     .border_color(p.border)
                     .pb(px(6.))
-                    .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).text_size(px(12.)).text_color(p.muted).child("這個分支的 commit"))
+                    .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).text_size(px(12.)).text_color(p.muted).child(crate::i18n::t("這個分支的 commit")))
                     .children(commits.iter().map(|c| {
                         let sha = c.sha.clone();
                         div()
@@ -185,7 +185,7 @@ impl GitTabs {
                     .min_h(px(41.))
                     .border_b_1()
                     .border_color(p.border)
-                    .child(sub(&p, "HEAD 的移動紀錄。不小心 reset、rebase 或刪掉分支時，可以從這裡找回 commit。")),
+                    .child(sub(&p, crate::i18n::t("HEAD 的移動紀錄。不小心 reset、rebase 或刪掉分支時，可以從這裡找回 commit。"))),
             )
             .child(
                 div()
@@ -227,12 +227,12 @@ impl GitTabs {
                                     .gap(px(4.))
                                     .opacity(0.)
                                     .group_hover("rl", |s| s.opacity(1.))
-                                    .child(btn(&p, SharedString::from(format!("rlb-{}", e.selector)), Bk::Normal, true, "從這裡開分支").on_click(cx.listener(move |this, _, w, cx| this.new_branch(Some(s2.clone()), w, cx))))
+                                    .child(btn(&p, SharedString::from(format!("rlb-{}", e.selector)), Bk::Normal, true, crate::i18n::t("從這裡開分支")).on_click(cx.listener(move |this, _, w, cx| this.new_branch(Some(s2.clone()), w, cx))))
                                     .child(btn(&p, SharedString::from(format!("rlc-{}", e.selector)), Bk::Normal, true, "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s3.clone(), cx))))
-                                    .child(btn(&p, SharedString::from(format!("rlr-{}", e.selector)), Bk::Normal, true, "Reset 到這裡").on_click(cx.listener(move |this, _, _, cx| this.reset_to(s4.clone(), cx)))),
+                                    .child(btn(&p, SharedString::from(format!("rlr-{}", e.selector)), Bk::Normal, true, crate::i18n::t("Reset 到這裡")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s4.clone(), cx)))),
                             )
                     }))
-                    .when(rows.is_empty(), |d| d.child(empty(&p, "", "沒有紀錄", None))),
+                    .when(rows.is_empty(), |d| d.child(empty(&p, "", crate::i18n::t("沒有紀錄"), None))),
             )
             .into_any_element()
     }

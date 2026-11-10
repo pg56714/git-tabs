@@ -194,7 +194,7 @@ impl GitTabs {
             let h = self.modal_focus.clone();
             window.defer(cx, move |window, cx| window.focus(&h, cx));
         }
-        let cancel = btn(&p, "m-cancel", Bk::Normal, false, "取消").on_click(cx.listener(|this, _, w, cx| this.close_modal(w, cx))).into_any_element();
+        let cancel = btn(&p, "m-cancel", Bk::Normal, false, crate::i18n::t("取消")).on_click(cx.listener(|this, _, w, cx| this.close_modal(w, cx))).into_any_element();
         match &self.modal {
             Some(Modal::Confirm(m)) => {
                 let on_ok = m.on_ok.clone();
@@ -363,7 +363,7 @@ impl GitTabs {
                             .overflow_y_scroll()
                             .p(px(6.))
                             .children(rows)
-                            .when(items.is_empty(), |d| d.child(div().px(px(10.)).py(px(7.)).child("沒有符合的項目"))),
+                            .when(items.is_empty(), |d| d.child(div().px(px(10.)).py(px(7.)).child(crate::i18n::t("沒有符合的項目")))),
                     ),
             )
             .into_any_element()
@@ -441,10 +441,10 @@ impl GitTabs {
                                 .child(sub(&p, format!("({:.1}s)", l.ms as f32 / 1000.))),
                         )
                         .when(expanded, |d| {
-                            d.child(div().ml(px(24.)).mt(px(2.)).mb(px(6.)).text_color(p.muted).child(if l.output.is_empty() { "（沒有輸出）".to_string() } else { l.output.clone() }))
+                            d.child(div().ml(px(24.)).mt(px(2.)).mb(px(6.)).text_color(p.muted).child(if l.output.is_empty() { crate::i18n::t("（沒有輸出）").to_string() } else { l.output.clone() }))
                         })
                 }))
-                .when(self.log.is_empty(), |d| d.child(sub(&p, "（空）")))
+                .when(self.log.is_empty(), |d| d.child(sub(&p, crate::i18n::t("（空）"))))
                 .into_any_element()
         });
         div()
@@ -469,7 +469,7 @@ impl GitTabs {
                         this.log_open = !this.log_open;
                         cx.notify();
                     }))
-                    .child(format!("{} 指令紀錄", if open { "▾" } else { "▸" }))
+                    .child(crate::i18n::tr("{} 指令紀錄", &[], &[(if open { "▾" } else { "▸" }).to_string()]))
                     .child(match last {
                         Some(l) => div()
                             .flex()
@@ -477,10 +477,10 @@ impl GitTabs {
                             .child(div().text_color(p.text).font_family("Cascadia Mono").overflow_hidden().text_ellipsis().child(l.cmd.clone()))
                             .child(div().text_color(if l.ok { p.ok } else { p.danger }).child(format!("{} {:.1}s", if l.ok { "✓" } else { "✕" }, l.ms as f32 / 1000.)))
                             .into_any_element(),
-                        None => div().child("還沒有執行任何會改變東西的指令").into_any_element(),
+                        None => div().child(crate::i18n::t("還沒有執行任何會改變東西的指令")).into_any_element(),
                     })
                     .child(div().flex_1())
-                    .child(format!("{n} 筆"))
+                    .child(crate::i18n::tr("{n} 筆", &[("n", (n).to_string())], &[]))
                     .when(!self.git_version.is_empty(), |d| d.child(sub(&p, format!("· {}", self.git_version)))),
             )
             .when_some(list, |d, l| d.child(l))

@@ -48,11 +48,11 @@ impl GitTabs {
         let rev = if sel.list == ListKind::C { r.detail.as_ref().map(|d| d.sha.clone()) } else { None };
         let (a, b, c, d) = (sel.path.clone(), sel.path.clone(), sel.path.clone(), sel.path.clone());
         vec![
-            MenuItem::new("用編輯器開啟", move |t, _, cx| t.open_file(&a, cx)).icon("✎"),
-            MenuItem::new("在檔案總管顯示資料夾", move |t, _, cx| t.open_folder(full.clone(), cx)).icon("📂"),
-            MenuItem::new("這個檔案的歷史", move |t, _, cx| t.file_history(b.clone(), cx)).icon("◷"),
-            MenuItem::new("Blame（逐行看是誰改的）", move |t, _, cx| t.open_blame(c.clone(), rev.clone(), cx)).icon("☰"),
-            MenuItem::new("複製路徑", move |t, _, cx| t.copy(d.clone(), "路徑", cx)).icon("⧉"),
+            MenuItem::new(crate::i18n::t("用編輯器開啟"), move |t, _, cx| t.open_file(&a, cx)).icon("✎"),
+            MenuItem::new(crate::i18n::t("在檔案總管顯示資料夾"), move |t, _, cx| t.open_folder(full.clone(), cx)).icon("📂"),
+            MenuItem::new(crate::i18n::t("這個檔案的歷史"), move |t, _, cx| t.file_history(b.clone(), cx)).icon("◷"),
+            MenuItem::new(crate::i18n::t("Blame（逐行看是誰改的）"), move |t, _, cx| t.open_blame(c.clone(), rev.clone(), cx)).icon("☰"),
+            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("路徑"), cx)).icon("⧉"),
         ]
     }
 
@@ -100,8 +100,8 @@ impl GitTabs {
             .children(extra)
             .when(can_seen, |d| {
                 d.child(
-                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, format!("{} 已看", if seen { "☑" } else { "☐" }))
-                        .tooltip_text("看完勾起來，會跳到下一個沒看的檔案（Enter）")
+                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, crate::i18n::tr("{} 已看", &[], &[(if seen { "☑" } else { "☐" }).to_string()]))
+                        .tooltip_text(crate::i18n::t("看完勾起來，會跳到下一個沒看的檔案（Enter）"))
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_seen(true, cx))),
                 )
             })
@@ -121,7 +121,7 @@ impl GitTabs {
                             .cursor_pointer()
                             .bg(if !side { p.accent_bg } else { gpui_kit::Hsla::transparent_black() })
                             .text_color(if !side { p.accent_tx } else { p.muted })
-                            .child("單欄")
+                            .child(crate::i18n::t("單欄"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.side_by_side = false;
                                 this.apply_diff_view(cx);
@@ -139,7 +139,7 @@ impl GitTabs {
                             .border_color(p.border_strong)
                             .bg(if side { p.accent_bg } else { gpui_kit::Hsla::transparent_black() })
                             .text_color(if side { p.accent_tx } else { p.muted })
-                            .child("並排")
+                            .child(crate::i18n::t("並排"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.side_by_side = true;
                                 this.apply_diff_view(cx);
@@ -149,13 +149,13 @@ impl GitTabs {
                     ),
             )
             .child(
-                btn(&p, "wrap", if wrap { Bk::On } else { Bk::Normal }, true, "↩").tooltip_text("自動換行").on_click(cx.listener(|this, _, _, cx| {
+                btn(&p, "wrap", if wrap { Bk::On } else { Bk::Normal }, true, "↩").tooltip_text(crate::i18n::t("自動換行")).on_click(cx.listener(|this, _, _, cx| {
                     this.wrap = !this.wrap;
                     this.save_prefs();
                     cx.notify();
                 })),
             )
-            .child(btn(&p, "more", Bk::Normal, true, "⋯").tooltip_text("更多").on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
+            .child(btn(&p, "more", Bk::Normal, true, "⋯").tooltip_text(crate::i18n::t("更多")).on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                 let items = this.diff_more_menu();
                 this.open_menu(ev.position(), items, true, cx);
             })))
@@ -166,14 +166,14 @@ impl GitTabs {
     pub fn render_diff_area(&mut self, mode: PaneMode, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
         let Some(r) = self.repo() else { return div().into_any_element() };
-        let Some(sel) = r.sel.clone() else { return empty(&p, "◇", "選一個檔案來看修改", None) };
+        let Some(sel) = r.sel.clone() else { return empty(&p, "◇", crate::i18n::t("選一個檔案來看修改"), None) };
         let key = format!("{}:{}", sel.list.tag(), sel.path);
-        let Some(fd) = r.diff.clone().filter(|_| r.diff_for == key) else { return empty(&p, "", "載入中…", None) };
+        let Some(fd) = r.diff.clone().filter(|_| r.diff_for == key) else { return empty(&p, "", crate::i18n::t("載入中…"), None) };
         if fd.binary {
-            return empty(&p, "⬚", "二進位檔案，無法顯示文字差異", None);
+            return empty(&p, "⬚", crate::i18n::t("二進位檔案，無法顯示文字差異"), None);
         }
         if fd.hunks.is_empty() {
-            return empty(&p, "≡", "沒有內容差異", Some("可能只改了檔案權限，或是空檔案"));
+            return empty(&p, "≡", crate::i18n::t("沒有內容差異"), Some(crate::i18n::t("可能只改了檔案權限，或是空檔案")));
         }
         // ---- selected lines
         let selected = self.stored_sel.clone().map(|range| crate::diffmap::selected_pairs(&fd, (range.side(), range.start()), (range.end_side(), range.end())).len());
@@ -190,21 +190,21 @@ impl GitTabs {
                 .bg(p.accent_bg)
                 .text_color(p.accent_tx)
                 .text_size(px(12.5))
-                .child(format!("已選 {n} 行"))
+                .child(crate::i18n::tr("已選 {n} 行", &[("n", (n).to_string())], &[]))
                 .when(mode == PaneMode::Unstaged, |d| {
-                    d.child(btn(&p, "sel-stage", Bk::Primary, true, div().flex().gap_1().child("Stage 選取的行").child(kbd(&p, "S"))).on_click(cx.listener(|this, _, _, cx| {
+                    d.child(btn(&p, "sel-stage", Bk::Primary, true, div().flex().gap_1().child(crate::i18n::t("Stage 選取的行")).child(kbd(&p, "S"))).on_click(cx.listener(|this, _, _, cx| {
                         this.apply_selection(false, cx);
                     })))
-                        .child(btn(&p, "sel-discard", Bk::Normal, true, "捨棄選取的行").on_click(cx.listener(|this, _, _, cx| {
+                        .child(btn(&p, "sel-discard", Bk::Normal, true, crate::i18n::t("捨棄選取的行")).on_click(cx.listener(|this, _, _, cx| {
                             this.apply_selection(true, cx);
                         })))
                 })
                 .when(mode == PaneMode::Staged, |d| {
-                    d.child(btn(&p, "sel-unstage", Bk::Primary, true, div().flex().gap_1().child("取消 Stage 選取的行").child(kbd(&p, "S"))).on_click(cx.listener(|this, _, _, cx| {
+                    d.child(btn(&p, "sel-unstage", Bk::Primary, true, div().flex().gap_1().child(crate::i18n::t("取消 Stage 選取的行")).child(kbd(&p, "S"))).on_click(cx.listener(|this, _, _, cx| {
                         this.apply_selection(false, cx);
                     })))
                 })
-                .child(btn(&p, "sel-clear", Bk::Ghost, true, "清除選取").on_click(cx.listener(|this, _, _, cx| {
+                .child(btn(&p, "sel-clear", Bk::Ghost, true, crate::i18n::t("清除選取")).on_click(cx.listener(|this, _, _, cx| {
                     this.stored_sel = None;
                     this.diff.update(cx, |d, cx| d.set_selected_lines(None, cx));
                 })))
@@ -224,15 +224,15 @@ impl GitTabs {
             .bg(p.accent_bg)
             .text_color(p.accent_tx)
             .text_size(px(12.))
-            .child(btn(&p, "hunk-prev", Bk::Ghost, true, "◀").tooltip_text("上一段改動 (←)").on_click(cx.listener(|this, _, _, cx| this.goto_hunk(-1, cx))))
-            .child(btn(&p, "hunk-next", Bk::Ghost, true, "▶").tooltip_text("下一段改動 (→)").on_click(cx.listener(|this, _, _, cx| this.goto_hunk(1, cx))))
-            .child(div().flex_none().child(format!("第 {}/{n} 段", cur + 1)))
+            .child(btn(&p, "hunk-prev", Bk::Ghost, true, "◀").tooltip_text(crate::i18n::t("上一段改動 (←)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(-1, cx))))
+            .child(btn(&p, "hunk-next", Bk::Ghost, true, "▶").tooltip_text(crate::i18n::t("下一段改動 (→)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(1, cx))))
+            .child(div().flex_none().child(crate::i18n::tr("第 {}/{n} 段", &[("n", (n).to_string())], &[(cur + 1).to_string()])))
             .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().font_family("Cascadia Mono").child(header))
             .when(mode == PaneMode::Unstaged, |d| {
-                d.child(btn(&p, "hunk-stage", Bk::Normal, true, "Stage 這段").on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Stage, cx))))
-                    .child(btn(&p, "hunk-discard", Bk::Normal, true, "捨棄這段").on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Discard, cx))))
+                d.child(btn(&p, "hunk-stage", Bk::Normal, true, crate::i18n::t("Stage 這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Stage, cx))))
+                    .child(btn(&p, "hunk-discard", Bk::Normal, true, crate::i18n::t("捨棄這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Discard, cx))))
             })
-            .when(mode == PaneMode::Staged, |d| d.child(btn(&p, "hunk-unstage", Bk::Normal, true, "取消 Stage 這段").on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Unstage, cx)))));
+            .when(mode == PaneMode::Staged, |d| d.child(btn(&p, "hunk-unstage", Bk::Normal, true, crate::i18n::t("取消 Stage 這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Unstage, cx)))));
         div()
             .flex()
             .flex_col()
@@ -260,13 +260,13 @@ impl GitTabs {
             .border_color(p.border)
             .text_size(px(11.5))
             .text_color(p.faint)
-            .child(item("↑/↓", "上/下一個檔案"))
-            .child(item("←/→", "上/下一段改動"))
+            .child(item("↑/↓", crate::i18n::t("上/下一個檔案")))
+            .child(item("←/→", crate::i18n::t("上/下一段改動")))
             .when(with_stage, |d| d.child(item("S", "Stage")))
-            .child(item("Enter", "已看"))
-            .when(with_stage, |d| d.child("在差異裡點行號選取單行，拖曳或 Shift 選多行"))
+            .child(item("Enter", crate::i18n::t("已看")))
+            .when(with_stage, |d| d.child(crate::i18n::t("在差異裡點行號選取單行，拖曳或 Shift 選多行")))
             .child(div().flex_1())
-            .when(self.side_by_side, |d| d.child("並排"))
+            .when(self.side_by_side, |d| d.child(crate::i18n::t("並排")))
             .into_any_element()
     }
 }

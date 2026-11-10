@@ -1915,6 +1915,7 @@ dependencies = [
  "gpui-kit",
  "notify-debouncer-mini",
  "serde_json",
+ "sys-locale",
  "winresource",
 ]
 

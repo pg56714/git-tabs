@@ -82,6 +82,8 @@ pub struct GitTabs {
     pub side_by_side: bool,
     pub wrap: bool,
     pub hist_tab: HistTab,
+    /// "auto" (follow the system), "zh-TW" or "en"
+    pub lang: String,
     pub cur_hunk: usize,
     /// The lines picked in the diff. The diff view forgets its own selection when the pointer
     /// goes down anywhere else (such as on the Stage button), so the last pick is kept here.
@@ -143,12 +145,13 @@ impl GitTabs {
         let active = cfg.active.min(repos.len().saturating_sub(1));
         let dark = resolve_dark(&cfg.theme, window.appearance());
         theme::apply(dark, Some(window), cx);
-        let diff = cx.new(|cx| DiffState::new([], cx).with_mode(DiffMode::Unified));
-        let subject = cx.new(|cx| InputState::new(window, cx).placeholder("Commit 標題"));
-        let desc = cx.new(|cx| TextareaState::new(window, cx).placeholder("說明（可留空）"));
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("搜尋 commit 訊息，或貼上 SHA"));
-        let nav_focus = cx.focus_handle().tab_stop(true);
         let prefs = load_prefs(&ctx.config_dir);
+        crate::i18n::set_from_setting(&prefs.lang);
+        let diff = cx.new(|cx| DiffState::new([], cx).with_mode(DiffMode::Unified));
+        let subject = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Commit 標題")));
+        let desc = cx.new(|cx| TextareaState::new(window, cx).placeholder(crate::i18n::t("說明（可留空）")));
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA")));
+        let nav_focus = cx.focus_handle().tab_stop(true);
         let mut subs = Vec::new();
         subs.push(cx.observe(&diff, |_, _, cx| cx.notify()));
         subs.push(cx.subscribe(&diff, |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
@@ -198,6 +201,7 @@ impl GitTabs {
             side_by_side: prefs.side,
             wrap: prefs.wrap,
             hist_tab: if prefs.hist_tab == "changes" { HistTab::Changes } else { HistTab::Commit },
+            lang: prefs.lang.clone(),
             cur_hunk: 0,
             stored_sel: None,
             bar_press: None,
@@ -252,7 +256,7 @@ impl GitTabs {
         this.work(cx, || gitcore::runner::run(None, &["--version"], None, false), |this, o, cx| {
             this.git_version = if o.ok() { o.stdout.trim().to_string() } else { String::new() };
             if !o.ok() {
-                this.toast("找不到 git，請到設定填 git 路徑", ToastKind::Err, Some(o.message()), cx);
+                this.toast(crate::i18n::t("找不到 git，請到設定填 git 路徑"), ToastKind::Err, Some(o.message()), cx);
             }
             cx.notify();
         });
@@ -379,10 +383,24 @@ impl GitTabs {
         }
     }
 
+    /// Switches the interface language: "auto", "zh-TW" or "en".
+    pub fn set_lang(&mut self, lang: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.lang = lang.to_string();
+        crate::i18n::set_from_setting(lang);
+        self.save_prefs();
+        // Text boxes keep the placeholder they were made with.
+        let t = crate::i18n::t;
+        self.subject.update(cx, |s, cx| s.set_placeholder(t("Commit 標題"), window, cx));
+        self.desc.update(cx, |s, cx| s.set_placeholder(t("說明（可留空）"), window, cx));
+        self.search.update(cx, |s, cx| s.set_placeholder(t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
+        cx.notify();
+    }
+
     pub fn save_prefs(&self) {
         let v = serde_json::json!({
             "side": self.side_by_side,
             "wrap": self.wrap,
+            "lang": self.lang,
             "hist_tab": if self.hist_tab == HistTab::Changes { "changes" } else { "commit" },
             "sizes": { "side_bar": self.sizes.side_bar, "files": self.sizes.files, "hist_top": self.sizes.hist_top, "hist_files": self.sizes.hist_files },
         });
@@ -645,7 +663,7 @@ impl GitTabs {
                         this.load_detail(&p, cx);
                     }
                 }
-                Err(e) => this.toast("讀不到歷史", ToastKind::Err, Some(e), cx),
+                Err(e) => this.toast(crate::i18n::t("讀不到歷史"), ToastKind::Err, Some(e), cx),
             }
             cx.notify();
         });
@@ -686,7 +704,7 @@ impl GitTabs {
                 }
                 Err(e) => {
                     r.detail = None;
-                    this.toast("讀不到 commit", ToastKind::Err, Some(e), cx);
+                    this.toast(crate::i18n::t("讀不到 commit"), ToastKind::Err, Some(e), cx);
                 }
             }
             cx.notify();
@@ -736,7 +754,7 @@ impl GitTabs {
                         this.load_diff(cx);
                     }
                 }
-                Err(e) => this.toast("比較失敗", ToastKind::Err, Some(e), cx),
+                Err(e) => this.toast(crate::i18n::t("比較失敗"), ToastKind::Err, Some(e), cx),
             }
             cx.notify();
         });
@@ -897,7 +915,7 @@ impl GitTabs {
                             this.install_diff(&repo, &sel, key, d, cx);
                         }
                     }
-                    Err(e) => this.toast("讀不到 diff", ToastKind::Err, Some(e), cx),
+                    Err(e) => this.toast(crate::i18n::t("讀不到 diff"), ToastKind::Err, Some(e), cx),
                 }
             },
         );
@@ -968,7 +986,7 @@ impl GitTabs {
                 let next = self.repo().and_then(|r| Self::ordered_files(r).into_iter().find(|f| !self.is_seen(r, f.list, &f.path)));
                 match next {
                     Some(n) => self.select(n.list, n.path, cx),
-                    None => self.ok("全部檔案都看完了", cx),
+                    None => self.ok(crate::i18n::t("全部檔案都看完了"), cx),
                 }
             }
         }
@@ -1084,7 +1102,7 @@ impl GitTabs {
                     r.queued == 0
                 };
                 if let Err(e) = res {
-                    this.toast(format!("{label}失敗"), ToastKind::Err, Some(e.trim_start_matches("Error: ").to_string()), cx);
+                    this.toast(crate::i18n::tr("{label}失敗", &[("label", (label).to_string())], &[]), ToastKind::Err, Some(e.trim_start_matches("Error: ").to_string()), cx);
                 }
                 if last {
                     this.refresh_status(&p, cx);
@@ -1178,6 +1196,7 @@ pub struct Prefs {
     pub side: bool,
     pub wrap: bool,
     pub hist_tab: String,
+    pub lang: String,
     pub sizes: Sizes,
 }
 
@@ -1188,6 +1207,7 @@ fn load_prefs(dir: &Path) -> Prefs {
         side: v["side"].as_bool().unwrap_or(false),
         wrap: v["wrap"].as_bool().unwrap_or(false),
         hist_tab: v["hist_tab"].as_str().unwrap_or("commit").to_string(),
+        lang: v["lang"].as_str().unwrap_or("auto").to_string(),
         sizes: Sizes { side_bar: z("side_bar", 220.), files: z("files", 300.), hist_top: z("hist_top", 340.), hist_files: z("hist_files", 300.) },
     }
 }

@@ -23,18 +23,18 @@ impl GitTabs {
         if list == ListKind::U {
             items.push(MenuItem::new("Stage", move |t, _, cx| t.stage_files(vec![a.clone()], cx)));
             if !conflicted {
-                items.push(MenuItem::new(if untracked { "刪除這個新檔案…" } else { "捨棄修改…" }, move |t, _, cx| t.discard_files(vec![b.clone()], cx)).danger());
+                items.push(MenuItem::new(if untracked { crate::i18n::t("刪除這個新檔案…") } else { crate::i18n::t("捨棄修改…") }, move |t, _, cx| t.discard_files(vec![b.clone()], cx)).danger());
             }
         } else {
-            items.push(MenuItem::new("取消 Stage", move |t, _, cx| t.unstage_files(vec![a.clone()], cx)));
+            items.push(MenuItem::new(crate::i18n::t("取消 Stage"), move |t, _, cx| t.unstage_files(vec![a.clone()], cx)));
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new("用編輯器開啟", move |t, _, cx| t.open_file(&c, cx)));
+        items.push(MenuItem::new(crate::i18n::t("用編輯器開啟"), move |t, _, cx| t.open_file(&c, cx)));
         if !untracked {
-            items.push(MenuItem::new("這個檔案的歷史", move |t, _, cx| t.file_history(d.clone(), cx)));
+            items.push(MenuItem::new(crate::i18n::t("這個檔案的歷史"), move |t, _, cx| t.file_history(d.clone(), cx)));
             items.push(MenuItem::new("Blame", move |t, _, cx| t.open_blame(e.clone(), None, cx)));
         }
-        items.push(MenuItem::new("複製路徑", move |t, _, cx| t.copy(g.clone(), "路徑", cx)));
+        items.push(MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(g.clone(), crate::i18n::t("路徑"), cx)));
         items
     }
 

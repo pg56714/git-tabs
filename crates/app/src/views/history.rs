@@ -83,18 +83,18 @@ impl GitTabs {
         let subject = r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone()).unwrap_or_default();
         let (a, b, c, d, e, f, g) = (sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string());
         vec![
-            MenuItem::new("Checkout 這個 commit…", move |t, _, cx| t.checkout_commit(a.clone(), cx)),
-            MenuItem::new("從這裡開新分支…", move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
-            MenuItem::new("Cherry-pick 到目前分支", move |t, _, cx| t.cherry_pick(c.clone(), cx)),
+            MenuItem::new(crate::i18n::t("Checkout 這個 commit…"), move |t, _, cx| t.checkout_commit(a.clone(), cx)),
+            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("Cherry-pick 到目前分支"), move |t, _, cx| t.cherry_pick(c.clone(), cx)),
             MenuItem::new("Revert…", move |t, _, cx| t.revert(d.clone(), cx)),
-            MenuItem::new(format!("Reset {branch} 到這裡…"), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
-            MenuItem::new("加 Tag…", move |t, w, cx| t.create_tag(f.clone(), w, cx)),
+            MenuItem::new(crate::i18n::tr("Reset {branch} 到這裡…", &[("branch", (branch).to_string())], &[]), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
+            MenuItem::new(crate::i18n::t("加 Tag…"), move |t, w, cx| t.create_tag(f.clone(), w, cx)),
             MenuItem::sep(),
-            MenuItem::new("複製 SHA", {
+            MenuItem::new(crate::i18n::t("複製 SHA"), {
                 let s = g.clone();
                 move |t, _, cx| t.copy(s.clone(), &short(&s), cx)
             }),
-            MenuItem::new("複製標題", move |t, _, cx| t.copy(subject.clone(), "標題", cx)),
+            MenuItem::new(crate::i18n::t("複製標題"), move |t, _, cx| t.copy(subject.clone(), crate::i18n::t("標題"), cx)),
         ]
     }
 
@@ -207,12 +207,12 @@ impl GitTabs {
                         .bg(p.accent_bg)
                         .text_color(p.accent_tx)
                         .text_size(px(12.))
-                        .child(div().flex().gap_1().child("只看").child(div().font_family("Cascadia Mono").child(lp)))
+                        .child(div().flex().gap_1().child(crate::i18n::t("只看")).child(div().font_family("Cascadia Mono").child(lp)))
                         .child(div().id("clear-fh").px(px(4.)).cursor_pointer().child("×").on_click(cx.listener(|this, _, _, cx| this.clear_file_history(cx)))),
                 )
             })
-            .child(sub(&p, format!("{count}{} 個 commit", if log_done { "" } else { "+" })))
-            .when(log_loading, |d| d.child(sub(&p, "載入中…")));
+            .child(sub(&p, crate::i18n::tr("{count}{} 個 commit", &[("count", (count).to_string())], &[(if log_done { "" } else { "+" }).to_string()])))
+            .when(log_loading, |d| d.child(sub(&p, crate::i18n::t("載入中…"))));
 
         // ---- detail pane
         let tab = self.hist_tab;
@@ -227,13 +227,13 @@ impl GitTabs {
             .child(self.hist_tab_button("tab-commit", "Commit", None, tab == HistTab::Commit, HistTab::Commit, cx))
             .child(self.hist_tab_button("tab-changes", "Changes", files_n, tab == HistTab::Changes, HistTab::Changes, cx));
         let body: AnyElement = match detail {
-            None => empty(&p, "", "選一個 commit", None),
+            None => empty(&p, "", crate::i18n::t("選一個 commit"), None),
             Some(d) if tab == HistTab::Commit => self.render_commit_tab(d, cx),
             Some(d) => self.render_changes_tab(d, cx),
         };
         let _ = nothing;
         let empty_msg = if count == 0 && !log_loading {
-            Some(if query.is_empty() { "還沒有任何 commit" } else { "找不到符合的 commit" })
+            Some(if query.is_empty() { crate::i18n::t("還沒有任何 commit") } else { crate::i18n::t("找不到符合的 commit") })
         } else {
             None
         };
@@ -308,7 +308,7 @@ impl GitTabs {
                     .child(
                         div()
                             .child(div().flex().gap_1().child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(d.author.clone())).child(sub(&p, d.email.clone())))
-                            .child(sub(&p, format!("{}{}", date_time(d.time), if d.committer != d.author { format!(" · commit 者 {}", d.committer) } else { String::new() }))),
+                            .child(sub(&p, format!("{}{}", date_time(d.time), if d.committer != d.author { crate::i18n::tr(" · commit 者 {}", &[], &[(d.committer).to_string()]) } else { String::new() }))),
                     ),
             )
             .child(
@@ -327,7 +327,7 @@ impl GitTabs {
                             .text_color(p.text)
                             .font_family("Cascadia Mono")
                             .child(sha.clone())
-                            .child(div().id("copy-sha").text_color(p.accent).cursor_pointer().child("複製").on_click(cx.listener(move |this, _, _, cx| this.copy(s1.clone(), &short(&s1), cx))))
+                            .child(div().id("copy-sha").text_color(p.accent).cursor_pointer().child(crate::i18n::t("複製")).on_click(cx.listener(move |this, _, _, cx| this.copy(s1.clone(), &short(&s1), cx))))
                             .into_any_element(),
                     ))
                     .child(kv(
@@ -341,7 +341,7 @@ impl GitTabs {
                                 let pa2 = pa.clone();
                                 div().id(SharedString::from(format!("par-{pa}"))).text_color(p.accent).cursor_pointer().child(short(pa)).on_click(cx.listener(move |this, _, _, cx| this.pick_commit(pa2.clone(), cx)))
                             }))
-                            .when(d.parents.is_empty(), |c| c.child("（第一個 commit）"))
+                            .when(d.parents.is_empty(), |c| c.child(crate::i18n::t("（第一個 commit）")))
                             .into_any_element(),
                     )),
             )
@@ -355,12 +355,12 @@ impl GitTabs {
                     .child(act("a-cp", "Cherry-pick").on_click(cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx))))
                     .child(act("a-rv", "Revert").on_click(cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx))))
                     .child(act("a-co", "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s4.clone(), cx))))
-                    .child(act("a-br", "開分支").on_click(cx.listener({
+                    .child(act("a-br", crate::i18n::t("開分支")).on_click(cx.listener({
                         let s = sha.clone();
                         move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
                     })))
-                    .child(act("a-tg", "加 Tag").on_click(cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx))))
-                    .child(act("a-rs", "Reset 到這裡…").on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx)))),
+                    .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx))))
+                    .child(act("a-rs", crate::i18n::t("Reset 到這裡…")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx)))),
             )
             .child(
                 div()
@@ -390,7 +390,7 @@ impl GitTabs {
                             .when_some(f.add, |d, a| d.child(div().text_size(px(12.)).text_color(p.ok).child(format!("+{a}"))))
                             .when_some(f.del, |d, a| d.child(div().text_size(px(12.)).text_color(p.danger).child(format!("−{a}"))))
                     }))
-                    .when(d.files.is_empty(), |c| c.child(div().px(px(12.)).py(px(6.)).child(sub(&p, "沒有檔案變更")))),
+                    .when(d.files.is_empty(), |c| c.child(div().px(px(12.)).py(px(6.)).child(sub(&p, crate::i18n::t("沒有檔案變更"))))),
             )
             .into_any_element()
     }
@@ -413,7 +413,7 @@ impl GitTabs {
                 .child(self.render_diff_head(st, vec![], cx))
                 .child(self.render_diff_area(PaneMode::ReadOnly, cx))
                 .into_any_element(),
-            None => empty(&p, "", "選一個檔案", None),
+            None => empty(&p, "", crate::i18n::t("選一個檔案"), None),
         };
         on_split(div().id("chtab").flex().flex_1().min_h_0(), SplitKind::HistFiles, cx)
             .child(div().id("hist-tree").flex_none().w(px(hf)).h_full().overflow_y_scroll().py(px(6.)).child(tree))

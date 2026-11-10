@@ -33,9 +33,9 @@ impl GitTabs {
         self.menu = None;
         // No built-in default: the folder is whatever the user scanned before, or empty.
         let dir = self.cfg.clone_dir.clone();
-        let scan_dir = input(window, cx, &dir, "輸入或選擇要掃描的資料夾");
+        let scan_dir = input(window, cx, &dir, crate::i18n::t("輸入或選擇要掃描的資料夾"));
         let url = input(window, cx, "", "git@github.com:org/repo.git");
-        let clone_to = input(window, cx, "", "存放位置");
+        let clone_to = input(window, cx, "", crate::i18n::t("存放位置"));
         let sub = cx.subscribe_in(&scan_dir, window, |this, _, ev: &InputEvent, _, cx| {
             if matches!(ev, InputEvent::PressEnter { .. }) {
                 this.add_repo_scan(cx);
@@ -53,7 +53,7 @@ impl GitTabs {
         m.err = None;
         let dir = m.scan_dir.read(cx).value().trim().to_string();
         if dir.is_empty() {
-            m.err = Some("先輸入或選擇要掃描的資料夾".into());
+            m.err = Some(crate::i18n::t("先輸入或選擇要掃描的資料夾").into());
             m.found.clear();
             cx.notify();
             return;
@@ -64,7 +64,7 @@ impl GitTabs {
         }
         self.work(cx, move || ops::scan(std::path::Path::new(&dir)), |this, found, cx| {
             if let Some(Modal::AddRepo(m)) = &mut this.modal {
-                m.err = found.is_empty().then(|| "這個資料夾底下沒有找到 git repo".to_string());
+                m.err = found.is_empty().then(|| crate::i18n::t("這個資料夾底下沒有找到 git repo").to_string());
                 m.found = found;
                 m.picked.retain(|p| m.found.contains(p));
             }
@@ -73,7 +73,7 @@ impl GitTabs {
     }
 
     pub fn add_repo_browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some("選擇要掃描的資料夾".into()) });
+        let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some(crate::i18n::t("選擇要掃描的資料夾").into()) });
         let Some(Modal::AddRepo(m)) = &self.modal else { return };
         let scan = m.scan_dir.clone();
         let handle = window.window_handle();
@@ -87,7 +87,7 @@ impl GitTabs {
     }
 
     pub fn add_repo_pick_one(&mut self, cx: &mut Context<Self>) {
-        let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some("選擇 repo 資料夾".into()) });
+        let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some(crate::i18n::t("選擇 repo 資料夾").into()) });
         let pin = match &self.modal {
             Some(Modal::AddRepo(m)) if !m.pin.is_empty() => Some(m.pin.clone()),
             _ => None,
@@ -118,7 +118,7 @@ impl GitTabs {
         m.err = None;
         let url = m.url.read(cx).value().trim().to_string();
         if url.is_empty() {
-            m.err = Some("輸入 repo 網址".into());
+            m.err = Some(crate::i18n::t("輸入 repo 網址").into());
             cx.notify();
             return;
         }
@@ -138,7 +138,7 @@ impl GitTabs {
                     this.modal = None;
                     this.pull_log();
                     this.add_repos(vec![PathBuf::from(&path)], pin, cx);
-                    this.ok(format!("已 clone {}", crate::format::base_name(&path)), cx);
+                    this.ok(crate::i18n::tr("已 clone {}", &[], &[(crate::format::base_name(&path)).to_string()]), cx);
                 }
                 Err(e) => {
                     if let Some(Modal::AddRepo(m)) = &mut this.modal {
@@ -177,14 +177,14 @@ impl GitTabs {
         let slug = if slug.is_empty() { id.id.clone() } else { slug };
         let home = self.home_dir();
         IdDraft {
-            name: input(window, cx, &id.name, "例如：個人 GitHub"),
+            name: input(window, cx, &id.name, crate::i18n::t("例如：個人 GitHub")),
             short: input(window, cx, &id.short, &crate::identity::auto_short(&id.name)),
             key: input(window, cx, &id.key, "C:\\Users\\you\\.ssh\\id_ed25519_xxx"),
             host: input(window, cx, &id.host, "github.com"),
             user: input(window, cx, &id.user, "Your Name"),
             email: input(window, cx, &id.email, "name@example.com"),
             gen_path: input(window, cx, &format!("{home}\\.ssh\\id_ed25519_{slug}"), ""),
-            gen_pass: input(window, cx, "", "留空就不設密碼"),
+            gen_pass: input(window, cx, "", crate::i18n::t("留空就不設密碼")),
             rules,
             test: None,
             testing: false,
@@ -203,10 +203,10 @@ impl GitTabs {
             Some((ids, def)) => (ids, def.unwrap_or_default()),
             None => (self.cfg.identities.clone(), self.cfg.default_identity.clone().unwrap_or_default()),
         };
-        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| format!("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。", ids.len()));
+        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。", &[], &[(ids.len()).to_string()]));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
-        let git = input(window, cx, &self.cfg.git_path.clone(), "留空就用 PATH 裡的 git");
-        let clone = input(window, cx, &self.cfg.clone_dir.clone(), "可留空");
+        let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
+        let clone = input(window, cx, &self.cfg.clone_dir.clone(), crate::i18n::t("可留空"));
         self.modal = Some(Modal::Settings(Box::new(SettingsModal {
             tab,
             ids: drafts,
@@ -278,9 +278,9 @@ impl GitTabs {
                         m.default = d;
                     }
                     this.pending_ids = ids;
-                    this.toast(if n > 0 { format!("找到 {n} 個新的身分，確認後按儲存") } else { "沒有找到新的 SSH key 或身分設定".into() }, ToastKind::Info, None, cx);
+                    this.toast(if n > 0 { crate::i18n::tr("找到 {n} 個新的身分，確認後按儲存", &[("n", (n).to_string())], &[]) } else { crate::i18n::t("沒有找到新的 SSH key 或身分設定").into() }, ToastKind::Info, None, cx);
                 }
-                Err(_) => this.toast("讀不到這台電腦的設定", ToastKind::Err, None, cx),
+                Err(_) => this.toast(crate::i18n::t("讀不到這台電腦的設定"), ToastKind::Err, None, cx),
             }
             cx.notify();
         });
@@ -301,7 +301,7 @@ impl GitTabs {
     pub fn settings_browse_key(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
         let home = self.home_dir();
         let _ = home;
-        let rx = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("選擇 SSH 私鑰（不是 .pub）".into()) });
+        let rx = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some(crate::i18n::t("選擇 SSH 私鑰（不是 .pub）").into()) });
         let handle = window.window_handle();
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = rx.await else { return };
@@ -326,7 +326,7 @@ impl GitTabs {
         let Some(d) = m.ids.get_mut(i) else { return };
         let key = d.key.read(cx).value().trim().to_string();
         if key.is_empty() {
-            self.toast("先填 SSH key 的路徑", ToastKind::Info, None, cx);
+            self.toast(crate::i18n::t("先填 SSH key 的路徑"), ToastKind::Info, None, cx);
             return;
         }
         d.testing = true;
@@ -362,7 +362,7 @@ impl GitTabs {
         let Some(d) = m.ids.get_mut(i) else { return };
         let email = d.email.read(cx).value().trim().to_string();
         if email.is_empty() {
-            d.kg.err = Some("先填 user.email，會寫進 key 的註解".into());
+            d.kg.err = Some(crate::i18n::t("先填 user.email，會寫進 key 的註解").into());
             cx.notify();
             return;
         }
@@ -406,12 +406,12 @@ impl GitTabs {
             id.email = d.email.read(cx).value().trim().to_string();
             id.rules = d.rules.iter().map(|r| Rule { t: r.t.clone(), v: r.v.read(cx).value().trim().to_string() }).collect();
             if id.name.is_empty() {
-                m.err = Some("每個身分都要有名稱".into());
+                m.err = Some(crate::i18n::t("每個身分都要有名稱").into());
                 cx.notify();
                 return;
             }
             if !id.email.is_empty() && !(id.email.contains('@') && id.email.split('@').nth(1).is_some_and(|d| d.contains('.')) && !id.email.contains(char::is_whitespace)) {
-                m.err = Some(format!("「{}」的 email 格式不對", id.name));
+                m.err = Some(crate::i18n::tr("「{}」的 email 格式不對", &[], &[(id.name).to_string()]));
                 cx.notify();
                 return;
             }
@@ -450,7 +450,7 @@ impl GitTabs {
                     }
                     this.save_config();
                     this.pull_log();
-                    this.ok("設定已儲存", cx);
+                    this.ok(crate::i18n::t("設定已儲存"), cx);
                     this.modal = None;
                     this.reapply_theme(cx);
                 }

@@ -90,13 +90,13 @@ impl GitTabs {
         let changes = r.summary.as_ref().map_or(0, |s| s.changes);
         let refs = r.refs.clone();
         let mut rows: Vec<AnyElement> = vec![
-            self.nav_item("nav-changes", "✎ 未提交的修改".into(), Some(changes), view == View::Changes, View::Changes, cx),
-            self.nav_item("nav-history", "◷ 歷史".into(), None, view == View::History, View::History, cx),
-            self.nav_item("nav-range", format!("⇄ 分支 vs {default}"), None, view == View::Range, View::Range, cx),
+            self.nav_item("nav-changes", crate::i18n::t("✎ 未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
+            self.nav_item("nav-history", crate::i18n::t("◷ 歷史").into(), None, view == View::History, View::History, cx),
+            self.nav_item("nav-range", crate::i18n::tr("⇄ 分支 vs {default}", &[("default", (default).to_string())], &[]), None, view == View::Range, View::Range, cx),
         ];
 
         // ---- branches
-        rows.push(self.section("b", "分支", refs.as_ref().map(|x| x.refs.branches.len()), cx));
+        rows.push(self.section("b", crate::i18n::t("分支"), refs.as_ref().map(|x| x.refs.branches.len()), cx));
         if !self.folded.contains("b") {
             for b in refs.iter().flat_map(|x| x.refs.branches.iter()) {
                 let (name, sha, cur) = (b.name.clone(), b.sha.clone(), b.current);
@@ -106,7 +106,7 @@ impl GitTabs {
                     "{}{}{}",
                     if b.ahead > 0 { format!("↑{}", b.ahead) } else { String::new() },
                     if b.behind > 0 { format!(" ↓{}", b.behind) } else { String::new() },
-                    if b.gone { " 已刪" } else { "" }
+                    if b.gone { crate::i18n::t(" 已刪") } else { "" }
                 );
                 rows.push(
                     self.item_row(SharedString::from(format!("br-{name}")), 22., cur, false)
@@ -136,7 +136,7 @@ impl GitTabs {
         }
 
         // ---- remotes
-        rows.push(self.section("r", "遠端", None, cx));
+        rows.push(self.section("r", crate::i18n::t("遠端"), None, cx));
         if !self.folded.contains("r") {
             let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
             for b in refs.iter().flat_map(|x| x.refs.remotes.iter()) {
@@ -166,9 +166,9 @@ impl GitTabs {
                                     let (a, b, c) = (f2.clone(), f2.clone(), f2.clone());
                                     let (pa, pb) = (p2.clone(), p2.clone());
                                     let items = vec![
-                                        MenuItem::new("切換（建立本地分支）", move |t, _, cx| t.switch_branch(&pa, &a, cx)),
-                                        MenuItem::new("Merge 進目前的分支", move |t, _, cx| t.merge_into(b.clone(), cx)),
-                                        MenuItem::new("從這裡開新分支…", move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
+                                        MenuItem::new(crate::i18n::t("切換（建立本地分支）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
+                                        MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)),
+                                        MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
                                     ];
                                     let _ = &pb;
                                     this.open_menu(ev.position, items, false, cx);
@@ -180,7 +180,7 @@ impl GitTabs {
                 }
             }
             if groups.is_empty() {
-                rows.push(self.item_row("rm-none".into(), 22., false, true).text_size(px(12.)).child("沒有遠端分支").into_any_element());
+                rows.push(self.item_row("rm-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有遠端分支")).into_any_element());
             }
         }
 
@@ -198,17 +198,17 @@ impl GitTabs {
                             cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
                                 let (a, b, c, d) = (n2.clone(), n2.clone(), n2.clone(), n2.clone());
                                 let items = vec![
-                                    MenuItem::new("Push 這個 tag", move |t, _, cx| {
+                                    MenuItem::new(crate::i18n::t("Push 這個 tag"), move |t, _, cx| {
                                         if let Some(pth) = t.active_path() {
-                                            t.simple_op(&pth, "push-tag", a.clone(), "Push tag", Some(format!("已 push {a}")), cx)
+                                            t.simple_op(&pth, "push-tag", a.clone(), "Push tag", Some(crate::i18n::tr("已 push {a}", &[("a", (a).to_string())], &[])), cx)
                                         }
                                     }),
-                                    MenuItem::new("從這裡開新分支…", move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
-                                    MenuItem::new("複製名稱", move |t, _, cx| t.copy(c.clone(), "tag", cx)),
+                                    MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
+                                    MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(c.clone(), "tag", cx)),
                                     MenuItem::sep(),
-                                    MenuItem::new("刪除 tag", move |t, _, cx| {
+                                    MenuItem::new(crate::i18n::t("刪除 tag"), move |t, _, cx| {
                                         if let Some(pth) = t.active_path() {
-                                            t.simple_op(&pth, "tag-delete", d.clone(), "刪除 tag", Some(format!("已刪除 {d}")), cx)
+                                            t.simple_op(&pth, "tag-delete", d.clone(), crate::i18n::t("刪除 tag"), Some(crate::i18n::tr("已刪除 {d}", &[("d", (d).to_string())], &[])), cx)
                                         }
                                     })
                                     .danger(),
@@ -222,7 +222,7 @@ impl GitTabs {
                 );
             }
             if refs.as_ref().is_none_or(|x| x.refs.tags.is_empty()) {
-                rows.push(self.item_row("tg-none".into(), 22., false, true).text_size(px(12.)).child("沒有 tag").into_any_element());
+                rows.push(self.item_row("tg-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有 tag")).into_any_element());
             }
         }
 
@@ -242,15 +242,15 @@ impl GitTabs {
                                 .group_hover("si", |d| d.flex())
                                 .ml_auto()
                                 .gap(px(2.))
-                                .child(small(format!("sa-{idx}"), "套用").on_click(cx.listener(move |this, _, _, cx| this.simple_op(&a, "stash-apply", idx.to_string(), "套用 stash", Some("已套用 stash".into()), cx))))
-                                .child(small(format!("sp-{idx}"), "Pop").on_click(cx.listener(move |this, _, _, cx| this.simple_op(&b, "stash-pop", idx.to_string(), "Pop stash", Some("已套用並刪除 stash".into()), cx))))
+                                .child(small(format!("sa-{idx}"), crate::i18n::t("套用")).on_click(cx.listener(move |this, _, _, cx| this.simple_op(&a, "stash-apply", idx.to_string(), crate::i18n::t("套用 stash"), Some(crate::i18n::t("已套用 stash").into()), cx))))
+                                .child(small(format!("sp-{idx}"), "Pop").on_click(cx.listener(move |this, _, _, cx| this.simple_op(&b, "stash-pop", idx.to_string(), "Pop stash", Some(crate::i18n::t("已套用並刪除 stash").into()), cx))))
                                 .child(small(format!("sd-{idx}"), "×").on_click(cx.listener(move |this, _, _, cx| this.stash_drop(c, cx)))),
                         )
                         .into_any_element(),
                 );
             }
             if refs.as_ref().is_none_or(|x| x.stashes.is_empty()) {
-                rows.push(self.item_row("st-none".into(), 22., false, true).text_size(px(12.)).child("沒有 stash").into_any_element());
+                rows.push(self.item_row("st-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有 stash")).into_any_element());
             }
         }
 
@@ -269,10 +269,10 @@ impl GitTabs {
                             cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
                                 let (a, b, c) = (w2.clone(), w2.clone(), w2.clone());
                                 let items = vec![
-                                    MenuItem::new("開成新分頁", move |t, _, cx| t.open_worktree(a.clone(), cx)),
-                                    MenuItem::new("複製路徑", move |t, _, cx| t.copy(b.clone(), "路徑", cx)),
+                                    MenuItem::new(crate::i18n::t("開成新分頁"), move |t, _, cx| t.open_worktree(a.clone(), cx)),
+                                    MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(b.clone(), crate::i18n::t("路徑"), cx)),
                                     MenuItem::sep(),
-                                    MenuItem::new("移除 worktree…", move |t, _, cx| t.remove_worktree(c.clone(), cx)).danger(),
+                                    MenuItem::new(crate::i18n::t("移除 worktree…"), move |t, _, cx| t.remove_worktree(c.clone(), cx)).danger(),
                                 ];
                                 this.open_menu(ev.position, items, false, cx);
                             }),
@@ -283,7 +283,7 @@ impl GitTabs {
                 );
             }
             if others.is_empty() {
-                rows.push(self.item_row("wt-none".into(), 22., false, true).text_size(px(12.)).child("沒有其他 worktree").into_any_element());
+                rows.push(self.item_row("wt-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有其他 worktree")).into_any_element());
             }
         }
         rows.push(div().mt(px(8.)).child(self.nav_item("nav-reflog", "↺ Reflog".into(), None, view == View::Reflog, View::Reflog, cx)).into_any_element());
@@ -304,19 +304,19 @@ impl GitTabs {
         let mk = |n: &str| n.to_string();
         let (a, b, c, d, e, f, g) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
         vec![
-            MenuItem::new("切換到這個分支", move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
-            MenuItem::new("Merge 進目前的分支", move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
-            MenuItem::new("把目前的分支 rebase 到這裡", move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
-            MenuItem::new("從這裡開新分支…", move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
-            MenuItem::new("跟 main 比較", move |t, _, cx| {
+            MenuItem::new(crate::i18n::t("切換到這個分支"), move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("把目前的分支 rebase 到這裡"), move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("跟 main 比較"), move |t, _, cx| {
                 if let Some(r) = t.repo_mut() {
                     r.range_head = Some(e.clone());
                 }
                 t.set_view(View::Range, cx);
             }),
-            MenuItem::new("複製名稱", move |t, _, cx| t.copy(f.clone(), "分支名稱", cx)),
+            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(f.clone(), crate::i18n::t("分支名稱"), cx)),
             MenuItem::sep(),
-            MenuItem::new("刪除分支…", move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),
+            MenuItem::new(crate::i18n::t("刪除分支…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),
         ]
     }
 }

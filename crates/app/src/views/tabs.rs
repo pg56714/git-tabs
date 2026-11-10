@@ -41,12 +41,12 @@ impl GitTabs {
         let (path, ps) = (r.path.clone(), r.path.display().to_string());
         let (ps2, ps3) = (ps.clone(), ps.clone());
         vec![
-            MenuItem::new("重新整理", move |t, _, cx| t.refresh(&path, cx)).icon("⟳"),
-            MenuItem::new("在檔案總管開啟", move |t, _, cx| t.open_folder(ps.clone(), cx)).icon("📂"),
-            MenuItem::new("開終端機", move |t, _, cx| t.open_terminal(ps2.clone(), cx)).icon("⌨"),
-            MenuItem::new("複製路徑", move |t, _, cx| t.copy(ps3.clone(), "路徑", cx)).icon("⧉"),
+            MenuItem::new(crate::i18n::t("重新整理"), move |t, _, cx| t.refresh(&path, cx)).icon("⟳"),
+            MenuItem::new(crate::i18n::t("在檔案總管開啟"), move |t, _, cx| t.open_folder(ps.clone(), cx)).icon("📂"),
+            MenuItem::new(crate::i18n::t("開終端機"), move |t, _, cx| t.open_terminal(ps2.clone(), cx)).icon("⌨"),
+            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(ps3.clone(), crate::i18n::t("路徑"), cx)).icon("⧉"),
             MenuItem::sep(),
-            MenuItem::new("關閉分頁", move |t, _, cx| t.close_repo(i, cx)).icon("×"),
+            MenuItem::new(crate::i18n::t("關閉分頁"), move |t, _, cx| t.close_repo(i, cx)).icon("×"),
         ]
     }
 
@@ -147,7 +147,7 @@ impl GitTabs {
             .cursor_pointer()
             .hover(move |s| s.bg(p.hover))
             .on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx)))
-            .child("＋");
+            .child(icon_plus(p.muted));
         let all = div()
             .id("tab-all")
             .flex_none()
@@ -169,7 +169,7 @@ impl GitTabs {
                     .collect();
                 this.open_menu(ev.position(), items, true, cx);
             }))
-            .child("⌄");
+            .child(icon_chevron_down(p.muted));
         div()
             .flex()
             .flex_none()

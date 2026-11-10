@@ -17,13 +17,13 @@ pub fn ago_at(unix: i64, now: i64) -> String {
     }
     let s = (now - unix).max(0);
     if s < 60 {
-        "剛剛".into()
+        crate::i18n::t("剛剛").into()
     } else if s < 3600 {
-        format!("{} 分鐘前", s / 60)
+        crate::i18n::tr("{} 分鐘前", &[], &[(s / 60).to_string()])
     } else if s < 86400 {
-        format!("{} 小時前", s / 3600)
+        crate::i18n::tr("{} 小時前", &[], &[(s / 3600).to_string()])
     } else if s < 86400 * 7 {
-        format!("{} 天前", s / 86400)
+        crate::i18n::tr("{} 天前", &[], &[(s / 86400).to_string()])
     } else {
         date_time(unix)
     }

@@ -61,14 +61,14 @@ impl GitTabs {
                 .text_color(p.warn)
                 .border_b_1()
                 .border_color(p.border)
-                .child(div().font_weight(gpui_kit::FontWeight::BOLD).child(format!("正在 {state_name}")))
-                .child(if conflicts > 0 { format!("還有 {conflicts} 個衝突的檔案。解決後按「繼續」。") } else { "衝突都解決了，按「繼續」完成。".to_string() })
+                .child(div().font_weight(gpui_kit::FontWeight::BOLD).child(crate::i18n::tr("正在 {state_name}", &[("state_name", (state_name).to_string())], &[])))
+                .child(if conflicts > 0 { crate::i18n::tr("還有 {conflicts} 個衝突的檔案。解決後按「繼續」。", &[("conflicts", (conflicts).to_string())], &[]) } else { crate::i18n::t("衝突都解決了，按「繼續」完成。").to_string() })
                 .child(div().flex_1())
                 .child(dim(
-                    btn(&p, "continue", Bk::Primary, true, "繼續").when(conflicts == 0, |b| b.on_click(cx.listener(|this, _, _, cx| this.abort_or_continue("continue", cx)))),
+                    btn(&p, "continue", Bk::Primary, true, crate::i18n::t("繼續")).when(conflicts == 0, |b| b.on_click(cx.listener(|this, _, _, cx| this.abort_or_continue("continue", cx)))),
                     conflicts > 0,
                 ))
-                .child(btn(&p, "abort", Bk::Normal, true, format!("中止 {state_name}")).on_click(cx.listener(|this, _, _, cx| this.abort_or_continue("abort", cx))))
+                .child(btn(&p, "abort", Bk::Normal, true, crate::i18n::tr("中止 {state_name}", &[("state_name", (state_name).to_string())], &[])).on_click(cx.listener(|this, _, _, cx| this.abort_or_continue("abort", cx))))
                 .into_any_element()
         });
 
@@ -79,7 +79,7 @@ impl GitTabs {
                 .flex_1()
                 .min_h_0()
                 .when_some(banner, |d, b| d.child(b))
-                .child(empty(&p, "✓", "沒有未提交的修改", Some("工作目錄是乾淨的")))
+                .child(empty(&p, "✓", crate::i18n::t("沒有未提交的修改"), Some(crate::i18n::t("工作目錄是乾淨的"))))
                 .into_any_element();
         }
 
@@ -88,22 +88,22 @@ impl GitTabs {
             (Some(s), Some(e)) if e.conflicted => {
                 let (a, b, c, d) = (s.path.clone(), s.path.clone(), s.path.clone(), s.path.clone());
                 vec![
-                    btn(&p, "c-ours", Bk::Normal, true, "用我的").on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(a.clone(), "use-ours", cx))).into_any_element(),
-                    btn(&p, "c-theirs", Bk::Normal, true, "用對方的").on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(b.clone(), "use-theirs", cx))).into_any_element(),
-                    btn(&p, "c-edit", Bk::Normal, true, "用編輯器開啟").on_click(cx.listener(move |this, _, _, cx| this.open_file(&c, cx))).into_any_element(),
-                    btn(&p, "c-done", Bk::Primary, true, "標記已解決").on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(d.clone(), "mark-resolved", cx))).into_any_element(),
+                    btn(&p, "c-ours", Bk::Normal, true, crate::i18n::t("用我的")).on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(a.clone(), "use-ours", cx))).into_any_element(),
+                    btn(&p, "c-theirs", Bk::Normal, true, crate::i18n::t("用對方的")).on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(b.clone(), "use-theirs", cx))).into_any_element(),
+                    btn(&p, "c-edit", Bk::Normal, true, crate::i18n::t("用編輯器開啟")).on_click(cx.listener(move |this, _, _, cx| this.open_file(&c, cx))).into_any_element(),
+                    btn(&p, "c-done", Bk::Primary, true, crate::i18n::t("標記已解決")).on_click(cx.listener(move |this, _, _, cx| this.resolve_conflict(d.clone(), "mark-resolved", cx))).into_any_element(),
                 ]
             }
             (Some(s), _) if s.list == ListKind::U => {
                 let (a, b) = (s.path.clone(), s.path.clone());
                 vec![
-                    btn(&p, "h-stage", Bk::Normal, true, "Stage 檔案").tooltip_text("S").on_click(cx.listener(move |this, _, _, cx| this.stage_files(vec![a.clone()], cx))).into_any_element(),
-                    btn(&p, "h-discard", Bk::Normal, true, "捨棄").on_click(cx.listener(move |this, _, _, cx| this.discard_files(vec![b.clone()], cx))).into_any_element(),
+                    btn(&p, "h-stage", Bk::Normal, true, crate::i18n::t("Stage 檔案")).tooltip_text("S").on_click(cx.listener(move |this, _, _, cx| this.stage_files(vec![a.clone()], cx))).into_any_element(),
+                    btn(&p, "h-discard", Bk::Normal, true, crate::i18n::t("捨棄")).on_click(cx.listener(move |this, _, _, cx| this.discard_files(vec![b.clone()], cx))).into_any_element(),
                 ]
             }
             (Some(s), _) => {
                 let a = s.path.clone();
-                vec![btn(&p, "h-unstage", Bk::Normal, true, "取消 Stage").tooltip_text("S").on_click(cx.listener(move |this, _, _, cx| this.unstage_files(vec![a.clone()], cx))).into_any_element()]
+                vec![btn(&p, "h-unstage", Bk::Normal, true, crate::i18n::t("取消 Stage")).tooltip_text("S").on_click(cx.listener(move |this, _, _, cx| this.unstage_files(vec![a.clone()], cx))).into_any_element()]
             }
             _ => vec![],
         };
@@ -124,7 +124,7 @@ impl GitTabs {
                 .child(self.render_diff_hint(true))
                 .into_any_element()
         } else {
-            div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "", "選一個檔案", None)).child(self.render_diff_hint(true)).into_any_element()
+            div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "", crate::i18n::t("選一個檔案"), None)).child(self.render_diff_hint(true)).into_any_element()
         };
 
         // ---- left: lists + commit box
@@ -152,7 +152,7 @@ impl GitTabs {
             .h_full()
             .min_h_0()
             .overflow_hidden()
-            .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).child(sub(&p, format!("已看 {seen_n} / {total} 個檔案"))))
+            .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).child(sub(&p, crate::i18n::tr("已看 {seen_n} / {total} 個檔案", &[("seen_n", (seen_n).to_string()), ("total", (total).to_string())], &[]))))
             .child(
                 div()
                     .h(px(3.))
@@ -172,20 +172,20 @@ impl GitTabs {
                     .pb(px(8.))
                     .child(section(
                         "sec-u",
-                        "未暫存",
+                        crate::i18n::t("未暫存"),
                         un_n,
-                        (un_n > 0).then(|| btn(&p, "stage-all", Bk::Normal, true, "全部 Stage").on_click(cx.listener(|this, _, _, cx| this.stage_all(cx))).into_any_element()),
+                        (un_n > 0).then(|| btn(&p, "stage-all", Bk::Normal, true, crate::i18n::t("全部 Stage")).on_click(cx.listener(|this, _, _, cx| this.stage_all(cx))).into_any_element()),
                     ))
                     .child(un_tree)
-                    .when(un_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child("（沒有）")))
+                    .when(un_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child(crate::i18n::t("（沒有）"))))
                     .child(section(
                         "sec-s",
-                        "已暫存",
+                        crate::i18n::t("已暫存"),
                         st_n,
-                        (st_n > 0).then(|| btn(&p, "unstage-all", Bk::Normal, true, "全部取消").on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx))).into_any_element()),
+                        (st_n > 0).then(|| btn(&p, "unstage-all", Bk::Normal, true, crate::i18n::t("全部取消")).on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx))).into_any_element()),
                     ))
                     .child(st_tree)
-                    .when(st_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child("（沒有。按 Stage 把要提交的檔案放進來）"))),
+                    .when(st_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child(crate::i18n::t("（沒有。按 Stage 把要提交的檔案放進來）")))),
             )
             .child(
                 div()
@@ -212,7 +212,7 @@ impl GitTabs {
                             .text_size(px(11.5))
                             .text_color(p.faint)
                             .child(if amend { "☑" } else { "☐" })
-                            .child("Amend（改寫上一個 commit）")
+                            .child(crate::i18n::t("Amend（改寫上一個 commit）"))
                             .on_click(cx.listener(|this, _, w, cx| this.toggle_amend(w, cx))),
                     )
                     .child(
@@ -220,7 +220,7 @@ impl GitTabs {
                             .flex()
                             .flex_wrap()
                             .gap(px(6.))
-                            .child(dim(btn(&p, "commit-push", Bk::Normal, false, "Commit 並 Push").flex_1().min_w(px(110.)).tooltip_text("Ctrl+Shift+Enter").when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(true, w, cx)))), committing))
+                            .child(dim(btn(&p, "commit-push", Bk::Normal, false, crate::i18n::t("Commit 並 Push")).flex_1().min_w(px(110.)).tooltip_text("Ctrl+Shift+Enter").when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(true, w, cx)))), committing))
                             .child(dim(btn(&p, "commit", Bk::Primary, false, if amend { "Amend" } else { "Commit" }).flex_1().min_w(px(110.)).tooltip_text("Ctrl+Enter").when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(false, w, cx)))), committing)),
                     ),
             );

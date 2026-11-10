@@ -6,6 +6,7 @@ mod app;
 mod diffmap;
 mod format;
 mod graph;
+mod i18n;
 mod identity;
 mod model;
 mod modals;
