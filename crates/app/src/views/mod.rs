@@ -26,16 +26,22 @@ use crate::ui::*;
 /// The shortcut modifier: Cmd on macOS, Ctrl elsewhere.
 const MOD: &str = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
 
+/// A shortcut with the platform modifier. Bindings need a `'static` string; these few are
+/// made once at startup.
+fn key(rest: &str) -> &'static str {
+    Box::leak(format!("{MOD}-{rest}").into_boxed_str())
+}
+
 pub fn bind_keys(cx: &mut gpui_kit::App) {
     cx.bind_keys([
         KeyBinding::new("f5", Refresh, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-r", MOD), Refresh, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-k", MOD), OpenPalette, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-tab", MOD), NextTab, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-shift-tab", MOD), PreviousTab, Some("GitTabs")),
+        KeyBinding::new(key("r"), Refresh, Some("GitTabs")),
+        KeyBinding::new(key("k"), OpenPalette, Some("GitTabs")),
+        KeyBinding::new(key("tab"), NextTab, Some("GitTabs")),
+        KeyBinding::new(key("shift-tab"), PreviousTab, Some("GitTabs")),
         KeyBinding::new("escape", CloseOverlay, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-enter", MOD), Commit, Some("CommitBox")),
-        KeyBinding::new(&format!("{}-shift-enter", MOD), CommitAndPush, Some("CommitBox")),
+        KeyBinding::new(key("enter"), Commit, Some("CommitBox")),
+        KeyBinding::new(key("shift-enter"), CommitAndPush, Some("CommitBox")),
         KeyBinding::new("down", NextFile, Some("Nav")),
         KeyBinding::new("up", PreviousFile, Some("Nav")),
         KeyBinding::new("right", NextHunk, Some("Nav")),
@@ -48,15 +54,15 @@ pub fn bind_keys(cx: &mut gpui_kit::App) {
         KeyBinding::new("enter", ModalEnter, Some("Modal")),
     ]);
     cx.bind_keys([
-        KeyBinding::new(&format!("{}-1", MOD), Tab1, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-2", MOD), Tab2, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-3", MOD), Tab3, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-4", MOD), Tab4, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-5", MOD), Tab5, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-6", MOD), Tab6, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-7", MOD), Tab7, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-8", MOD), Tab8, Some("GitTabs")),
-        KeyBinding::new(&format!("{}-9", MOD), Tab9, Some("GitTabs")),
+        KeyBinding::new(key("1"), Tab1, Some("GitTabs")),
+        KeyBinding::new(key("2"), Tab2, Some("GitTabs")),
+        KeyBinding::new(key("3"), Tab3, Some("GitTabs")),
+        KeyBinding::new(key("4"), Tab4, Some("GitTabs")),
+        KeyBinding::new(key("5"), Tab5, Some("GitTabs")),
+        KeyBinding::new(key("6"), Tab6, Some("GitTabs")),
+        KeyBinding::new(key("7"), Tab7, Some("GitTabs")),
+        KeyBinding::new(key("8"), Tab8, Some("GitTabs")),
+        KeyBinding::new(key("9"), Tab9, Some("GitTabs")),
     ]);
 }
 
