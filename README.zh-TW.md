@@ -1,4 +1,4 @@
-# <img src="public/icon.svg" width="32" height="32" alt="" align="absmiddle"> git-tabs
+# <img src="crates/app/icons/icon.svg" width="32" height="32" alt="" align="absmiddle"> git-tabs
 
 [English](README.md) | **繁體中文**
 
@@ -51,39 +51,38 @@
 
 所以在終端機直接下 `git`，用的也是和 app 一樣的身分。app 會記得自己加了哪幾行，修改或刪除身分時只會移除那幾行。對單一 repo 手動指定身分時，會把同樣三個設定寫進那個 repo 自己的 `.git/config`，優先於全域規則。
 
+## 語言
+
+介面有繁體中文和英文。第一次啟動時會跟著系統語言；隨時可以到**設定 → 一般 → 語言**切換。
+
 ## 專案結構
 
 ```
-crates/gitcore     所有 git 邏輯（呼叫系統的 git），單一 dispatch(cmd, args) 入口，含測試
-crates/devserver   只供開發：在 127.0.0.1 用 HTTP 提供同樣的指令，方便在瀏覽器測試介面
-src-tauri          桌面外殼：一個 `call` IPC 指令＋檔案監看
-src                Vue 3 介面
+crates/gitcore   所有 git 邏輯（呼叫系統的 git）、型別化的操作、測試
+crates/app       桌面程式，用 GPUI Kit 寫成（GPU 繪製，不含網頁）
 ```
 
 ## 開發
 
-需要：Rust（stable）、Bun 1.4 以上、git 2.36 以上（`hasconfig:` include 需要），Windows 上還需要 MSVC 編譯工具和 WebView2（Windows 11 已內建）。
+需要：Rust（stable）、git 2.36+（為了 `hasconfig:` include）。Linux 另外需要 `.github/workflows/ci.yml` 裡列的套件。
 
 ```bash
-bun install
-bun run tauri dev        # 桌面 app，支援熱更新
-bun run dev:web          # 在瀏覽器開 http://127.0.0.1:5320，後端是 crates/devserver
-npm test                 # vitest + cargo 測試
-bun run typecheck        # vue-tsc（TypeScript 6）＋ tsc 7 檢查 .ts 檔
-bun run lint             # oxlint
-bun run tauri build      # release 版（加 --no-bundle 只產生 exe）
+cargo run -p git-tabs          # 執行程式
+cargo test --workspace         # 單元測試與端到端測試
+bun test scripts               # 發版腳本（需要 Bun）
 ```
 
-`crates/devserver` 接受 `--config-dir <dir>` 和 `--git-global <file>`；後者指到一個暫存檔，測試時就不會動到你真正的 gitconfig。
+開發時好用的參數：`--config-dir <資料夾>` 把設定放在暫存資料夾，`--git-global <檔案>` 讓 git 讀暫存的全域設定，測試時就不會動到你真正的設定。`--check <repo>` 不開視窗，只印出 repo 的分支與有修改的檔案。
 
-### 發布
+### 發版
 
-到 Actions → **Release** → **Run workflow**。它會依上一個 tag 之後的 Conventional Commits 決定新版本（`feat` → 第二位 +1，`fix`/`perf` → 第三位 +1，1.0 前的破壞性改動 → 第二位 +1），寫入 `CHANGELOG.md`，commit 並打上 `chore(release): vX.Y.Z` tag，在 Windows（安裝檔＋免安裝 exe）、macOS（通用 dmg）、Linux（AppImage＋deb）上編譯，三個都上傳完就直接公開。上一個 tag 之後沒有新東西時會直接停止。`bun scripts/release.ts --dry-run` 可以先看它會怎麼做。
+Actions → **Release** → **Run workflow**。它會依上次 tag 之後的 Conventional Commits 決定下一個版本（`feat` → minor，`fix`/`perf` → patch，破壞性修改在 1.0 之前 → minor），寫入 `CHANGELOG.md`，commit 並打上 `chore(release): vX.Y.Z` 的 tag，建出 Windows（安裝檔加免安裝 exe）、macOS（universal dmg）和 Linux（AppImage 加 deb），三個都上傳完才公開。上次 tag 之後沒有新東西就直接停止，不發版。`bun scripts/release.ts --dry-run` 可以先看它會做什麼。
+
+**CI** 工作流程每次 push 都會跑測試，並在三個系統試打包（不發布）。
 
 ### 工具鏈
 
-Tauri 2、Vue 3、Vite 8（Rolldown）、oxlint／oxfmt、Vitest，語法上色用 shiki。
-TypeScript 7（用 Go 寫的原生編譯器）檢查一般的 `.ts` 檔；`.vue` 檔由 vue-tsc 搭配 TypeScript 6 檢查，因為 vue-tsc 目前還不能在 TypeScript 7 上跑。
+Rust、[GPUI Kit](https://github.com/longbridge/gpui-kit)（Zed 編輯器背後的 UI 框架，用它現成的 diff、列表、輸入元件），安裝檔由 [cargo-packager](https://github.com/crabnebula-dev/cargo-packager) 產生。
 
 ## 授權
 

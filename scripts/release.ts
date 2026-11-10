@@ -1,5 +1,5 @@
 // Works out the next version from Conventional Commits since the last tag, prepends the
-// release notes to CHANGELOG.md and bumps the version everywhere it is written.
+// release notes to CHANGELOG.md and bumps the version in Cargo.toml.
 //
 //   bun scripts/release.ts            write files (CI)
 //   bun scripts/release.ts --dry-run  only print what would happen
@@ -72,9 +72,10 @@ function main() {
   }
   const range = lastTag ? [`${lastTag}..HEAD`] : []
   const changes = parseCommits(git('log', ...range, '--format=%H%x1f%s%x1f%b%x1e'))
-  const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
-  // The first release ships the version already in package.json.
-  const version = lastTag ? nextVersion(lastTag.replace(/^v/, ''), changes) : pkg.version
+  // The version lives in one place: [workspace.package] in Cargo.toml.
+  const current = /\[workspace\.package\]\r?\nversion = "([^"]+)"/.exec(readFileSync('Cargo.toml', 'utf8'))?.[1] ?? '0.1.0'
+  // The first release ships the version already in Cargo.toml.
+  const version = lastTag ? nextVersion(lastTag.replace(/^v/, ''), changes) : current
   const out = (k: string, v: string) => process.env.GITHUB_OUTPUT && appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`)
 
   if (!version) {
@@ -94,13 +95,9 @@ function main() {
   writeFileSync('CHANGELOG.md', head + text + '\n' + old)
   writeFileSync('release-notes.md', text)
 
-  pkg.version = version
-  writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
-  const conf = 'src-tauri/tauri.conf.json'
-  writeFileSync(conf, readFileSync(conf, 'utf8').replace(/"version": "[^"]+"/, `"version": "${version}"`))
   writeFileSync('Cargo.toml', readFileSync('Cargo.toml', 'utf8').replace(/(\[workspace\.package\]\r?\nversion = )"[^"]+"/, `$1"${version}"`))
   // The workspace crates' entries in Cargo.lock carry the same version.
-  const lock = readFileSync('Cargo.lock', 'utf8').replace(/(name = "(?:gitcore|git-tabs|git-tabs-devserver)"\r?\nversion = )"[^"]+"/g, `$1"${version}"`)
+  const lock = readFileSync('Cargo.lock', 'utf8').replace(/(name = "(?:gitcore|git-tabs)"\r?\nversion = )"[^"]+"/g, `$1"${version}"`)
   writeFileSync('Cargo.lock', lock)
 
   out('skip', 'false')

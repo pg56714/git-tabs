@@ -220,8 +220,8 @@ impl GitTabs {
                             .flex()
                             .flex_wrap()
                             .gap(px(6.))
-                            .child(dim(btn(&p, "commit-push", Bk::Normal, false, crate::i18n::t("Commit 並 Push")).flex_1().min_w(px(110.)).tooltip_text("Ctrl+Shift+Enter").when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(true, w, cx)))), committing))
-                            .child(dim(btn(&p, "commit", Bk::Primary, false, if amend { "Amend" } else { "Commit" }).flex_1().min_w(px(110.)).tooltip_text("Ctrl+Enter").when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(false, w, cx)))), committing)),
+                            .child(dim(btn(&p, "commit-push", Bk::Normal, false, crate::i18n::t("Commit 並 Push")).flex_1().min_w(px(110.)).tooltip_text(format!("{}+Shift+Enter", crate::ui::mod_name())).when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(true, w, cx)))), committing))
+                            .child(dim(btn(&p, "commit", Bk::Primary, false, if amend { "Amend" } else { "Commit" }).flex_1().min_w(px(110.)).tooltip_text(format!("{}+Enter", crate::ui::mod_name())).when(!committing, |b| b.on_click(cx.listener(|this, _, w, cx| this.do_commit(false, w, cx)))), committing)),
                     ),
             );
         let review = on_split(div().id("review").flex().flex_1().min_h_0(), SplitKind::Files, cx)

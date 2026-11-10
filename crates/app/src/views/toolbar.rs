@@ -187,7 +187,7 @@ impl GitTabs {
                     .on_click(cx.listener(|this, _, w, cx| this.open_settings(SettingsTab::Ids, None, w, cx)))
             })
             .child(
-                btn(&p, "palette", Bk::Normal, false, div().flex().items_center().gap_1().child("🔍").when(wide, |d| d.child(kbd(&p, "Ctrl K"))))
+                btn(&p, "palette", Bk::Normal, false, div().flex().items_center().gap_1().child("🔍").when(wide, |d| d.child(kbd(&p, &format!("{} K", crate::ui::mod_name())))))
                     .tooltip_text(crate::i18n::t("搜尋指令、repo、分支、commit"))
                     .on_click(cx.listener(|this, _, w, cx| this.open_palette(w, cx))),
             )

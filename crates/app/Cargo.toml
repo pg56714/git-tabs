@@ -19,3 +19,19 @@ serde_json.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+# Installers are built with cargo-packager (see .github/workflows/release.yml).
+[package.metadata.packager]
+product-name = "git-tabs"
+identifier = "app.git-tabs.desktop"
+description = "A git client with one tab per repository, built for reviewing changes quickly."
+authors = ["Sam Hong"]
+license-file = "../../LICENSE"
+out-dir = "../../dist"
+icons = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+binaries = [{ path = "git-tabs", main = true }]
+# git-tabs shells out to the system git, so the installers do not bundle one.
+
+[package.metadata.packager.nsis]
+installer-icon = "icons/icon.ico"
+display-language-selector = false

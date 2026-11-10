@@ -202,13 +202,19 @@ pub fn rich(p: &Pal, s: &str) -> AnyElement {
 
 /// `.tooltip_text("...")` on any stateful div.
 pub trait TipExt: Sized {
-    fn tooltip_text(self, t: &'static str) -> Self;
+    fn tooltip_text(self, t: impl Into<SharedString>) -> Self;
 }
 
 impl TipExt for Stateful<Div> {
-    fn tooltip_text(self, t: &'static str) -> Self {
-        self.tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(t).build(window, cx))
+    fn tooltip_text(self, t: impl Into<SharedString>) -> Self {
+        let t: SharedString = t.into();
+        self.tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(t.clone()).build(window, cx))
     }
+}
+
+/// How the shortcut modifier is written on this system.
+pub fn mod_name() -> &'static str {
+    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
 }
 
 /// A 12x12 icon drawn from strokes, the way the Vue build draws its SVG icons, so it sits

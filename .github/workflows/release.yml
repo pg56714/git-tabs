@@ -13,6 +13,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -40,13 +43,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md package.json Cargo.toml Cargo.lock src-tauri/tauri.conf.json
+          git add CHANGELOG.md Cargo.toml Cargo.lock
           git commit -m "chore(release): $TAG"
           git tag "$TAG"
           git push origin "HEAD:${GITHUB_REF_NAME}" "$TAG"
-          # A draft until every platform has uploaded; the last job publishes it.
-          # Create it through the API so the id comes straight back. Looking it up by tag_name
-          # afterwards finds nothing: drafts are listed as "untagged-<hash>" until published.
+          # A draft until every platform has uploaded; the last job publishes it. Creating it
+          # through the API returns the id straight away (a draft is not found by tag name).
           RELEASE_ID=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
             -f tag_name="$TAG" -f name="git-tabs $TAG" -F draft=true -F body=@release-notes.md \
             --jq .id)
@@ -61,15 +63,15 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            args: --bundles nsis
-            plain: true
+            formats: nsis
           - os: macos-latest
-            args: --target universal-apple-darwin --bundles app,dmg
-            plain: false
+            formats: dmg
           - os: ubuntu-22.04
-            args: --bundles appimage,deb
-            plain: false
+            formats: appimage,deb
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
@@ -79,24 +81,53 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y clang pkg-config libasound2-dev libfontconfig-dev libwayland-dev \
+            libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libssl-dev libzstd-dev \
+            libgbm-dev libfuse2 patchelf
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@action-v1.0.0
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
+
+      - name: Build
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # One universal binary for Apple Silicon and Intel.
+            cargo build --release -p git-tabs --target aarch64-apple-darwin
+            cargo build --release -p git-tabs --target x86_64-apple-darwin
+            lipo -create -output target/release/git-tabs \
+              target/aarch64-apple-darwin/release/git-tabs target/x86_64-apple-darwin/release/git-tabs
+          else
+            cargo build --release -p git-tabs
+          fi
+
+      - name: Package
+        working-directory: crates/app
+        run: cargo packager --release --formats ${{ matrix.formats }}
+
+      - name: Upload to the draft release
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          tauriScript: bun run tauri
-          args: ${{ matrix.args }}
-          # Windows also gets the bare .exe, which runs without installing.
-          uploadPlainBinary: ${{ matrix.plain }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          mkdir -p upload
+          cp dist/*.exe dist/*.dmg dist/*.AppImage dist/*.deb upload/ 2>/dev/null || true
+          # The bare .exe runs without installing.
+          if [ "$RUNNER_OS" = "Windows" ]; then cp target/release/git-tabs.exe upload/git-tabs_windows_x64.exe; fi
+          ls -la upload
+          test -n "$(ls upload)"
+          for f in upload/*; do
+            name=$(basename "$f")
+            echo "uploading $name"
+            gh api --method POST \
+              -H "Content-Type: application/octet-stream" \
+              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${name}" \
+              --input "$f" > /dev/null
+          done
 
   publish:
     needs: [prepare, build]
@@ -106,4 +137,6 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ needs.prepare.outputs.tag }}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
+        run: |
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${{ needs.prepare.outputs.release_id }}" \
+            -F draft=false -F make_latest=true > /dev/null

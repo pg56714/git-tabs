@@ -23,16 +23,19 @@ use crate::model::*;
 use crate::theme::Pal;
 use crate::ui::*;
 
+/// The shortcut modifier: Cmd on macOS, Ctrl elsewhere.
+const MOD: &str = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
+
 pub fn bind_keys(cx: &mut gpui_kit::App) {
     cx.bind_keys([
         KeyBinding::new("f5", Refresh, Some("GitTabs")),
-        KeyBinding::new("ctrl-r", Refresh, Some("GitTabs")),
-        KeyBinding::new("ctrl-k", OpenPalette, Some("GitTabs")),
-        KeyBinding::new("ctrl-tab", NextTab, Some("GitTabs")),
-        KeyBinding::new("ctrl-shift-tab", PreviousTab, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-r", MOD), Refresh, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-k", MOD), OpenPalette, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-tab", MOD), NextTab, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-shift-tab", MOD), PreviousTab, Some("GitTabs")),
         KeyBinding::new("escape", CloseOverlay, Some("GitTabs")),
-        KeyBinding::new("ctrl-enter", Commit, Some("CommitBox")),
-        KeyBinding::new("ctrl-shift-enter", CommitAndPush, Some("CommitBox")),
+        KeyBinding::new(&format!("{}-enter", MOD), Commit, Some("CommitBox")),
+        KeyBinding::new(&format!("{}-shift-enter", MOD), CommitAndPush, Some("CommitBox")),
         KeyBinding::new("down", NextFile, Some("Nav")),
         KeyBinding::new("up", PreviousFile, Some("Nav")),
         KeyBinding::new("right", NextHunk, Some("Nav")),
@@ -45,15 +48,15 @@ pub fn bind_keys(cx: &mut gpui_kit::App) {
         KeyBinding::new("enter", ModalEnter, Some("Modal")),
     ]);
     cx.bind_keys([
-        KeyBinding::new("ctrl-1", Tab1, Some("GitTabs")),
-        KeyBinding::new("ctrl-2", Tab2, Some("GitTabs")),
-        KeyBinding::new("ctrl-3", Tab3, Some("GitTabs")),
-        KeyBinding::new("ctrl-4", Tab4, Some("GitTabs")),
-        KeyBinding::new("ctrl-5", Tab5, Some("GitTabs")),
-        KeyBinding::new("ctrl-6", Tab6, Some("GitTabs")),
-        KeyBinding::new("ctrl-7", Tab7, Some("GitTabs")),
-        KeyBinding::new("ctrl-8", Tab8, Some("GitTabs")),
-        KeyBinding::new("ctrl-9", Tab9, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-1", MOD), Tab1, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-2", MOD), Tab2, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-3", MOD), Tab3, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-4", MOD), Tab4, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-5", MOD), Tab5, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-6", MOD), Tab6, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-7", MOD), Tab7, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-8", MOD), Tab8, Some("GitTabs")),
+        KeyBinding::new(&format!("{}-9", MOD), Tab9, Some("GitTabs")),
     ]);
 }
 
@@ -161,7 +164,7 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
             .child(div().text_size(px(22.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child("git-tabs"))
             .child(muted(&p, crate::i18n::t("每個 repo 一個分頁。先加入你的 repo。")))
             .child(btn(&p, "welcome-add", Bk::Primary, false, crate::i18n::t("＋ 加入 repo")).on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))))
-            .child(div().flex().items_center().gap_1().child(sub(&p, crate::i18n::t("之後可以用"))).child(kbd(&p, "Ctrl")).child(sub(&p, "+")).child(kbd(&p, "K")).child(sub(&p, crate::i18n::t("搜尋所有指令"))))
+            .child(div().flex().items_center().gap_1().child(sub(&p, crate::i18n::t("之後可以用"))).child(kbd(&p, crate::ui::mod_name())).child(sub(&p, "+")).child(kbd(&p, "K")).child(sub(&p, crate::i18n::t("搜尋所有指令"))))
             .into_any_element()
     };
     div()

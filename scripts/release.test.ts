@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { nextVersion, notes, parseCommits } from './release'
 
 const log = (...rows: [string, string, string?][]) => rows.map(([sha, s, b = '']) => `${sha}\x1f${s}\x1f${b}\x1e`).join('\n')

@@ -1,4 +1,4 @@
-# <img src="public/icon.svg" width="32" height="32" alt="" align="absmiddle"> git-tabs
+# <img src="crates/app/icons/icon.svg" width="32" height="32" alt="" align="absmiddle"> git-tabs
 
 **English** | [繁體中文](README.zh-TW.md)
 
@@ -51,39 +51,38 @@ each pointing at a small file (`identities/<id>.gitconfig` in the app's config f
 
 Plain `git` in a terminal therefore uses the same identity as the app. The app remembers exactly which lines it added and removes only those when you change or delete identities. Pinning an identity to one repo writes the same three settings into that repo's own `.git/config`, which wins over the global rules.
 
+## Languages
+
+The interface is available in English and Traditional Chinese. It follows the language of your system at the first start; change it any time in **Settings → General → Language**.
+
 ## Layout
 
 ```
-crates/gitcore     all git logic (runs the system git), one dispatch(cmd, args) entry point, tests
-crates/devserver   dev only: the same commands over HTTP on 127.0.0.1, for testing the UI in a browser
-src-tauri          desktop shell: one `call` IPC command + a file watcher
-src                Vue 3 UI
+crates/gitcore   all git logic (runs the system git), typed operations, tests
+crates/app       the desktop app, built on GPUI Kit (GPU-rendered, no web view)
 ```
 
 ## Development
 
-Requirements: Rust (stable), Bun 1.4+, git 2.36+ (for `hasconfig:` includes), and on Windows the MSVC build tools and WebView2 (built into Windows 11).
+Requirements: Rust (stable), git 2.36+ (for `hasconfig:` includes). On Linux also the packages listed in `.github/workflows/ci.yml`.
 
 ```bash
-bun install
-bun run tauri dev        # desktop app with hot reload
-bun run dev:web          # UI in a browser at http://127.0.0.1:5320 against crates/devserver
-npm test                 # vitest + cargo tests
-bun run typecheck        # vue-tsc (TypeScript 6) + tsc 7 on the .ts files
-bun run lint             # oxlint
-bun run tauri build      # release build (add --no-bundle for just the exe)
+cargo run -p git-tabs          # run the app
+cargo test --workspace         # unit and end-to-end tests
+bun test scripts               # the release script (needs Bun)
 ```
 
-`crates/devserver` accepts `--config-dir <dir>` and `--git-global <file>`; point the latter at a scratch file so testing never touches your real gitconfig.
+Useful flags while developing: `--config-dir <dir>` keeps the settings in a scratch folder and `--git-global <file>` points git at a scratch global config, so testing never touches your real settings. `--check <repo>` prints a repo's branch and changed files without opening a window.
 
 ### Releasing
 
 Actions → **Release** → **Run workflow**. It picks the next version from the Conventional Commits since the last tag (`feat` → minor, `fix`/`perf` → patch, breaking → minor before 1.0), writes `CHANGELOG.md`, commits and tags `chore(release): vX.Y.Z`, builds Windows (installer + portable exe), macOS (universal dmg) and Linux (AppImage + deb), and publishes the release when all three have uploaded. With nothing new since the last tag it stops without releasing. `bun scripts/release.ts --dry-run` shows what it would do.
 
+The **CI** workflow runs the tests and a trial packaging on all three systems for every push, without publishing.
+
 ### Toolchain
 
-Tauri 2, Vue 3, Vite 8 (Rolldown), oxlint / oxfmt, Vitest, shiki for syntax colors.
-TypeScript 7 (the native Go compiler) checks the plain `.ts` files; `.vue` files are checked by vue-tsc on TypeScript 6, because vue-tsc can't run on TypeScript 7 yet.
+Rust, [GPUI Kit](https://github.com/longbridge/gpui-kit) (the UI framework behind the Zed editor, with its diff, list and input components), installers by [cargo-packager](https://github.com/crabnebula-dev/cargo-packager).
 
 ## License
 
