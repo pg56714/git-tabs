@@ -10,6 +10,20 @@
 
 一個桌面 git 用戶端：每個 repo 一個分頁，專為快速 review 修改而設計。
 
+## 下載
+
+到[最新版本](https://github.com/pg56714/git-tabs/releases/latest)下載你系統對應的檔案。
+
+| 系統 | 檔案 | 說明 |
+|---|---|---|
+| Windows | `git-tabs_*_x64-setup.exe` | 安裝檔 |
+| Windows | `git-tabs_windows_x64.exe` | 免安裝版，直接執行 |
+| macOS | `git-tabs_*_universal.dmg` | Intel 與 Apple Silicon 通用 |
+| Linux | `git-tabs_*_amd64.AppImage` | 任何發行版可用，先 `chmod +x` |
+| Linux | `git-tabs_*_amd64.deb` | Debian / Ubuntu：`sudo apt install ./git-tabs_*.deb` |
+
+`git-tabs_*_universal.app.tar.gz` 是同一個 macOS 程式的壓縮檔，一般用 `.dmg` 即可。
+
 ## 功能
 
 - **Repo 分頁**：每個分頁顯示分支、領先／落後幾個 commit、有沒有未提交的修改，以及這個 repo 用的身分。可以拖曳排序，用 `Ctrl+1…9`／`Ctrl+Tab` 切換。
@@ -70,3 +84,7 @@ bun run tauri build      # release 版（加 --no-bundle 只產生 exe）
 
 Tauri 2、Vue 3、Vite 8（Rolldown）、oxlint／oxfmt、Vitest，語法上色用 shiki。
 TypeScript 7（用 Go 寫的原生編譯器）檢查一般的 `.ts` 檔；`.vue` 檔由 vue-tsc 搭配 TypeScript 6 檢查，因為 vue-tsc 目前還不能在 TypeScript 7 上跑。
+
+## 授權
+
+[Apache License 2.0](LICENSE)

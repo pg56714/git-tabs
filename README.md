@@ -10,6 +10,20 @@
 
 A desktop git client with one tab per repository, built for reviewing changes quickly.
 
+## Download
+
+Grab the file for your system from the [latest release](https://github.com/pg56714/git-tabs/releases/latest).
+
+| System | File | Notes |
+|---|---|---|
+| Windows | `git-tabs_*_x64-setup.exe` | Installer |
+| Windows | `git-tabs_windows_x64.exe` | Portable, runs without installing |
+| macOS | `git-tabs_*_universal.dmg` | Intel and Apple Silicon |
+| Linux | `git-tabs_*_amd64.AppImage` | Runs anywhere, `chmod +x` first |
+| Linux | `git-tabs_*_amd64.deb` | Debian / Ubuntu: `sudo apt install ./git-tabs_*.deb` |
+
+`git-tabs_*_universal.app.tar.gz` is the same macOS app zipped; most people want the `.dmg`.
+
 ## What it does
 
 - **Repo tabs**: each tab shows the branch, ahead/behind, uncommitted changes and which identity the repo uses. Drag to reorder, `Ctrl+1…9` / `Ctrl+Tab` to switch.
@@ -70,3 +84,7 @@ Actions → **Release** → **Run workflow**. It picks the next version from the
 
 Tauri 2, Vue 3, Vite 8 (Rolldown), oxlint / oxfmt, Vitest, shiki for syntax colors.
 TypeScript 7 (the native Go compiler) checks the plain `.ts` files; `.vue` files are checked by vue-tsc on TypeScript 6, because vue-tsc can't run on TypeScript 7 yet.
+
+## License
+
+[Apache License 2.0](LICENSE)
