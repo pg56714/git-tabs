@@ -45,8 +45,13 @@ jobs:
           git tag "$TAG"
           git push origin "HEAD:${GITHUB_REF_NAME}" "$TAG"
           # A draft until every platform has uploaded; the last job publishes it.
-          gh release create "$TAG" --draft --title "git-tabs $TAG" --notes-file release-notes.md
-          echo "release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")" >> "$GITHUB_OUTPUT"
+          # Create it through the API so the id comes straight back. Looking it up by tag_name
+          # afterwards finds nothing: drafts are listed as "untagged-<hash>" until published.
+          RELEASE_ID=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
+            -f tag_name="$TAG" -f name="git-tabs $TAG" -F draft=true -F body=@release-notes.md \
+            --jq .id)
+          test -n "$RELEASE_ID"
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
