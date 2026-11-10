@@ -78,7 +78,7 @@ jobs:
       - name: Package
         working-directory: crates/app
         run: cargo packager --release --formats ${{ matrix.formats }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.os }}
           path: dist/*
