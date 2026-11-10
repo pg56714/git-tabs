@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/gitcore", "crates/devserver", "src-tauri"]
+members = ["crates/gitcore", "crates/app"]
 
 [workspace.package]
 version = "0.1.1"
@@ -11,6 +11,10 @@ license = "Apache-2.0"
 gitcore = { path = "crates/gitcore" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# GPUI renders on the CPU side too: keep dependencies optimised in dev builds.
+[profile.dev.package."*"]
+opt-level = 2
 
 [profile.release]
 codegen-units = 1

@@ -1,0 +1,16 @@
+[package]
+name = "git-tabs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A git client with one tab per repository, built for reviewing changes quickly."
+
+[[bin]]
+name = "git-tabs"
+path = "src/main.rs"
+
+[dependencies]
+gitcore.workspace = true
+gpui-kit = { version = "0.9.1", features = ["tree-sitter-rust", "tree-sitter-toml", "tree-sitter-markdown", "tree-sitter-javascript", "tree-sitter-typescript"] }
+dirs = "6"
+notify-debouncer-mini = "0.7"
