@@ -119,6 +119,9 @@ pub fn on_split<E: gpui_kit::InteractiveElement>(e: E, kind: SplitKind, cx: &mut
 pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) -> impl IntoElement {
     let p = this.pal;
     this.window_size = window.viewport_size();
+    if let Some(found) = this.pending_first_run.take() {
+        this.open_settings(SettingsTab::Ids, Some(found), window, cx);
+    }
     let has_repo = this.repo().is_some();
     let body: AnyElement = if has_repo {
         let content = match this.repo().map(|r| (r.view, r.error.clone())) {

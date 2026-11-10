@@ -112,6 +112,8 @@ pub struct GitTabs {
     pub sizes: Sizes,
     pub sizes_dirty: bool,
     pub pending_ids: Vec<gitcore::config::Identity>,
+    /// Identities found on this computer at the first launch, waiting for a window to be shown in.
+    pub pending_first_run: Option<(Vec<gitcore::config::Identity>, Option<String>)>,
     pub tab_scroll: gpui_kit::ScrollHandle,
     pub side_scroll: gpui_kit::ScrollHandle,
     pub files_scroll: gpui_kit::ScrollHandle,
@@ -224,6 +226,7 @@ impl GitTabs {
             sizes: prefs.sizes,
             sizes_dirty: false,
             pending_ids: Vec::new(),
+            pending_first_run: None,
             tab_scroll: Default::default(),
             side_scroll: Default::default(),
             files_scroll: Default::default(),
@@ -253,6 +256,7 @@ impl GitTabs {
             }
             cx.notify();
         });
+        this.offer_detected_identities(cx);
         for i in 0..this.repos.len() {
             let p = this.repos[i].path.clone();
             if i == this.active {
@@ -262,6 +266,26 @@ impl GitTabs {
             }
         }
         this
+    }
+
+    /// First launch only: fill the identity settings from SSH keys and gitconfig already on this computer.
+    fn offer_detected_identities(&mut self, cx: &mut Context<Self>) {
+        let flag = self.ctx.config_dir.join("identities-offered");
+        if !self.cfg.identities.is_empty() || flag.exists() {
+            return;
+        }
+        let _ = std::fs::create_dir_all(&self.ctx.config_dir);
+        let _ = std::fs::write(&flag, "1");
+        let ctx = self.ctx.clone();
+        self.work(cx, move || gitcore::dispatch(&ctx, "identities_detect", serde_json::json!({})), |this, res, cx| {
+            if let Ok(found) = res {
+                let (ids, def) = crate::identity::from_found(&found, &[]);
+                if !ids.is_empty() {
+                    this.pending_first_run = Some((ids, def));
+                    cx.notify();
+                }
+            }
+        });
     }
 
     // ----- plumbing -----

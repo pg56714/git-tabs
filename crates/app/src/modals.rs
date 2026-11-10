@@ -31,8 +31,9 @@ impl GitTabs {
 
     pub fn open_add_repo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        let dir = if self.cfg.clone_dir.is_empty() { "D:\\project".to_string() } else { self.cfg.clone_dir.clone() };
-        let scan_dir = input(window, cx, &dir, "");
+        // No built-in default: the folder is whatever the user scanned before, or empty.
+        let dir = self.cfg.clone_dir.clone();
+        let scan_dir = input(window, cx, &dir, "輸入或選擇要掃描的資料夾");
         let url = input(window, cx, "", "git@github.com:org/repo.git");
         let clone_to = input(window, cx, "", "存放位置");
         let sub = cx.subscribe_in(&scan_dir, window, |this, _, ev: &InputEvent, _, cx| {
@@ -41,10 +42,8 @@ impl GitTabs {
             }
         });
         self.modal = Some(Modal::AddRepo(Box::new(AddRepoModal { scan_dir, found: Vec::new(), picked: HashSet::new(), pin: String::new(), url, clone_to, busy: false, err: None, _subs: vec![sub] })));
-        self.add_repo_scan(cx);
-        if self.cfg.clone_dir.is_empty() {
-            self.cfg.clone_dir = dir;
-            self.save_config();
+        if !dir.is_empty() {
+            self.add_repo_scan(cx);
         }
         cx.notify();
     }
@@ -52,7 +51,17 @@ impl GitTabs {
     pub fn add_repo_scan(&mut self, cx: &mut Context<Self>) {
         let Some(Modal::AddRepo(m)) = &mut self.modal else { return };
         m.err = None;
-        let dir = m.scan_dir.read(cx).value().to_string();
+        let dir = m.scan_dir.read(cx).value().trim().to_string();
+        if dir.is_empty() {
+            m.err = Some("先輸入或選擇要掃描的資料夾".into());
+            m.found.clear();
+            cx.notify();
+            return;
+        }
+        if self.cfg.clone_dir != dir && std::path::Path::new(&dir).is_dir() {
+            self.cfg.clone_dir = dir.clone();
+            self.save_config();
+        }
         self.work(cx, move || ops::scan(std::path::Path::new(&dir)), |this, found, cx| {
             if let Some(Modal::AddRepo(m)) = &mut this.modal {
                 m.err = found.is_empty().then(|| "這個資料夾底下沒有找到 git repo".to_string());
@@ -197,7 +206,7 @@ impl GitTabs {
         let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| format!("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。", ids.len()));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), "留空就用 PATH 裡的 git");
-        let clone = input(window, cx, &self.cfg.clone_dir.clone(), "D:\\project");
+        let clone = input(window, cx, &self.cfg.clone_dir.clone(), "可留空");
         self.modal = Some(Modal::Settings(Box::new(SettingsModal {
             tab,
             ids: drafts,

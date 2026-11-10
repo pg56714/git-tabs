@@ -23,7 +23,8 @@ impl GitTabs {
             layers.push(self.render_palette(cx));
         }
         layers.push(self.render_toasts(cx));
-        div().children(layers).into_any_element()
+        // Absolute children are placed against their parent, so this layer must fill the window.
+        div().absolute().inset_0().children(layers).into_any_element()
     }
 
     // ----- context menu -----
@@ -358,7 +359,7 @@ impl GitTabs {
                     .child(
                         div()
                             .id("palette-items")
-                            .max_h(gpui_kit::relative(0.5))
+                            .max_h(px((f32::from(self.window_size.height) * 0.5).max(160.)))
                             .overflow_y_scroll()
                             .p(px(6.))
                             .children(rows)
