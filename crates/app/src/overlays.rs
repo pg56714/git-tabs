@@ -8,13 +8,13 @@ use gpui_kit::{AppContext as _, Context, Pixels, Point, Window};
 
 use crate::app::GitTabs;
 use crate::format::{fuzzy, short};
-use crate::identity::tag_of;
 use crate::model::*;
 
 impl GitTabs {
     // ----- menus -----
 
     pub fn open_menu(&mut self, pos: Point<Pixels>, items: Vec<MenuItem>, right: bool, cx: &mut Context<Self>) {
+        crate::debug::log("menu", || format!("open: {}", items.iter().filter(|i| !i.sep).map(|i| i.label.to_string()).collect::<Vec<_>>().join(" | ")));
         self.menu = Some(MenuState { pos, items, right });
         cx.notify();
     }
@@ -28,6 +28,7 @@ impl GitTabs {
     // ----- dialogs -----
 
     pub fn close_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        crate::debug::log("modal", || "close".into());
         self.modal = None;
         self.nav_focus.focus(window, cx);
         cx.notify();
@@ -43,6 +44,7 @@ impl GitTabs {
         on_ok: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static,
     ) {
         self.menu = None;
+        crate::debug::log("modal", || format!("confirm: {title}"));
         self.modal = Some(Modal::Confirm(ConfirmModal { title: title.into(), body, ok: ok.into(), danger, on_ok: Rc::new(on_ok) }));
         cx.notify();
     }
@@ -56,6 +58,7 @@ impl GitTabs {
         on_pick: impl Fn(&mut GitTabs, String, &mut Window, &mut Context<GitTabs>) + 'static,
     ) {
         self.menu = None;
+        crate::debug::log("modal", || format!("choice: {title}"));
         self.modal = Some(Modal::Choice(ChoiceModal { title: title.into(), body: body.into(), choices, on_pick: Rc::new(on_pick) }));
         cx.notify();
     }
@@ -105,6 +108,7 @@ impl GitTabs {
         if let Some(first) = out.iter().find_map(|f| f.input.clone()) {
             first.update(cx, |s, cx| s.focus(window, cx));
         }
+        crate::debug::log("modal", || format!("prompt: {title}"));
         self.modal = Some(Modal::Prompt(PromptModal { title: title.into(), ok: ok.into(), fields: out, on_ok: Rc::new(on_ok), _subs: subs }));
         cx.notify();
     }
@@ -174,6 +178,7 @@ impl GitTabs {
         let item = self.palette_shown().into_iter().nth(sel);
         self.close_palette(window, cx);
         if let Some(it) = item {
+            crate::debug::log("palette", || format!("run: {}", it.title));
             (it.run)(self, window, cx);
         }
     }
@@ -231,7 +236,7 @@ impl GitTabs {
                 v.push(item(crate::i18n::t("身分：自動（依規則）"), n.clone(), |t, _, cx| t.set_pin(None, cx)));
                 for id in &self.cfg.identities {
                     let key = id.id.clone();
-                    v.push(item(crate::i18n::tr("身分：{} {} {}", &[], &[(id.name).to_string(), (tag_of(id)).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(Some(key.clone()), cx)));
+                    v.push(item(crate::i18n::tr("身分：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(Some(key.clone()), cx)));
                 }
             }
             for (i, x) in self.repos.iter().enumerate() {

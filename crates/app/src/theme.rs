@@ -11,7 +11,6 @@ fn c(hex: u32) -> Hsla {
 /// One theme's colours, named after the CSS variables they come from.
 #[derive(Clone, Copy)]
 pub struct Pal {
-    pub dark: bool,
     pub bg: Hsla,
     pub panel: Hsla,
     pub panel2: Hsla,
@@ -36,7 +35,6 @@ impl Pal {
     pub fn new(dark: bool) -> Self {
         if dark {
             Self {
-                dark,
                 bg: c(0x16181c),
                 panel: c(0x1e2126),
                 panel2: c(0x24282e),
@@ -58,7 +56,6 @@ impl Pal {
             }
         } else {
             Self {
-                dark,
                 bg: c(0xeef0f3),
                 panel: c(0xffffff),
                 panel2: c(0xf6f7f9),
@@ -80,22 +77,6 @@ impl Pal {
             }
         }
     }
-}
-
-/// Chip colours for an identity colour name: (background, text).
-pub fn chip_color(name: &str, dark: bool) -> (Hsla, Hsla) {
-    let (l, d) = match name {
-        "blue" => ((0xe3edff, 0x1f4fae), (0x22324f, 0xa9c4fb)),
-        "green" => ((0xe0f3e4, 0x25703a), (0x1d3324, 0x8fd19e)),
-        "amber" => ((0xfbefd5, 0x8a5a0c), (0x3b3020, 0xe5b45a)),
-        "red" => ((0xfde4e1, 0xa8322a), (0x3d2224, 0xff9a90)),
-        "purple" => ((0xeeeafd, 0x5641b5), (0x2e2850, 0xc3b7fb)),
-        "teal" => ((0xdcf3ee, 0x0f6e5e), (0x173631, 0x7fd8c6)),
-        "pink" => ((0xfbe5ef, 0x99335a), (0x3e2231, 0xf0a3c3)),
-        _ => ((0xecedef, 0x4a4f57), (0x30343a, 0xc4c9d0)),
-    };
-    let (b, t) = if dark { d } else { l };
-    (c(b), c(t))
 }
 
 /// The graph's lane colours.

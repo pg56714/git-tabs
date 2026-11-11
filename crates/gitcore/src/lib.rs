@@ -183,7 +183,8 @@ fn spawn(program: &str, args: &[&str], dir: Option<&Path>) -> Result<(), String>
 
 fn open_folder(p: &Path) -> Result<Value, String> {
     #[cfg(windows)]
-    spawn("explorer", &[&p.display().to_string()], None)?;
+    // Explorer falls back to Documents when the path has forward slashes (git prints C:/…).
+    spawn("explorer", &[&p.display().to_string().replace('/', "\\")], None)?;
     #[cfg(target_os = "macos")]
     spawn("open", &[&p.display().to_string()], None)?;
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -195,7 +196,9 @@ fn open_terminal(p: &Path) -> Result<Value, String> {
     let d = p.display().to_string();
     #[cfg(windows)]
     {
-        if spawn("wt", &["-d", &d], None).is_err() {
+        // Backslashes, and also the working directory, so the shell starts in the repo.
+        let d = d.replace('/', "\\");
+        if spawn("wt", &["-d", &d], Some(p)).is_err() {
             spawn("cmd", &["/c", "start", "", "cmd", "/K"], Some(p))?;
         }
     }

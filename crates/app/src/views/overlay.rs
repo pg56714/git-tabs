@@ -13,14 +13,16 @@ use crate::ui::*;
 impl GitTabs {
     pub fn render_overlays(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let mut layers: Vec<AnyElement> = Vec::new();
-        if self.menu.is_some() {
-            layers.push(self.render_menu(cx));
-        }
         if self.modal.is_some() {
             layers.push(self.render_modal(window, cx));
         }
         if self.palette.is_some() {
             layers.push(self.render_palette(cx));
+        }
+        // Last of the dismissable layers, so a menu opened from inside a dialog (settings'
+        // "assign to…") draws over it instead of behind.
+        if self.menu.is_some() {
+            layers.push(self.render_menu(cx));
         }
         layers.push(self.render_toasts(cx));
         // Absolute children are placed against their parent, so this layer must fill the window.
@@ -33,7 +35,9 @@ impl GitTabs {
         let p = self.pal;
         let Some(m) = &self.menu else { return div().into_any_element() };
         let (ww, wh) = (f32::from(self.window_size.width), f32::from(self.window_size.height));
-        let width = 220.0f32;
+        // Wide enough for the longest label and hint (CJK glyphs count double), 220..420 px.
+        let text_w = |t: &str| t.chars().map(|c| if c.is_ascii() { 7.0f32 } else { 13.0 }).sum::<f32>();
+        let width = m.items.iter().filter(|i| !i.sep).map(|i| if i.header { text_w(&i.label) + 24. } else { text_w(&i.label) + if i.hint.is_empty() { 0. } else { text_w(&i.hint) + 16. } + 56. }).fold(220.0f32, f32::max).min(420.0);
         let height = m.items.iter().map(|i| if i.sep { 9. } else if i.header { 26. } else { 28. }).sum::<f32>() + 8.;
         let mut x = f32::from(m.pos.x);
         let mut y = f32::from(m.pos.y) + 2.;
@@ -55,6 +59,7 @@ impl GitTabs {
                 }
                 let act = it.on.clone();
                 let off = it.disabled;
+                let label = it.label.clone();
                 div()
                     .id(SharedString::from(format!("mi-{i}")))
                     .flex()
@@ -71,6 +76,7 @@ impl GitTabs {
                         d.cursor_pointer().hover(move |s| s.bg(p.hover)).on_click(cx.listener(move |this, _, w, cx| {
                             this.menu = None;
                             cx.notify();
+                            crate::debug::log("menu", || format!("pick: {label}"));
                             if let Some(a) = &act {
                                 a(this, w, cx);
                             }

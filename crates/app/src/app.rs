@@ -333,7 +333,9 @@ impl GitTabs {
     pub fn toast(&mut self, text: impl Into<String>, kind: ToastKind, detail: Option<String>, cx: &mut Context<Self>) {
         self.toast_id += 1;
         let id = self.toast_id;
-        self.toasts.push(Toast { id, text: text.into(), kind, detail });
+        let text: String = text.into();
+        crate::debug::log("toast", || format!("{kind:?}: {text} {}", detail.as_deref().unwrap_or("")));
+        self.toasts.push(Toast { id, text, kind, detail });
         let secs = if kind == ToastKind::Err { 9 } else { 3 };
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(secs)).await;
@@ -412,6 +414,9 @@ impl GitTabs {
         let items = gitcore::runner::log_since(self.log_since);
         if let Some(last) = items.last() {
             self.log_since = last.id;
+            for l in &items {
+                crate::debug::log("git", || format!("{} {} [{}ms] {} {}", if l.ok { "ok " } else { "ERR" }, l.cmd, l.ms, l.repo, if l.ok { String::new() } else { l.output.clone() }));
+            }
             self.log.extend(items);
             let n = self.log.len();
             if n > 500 {

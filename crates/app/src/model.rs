@@ -196,7 +196,7 @@ pub struct MenuState {
     pub right: bool,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ToastKind {
     Ok,
     Err,
@@ -291,7 +291,6 @@ pub struct KeyGen {
 pub struct IdDraft {
     pub id: Identity,
     pub name: Entity<InputState>,
-    pub short: Entity<InputState>,
     pub key: Entity<InputState>,
     pub host: Entity<InputState>,
     pub user: Entity<InputState>,

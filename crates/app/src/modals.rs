@@ -41,6 +41,7 @@ impl GitTabs {
                 this.add_repo_scan(cx);
             }
         });
+        crate::debug::log("modal", || "add-repo".into());
         self.modal = Some(Modal::AddRepo(Box::new(AddRepoModal { scan_dir, found: Vec::new(), picked: HashSet::new(), pin: String::new(), url, clone_to, busy: false, err: None, _subs: vec![sub] })));
         if !dir.is_empty() {
             self.add_repo_scan(cx);
@@ -155,6 +156,7 @@ impl GitTabs {
     pub fn open_blame(&mut self, path: String, rev: Option<String>, cx: &mut Context<Self>) {
         let Some(repo) = self.active_path() else { return };
         self.menu = None;
+        crate::debug::log("modal", || format!("blame: {path:?}"));
         self.modal = Some(Modal::Blame(BlameModal { path: path.clone(), rev: rev.clone(), lines: Vec::new(), err: None, loading: true }));
         self.work(cx, move || ops::blame(&repo, &path, rev.as_deref()), |this, res, cx| {
             if let Some(Modal::Blame(m)) = &mut this.modal {
@@ -178,7 +180,6 @@ impl GitTabs {
         let home = self.home_dir();
         IdDraft {
             name: input(window, cx, &id.name, crate::i18n::t("例如：個人 GitHub")),
-            short: input(window, cx, &id.short, &crate::identity::auto_short(&id.name)),
             key: input(window, cx, &id.key, "C:\\Users\\you\\.ssh\\id_ed25519_xxx"),
             host: input(window, cx, &id.host, "github.com"),
             user: input(window, cx, &id.user, "Your Name"),
@@ -207,6 +208,7 @@ impl GitTabs {
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
         let clone = input(window, cx, &self.cfg.clone_dir.clone(), crate::i18n::t("可留空"));
+        crate::debug::log("modal", || "settings".into());
         self.modal = Some(Modal::Settings(Box::new(SettingsModal {
             tab,
             ids: drafts,
@@ -399,7 +401,6 @@ impl GitTabs {
         for d in &m.ids {
             let mut id = d.id.clone();
             id.name = d.name.read(cx).value().trim().to_string();
-            id.short = d.short.read(cx).value().trim().to_string();
             id.key = d.key.read(cx).value().trim().to_string();
             id.host = d.host.read(cx).value().trim().to_string();
             id.user = d.user.read(cx).value().trim().to_string();

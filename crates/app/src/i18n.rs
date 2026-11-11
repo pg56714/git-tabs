@@ -34,6 +34,9 @@ fn table() -> &'static HashMap<&'static str, &'static str> {
 }
 
 /// The text in the current language.
+/// The conflict view's pseudo-hunk header, written in Chinese by gitcore.
+pub const CONFLICT_HEADER: &str = "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@";
+
 pub fn t(s: &'static str) -> &'static str {
     if is_en() { table().get(s).copied().unwrap_or(s) } else { s }
 }
@@ -176,7 +179,7 @@ const TABLE: &[(&str, &str)] = &[
     ("標記已解決", "Mark resolved"),
     ("已解決 {name}", "Resolved {name}"),
     ("改用身分", "Change identity"),
-    ("{name} 改用 {}（{}）", "{name} now uses {} ({})"),
+    ("{name} 改用 {}", "{name} now uses {}"),
     ("{name} 改回自動", "{name} is back to automatic"),
     ("打不開資料夾", "Could not open the folder"),
     ("打不開終端機", "Could not open a terminal"),
@@ -238,7 +241,7 @@ const TABLE: &[(&str, &str)] = &[
     ("重新整理", "Refresh"),
     ("切換分支：{}", "Switch branch: {}"),
     ("身分：自動（依規則）", "Identity: automatic (by rules)"),
-    ("身分：{} {} {}", "Identity: {} {} {}"),
+    ("身分：{} {}", "Identity: {} {}"),
     ("遠端", "Remote"),
     ("全部 repo 一起 Fetch", "Fetch all repos"),
     ("加入 repo", "Add repo"),
@@ -354,6 +357,8 @@ const TABLE: &[(&str, &str)] = &[
     ("沒有對應的身分", "no matching identity"),
     ("用預設", "uses the default"),
     ("指定給… ▾", "Assign to… ▾"),
+    ("新身分 {}", "New identity {}"),
+    ("@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@", "@@ Conflict: red is mine (HEAD), green is theirs @@"),
     ("✓ 開著的 repo 都有對應的身分", "✓ Every open repo has an identity"),
     ("跟系統", "System"),
     ("淺色", "Light"),
@@ -377,8 +382,7 @@ const TABLE: &[(&str, &str)] = &[
     ("帳號 {}", "account {}"),
     ("還沒驗證這把 key 對應哪個帳號", "This key has not been verified against an account yet"),
     ("刪除這個身分", "Delete this identity"),
-    ("標籤", "Tag"),
-    ("留空會自動用「{}」", "Leave empty to use \"{}\""),
+    ("顏色", "Color"),
     ("選檔案…", "Choose file…"),
     ("連線中…", "Connecting…"),
     ("測試連線", "Test connection"),

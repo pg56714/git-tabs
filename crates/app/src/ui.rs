@@ -5,7 +5,7 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::theme::{Pal, chip_color};
+use crate::theme::Pal;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Bk {
@@ -123,12 +123,6 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str) -> Div {
         .text_color(fg)
         .text_size(px(11.))
         .child(name.to_string())
-}
-
-/// `.idc` identity chip
-pub fn id_chip(p: &Pal, label: &str, color: &str, unknown: bool) -> Div {
-    let (bg, fg) = if unknown { (p.warn_bg, p.warn) } else { chip_color(color, p.dark) };
-    div().flex_none().px(px(6.)).h(px(16.)).flex().items_center().rounded(px(9.)).bg(bg).text_color(fg).text_size(px(10.5)).whitespace_nowrap().child(label.to_string())
 }
 
 /// `kbd`

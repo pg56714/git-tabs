@@ -213,7 +213,8 @@ impl GitTabs {
         // ---- current hunk
         let n = fd.hunks.len();
         let cur = self.cur_hunk.min(n - 1);
-        let header = fd.hunks[cur].header.clone();
+        // The conflict view's pseudo-hunk header comes from gitcore in Chinese.
+        let header = if fd.hunks[cur].header == crate::i18n::CONFLICT_HEADER { crate::i18n::t(crate::i18n::CONFLICT_HEADER).to_string() } else { fd.hunks[cur].header.clone() };
         let hunkbar = div()
             .flex()
             .flex_none()

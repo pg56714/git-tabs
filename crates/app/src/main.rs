@@ -3,6 +3,7 @@
 
 mod actions;
 mod app;
+mod debug;
 mod diffmap;
 mod format;
 mod graph;
@@ -54,6 +55,7 @@ fn main() {
         return;
     }
 
+    crate::debug::log("start", || format!("git-tabs {} on {}", env!("CARGO_PKG_VERSION"), std::env::consts::OS));
     let ctx = Arc::new(gitcore::Ctx::new(dir));
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);

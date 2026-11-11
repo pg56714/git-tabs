@@ -10,9 +10,8 @@ use gpui_kit::{
 
 use crate::app::GitTabs;
 use crate::format::{ago, base_name, date_time, short};
-use crate::identity::{COLORS, auto_short, match_identity, norm_url, tag_of};
+use crate::identity::{match_identity, norm_url};
 use crate::model::*;
-use crate::theme::chip_color;
 use crate::ui::*;
 
 fn seg<'a>(p: &crate::theme::Pal, opts: &[(&'a str, &'a str)], current: &str, mut mk: impl FnMut(&'a str) -> Box<dyn Fn(&mut Window, &mut gpui_kit::App)>) -> AnyElement {
@@ -61,7 +60,6 @@ impl GitTabs {
             .map(|d| {
                 let mut id = d.id.clone();
                 id.name = d.name.read(cx).value().to_string();
-                id.short = d.short.read(cx).value().to_string();
                 id.rules = d.rules.iter().map(|r| gitcore::config::Rule { t: r.t.clone(), v: r.v.read(cx).value().to_string() }).collect();
                 id
             })
@@ -279,9 +277,6 @@ impl GitTabs {
 
     fn render_id_card(&self, i: usize, d: &IdDraft, snapshot: &[Identity], cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
-        let snap = snapshot.get(i).cloned().unwrap_or_else(|| d.id.clone());
-        let tag = tag_of(&snap);
-        let (cbg, cfg) = chip_color(&d.id.color, p.dark);
         let matched: Vec<String> = self
             .repos
             .iter()
@@ -296,30 +291,6 @@ impl GitTabs {
             .map(|r| r.name.clone())
             .collect();
         let row = |label: &str, content: AnyElement| self.labeled(label, content);
-        let sw: Vec<AnyElement> = COLORS
-            .iter()
-            .map(|c| {
-                let (bg, fg) = chip_color(c, p.dark);
-                let _ = bg;
-                let name = c.to_string();
-                div()
-                    .id(SharedString::from(format!("sw-{i}-{c}")))
-                    .size(px(18.))
-                    .rounded_full()
-                    .cursor_pointer()
-                    .bg(fg)
-                    .when(d.id.color == *c, |d| d.border_2().border_color(p.text))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Settings(m)) = &mut this.modal
-                            && let Some(d) = m.ids.get_mut(i)
-                        {
-                            d.id.color = name.clone();
-                        }
-                        cx.notify();
-                    }))
-                    .into_any_element()
-            })
-            .collect();
         let mut rows: Vec<AnyElement> = Vec::new();
         // ---- title row
         rows.push(
@@ -328,7 +299,6 @@ impl GitTabs {
                 .items_center()
                 .gap(px(8.))
                 .child(div().w(px(200.)).child(Input::new(&d.name)))
-                .child(div().px(px(6.)).h(px(16.)).flex().items_center().rounded(px(9.)).bg(cbg).text_color(cfg).text_size(px(10.5)).child(tag))
                 .child(if d.id.verified {
                     div().flex().gap_1().text_size(px(11.5)).text_color(p.faint).child(div().text_color(p.ok).child(crate::i18n::t("✓ 已驗證"))).child(crate::i18n::tr("帳號 {}", &[], &[(d.id.account).to_string()]))
                 } else {
@@ -338,18 +308,6 @@ impl GitTabs {
                 .child(btn(&p, SharedString::from(format!("rm-{i}")), Bk::Ghost, true, "🗑").tooltip_text(crate::i18n::t("刪除這個身分")).on_click(cx.listener(move |this, _, _, cx| this.settings_remove(i, cx))))
                 .into_any_element(),
         );
-        rows.push(row(
-            crate::i18n::t("標籤"),
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(div().w(px(110.)).child(Input::new(&d.short)))
-                .child(sub(&p, crate::i18n::tr("留空會自動用「{}」", &[], &[(auto_short(&snap.name)).to_string()])))
-                .child(div().flex_1())
-                .child(div().flex().gap(px(6.)).children(sw))
-                .into_any_element(),
-        ));
         rows.push(row(
             "SSH key",
             div()

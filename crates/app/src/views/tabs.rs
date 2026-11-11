@@ -8,7 +8,6 @@ use gpui_kit::{
 use gpui_kit::{AppContext as _, Hsla};
 
 use crate::app::GitTabs;
-use crate::identity::tag_of;
 use crate::model::*;
 use crate::ui::*;
 
@@ -23,19 +22,6 @@ impl Render for TabGhost {
 }
 
 impl GitTabs {
-    /// The identity chip shown next to a repo name (IdChip.vue).
-    pub fn id_chip_for(&self, r: &RepoState) -> Option<AnyElement> {
-        if self.cfg.identities.is_empty() {
-            return None;
-        }
-        let p = &self.pal;
-        let who = self.identity_of(r);
-        Some(match who.id {
-            Some(id) => id_chip(p, &format!("{}{}", if who.pinned { "📌 " } else { "" }, tag_of(&id)), &id.color, false).into_any_element(),
-            None => id_chip(p, "?", "", true).into_any_element(),
-        })
-    }
-
     pub fn tab_menu(&self, i: usize) -> Vec<MenuItem> {
         let Some(r) = self.repos.get(i) else { return vec![] };
         let (path, ps) = (r.path.clone(), r.path.display().to_string());
@@ -112,7 +98,6 @@ impl GitTabs {
                     .on_drop(cx.listener(move |this, d: &DraggedTab, _, cx| this.move_tab(d.0, i, cx)))
                     .when_some(lead, |d, l| d.child(l))
                     .child(div().overflow_hidden().text_ellipsis().child(name))
-                    .when_some(self.id_chip_for(r), |d, c| d.child(c))
                     .when_some(branch, |d, b| d.child(div().text_size(px(11.5)).text_color(p.faint).whitespace_nowrap().child(b)))
                     .child(
                         div()

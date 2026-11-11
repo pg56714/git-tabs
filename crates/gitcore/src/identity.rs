@@ -97,16 +97,25 @@ pub fn apply(cfg_dir: &Path, ids: &[Identity], default: Option<&str>, old: &[Man
     Ok(added)
 }
 
+/// Removes a key from the repo's own config. Git exits 5 when it was not set; that is not worth
+/// a red line in the command log, so only a real removal is recorded.
+fn unset_local(repo: &Path, key: &str) {
+    let t = std::time::Instant::now();
+    let o = run(Some(repo), &["config", "--local", "--unset-all", key], None, false);
+    if o.ok() {
+        crate::runner::record(&repo.display().to_string(), format!("git config --local --unset-all {key}"), t.elapsed().as_millis() as u64, true, "");
+    }
+}
+
 /// Pins an identity to one repo by writing its settings into the repo's own config.
 pub fn pin(repo: &Path, id: Option<&Identity>) -> Result<(), String> {
-    let r = Some(repo);
     match id {
         Some(id) => {
             for (k, v) in [("user.name", id.user.trim().to_string()), ("user.email", id.email.trim().to_string()), ("core.sshCommand", if id.key.trim().is_empty() { String::new() } else { ssh_command(&id.key) })] {
                 if v.is_empty() {
-                    let _ = run(r, &["config", "--local", "--unset-all", k], None, true);
+                    unset_local(repo, k);
                 } else {
-                    let o = run(r, &["config", "--local", k, &v], None, true);
+                    let o = run(Some(repo), &["config", "--local", k, &v], None, true);
                     if !o.ok() {
                         return Err(o.message());
                     }
@@ -115,7 +124,7 @@ pub fn pin(repo: &Path, id: Option<&Identity>) -> Result<(), String> {
         }
         None => {
             for k in ["user.name", "user.email", "core.sshCommand"] {
-                let _ = run(r, &["config", "--local", "--unset-all", k], None, true);
+                unset_local(repo, k);
             }
         }
     }

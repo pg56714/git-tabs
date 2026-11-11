@@ -3,34 +3,6 @@
 use gitcore::config::{Identity, Rule};
 use serde_json::Value;
 
-pub const COLORS: [&str; 8] = ["blue", "green", "amber", "red", "purple", "teal", "pink", "gray"];
-
-fn is_cjk(c: char) -> bool {
-    ('\u{3400}'..='\u{9fff}').contains(&c)
-}
-
-/// Tag shown when the user left it empty: the first Chinese word (first two characters if
-/// longer than three), else an all-caps word like "EMU", else the first word.
-pub fn auto_short(name: &str) -> String {
-    let s = name.trim();
-    if s.is_empty() {
-        return "身分".into();
-    }
-    let first = s.split_whitespace().next().unwrap_or(s);
-    if s.chars().next().is_some_and(is_cjk) {
-        let cjk: String = first.chars().filter(|c| is_cjk(*c)).collect();
-        return if cjk.chars().count() <= 3 { cjk } else { cjk.chars().take(2).collect() };
-    }
-    if let Some(caps) = s.split_whitespace().find(|w| (2..=5).contains(&w.len()) && w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())) {
-        return caps.to_string();
-    }
-    first.chars().take(8).collect()
-}
-
-pub fn tag_of(id: &Identity) -> String {
-    if id.short.trim().is_empty() { auto_short(&id.name) } else { id.short.trim().to_string() }
-}
-
 /// git@github.com:org/x.git, https://github.com/org/x, ssh://git@host/org/x -> host/org/x(.git)
 pub fn norm_url(u: &str) -> String {
     let mut s = u.trim().to_string();
@@ -132,13 +104,12 @@ pub fn rule_for_url(remote_url: &str) -> Option<String> {
 }
 
 pub fn new_identity(existing: &[Identity]) -> Identity {
-    let used: Vec<&str> = existing.iter().map(|x| x.color.as_str()).collect();
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     Identity {
         id: format!("id{stamp:x}"),
-        name: format!("新身分 {}", existing.len() + 1),
+        name: crate::i18n::tr("新身分 {}", &[], &[(existing.len() + 1).to_string()]),
         short: String::new(),
-        color: COLORS.iter().find(|c| !used.contains(c)).unwrap_or(&"gray").to_string(),
+        color: String::new(),
         key: String::new(),
         account: String::new(),
         verified: false,
@@ -287,15 +258,6 @@ mod tests {
         assert_eq!(match_identity(&ids, "d:\\work\\proj", None).unwrap().name, "B");
         assert_eq!(match_identity(&ids, "d:\\work\\proj", Some("git@github.com:acme/app.git")).unwrap().name, "B", "later identity wins");
         assert!(match_identity(&ids, "C:\\x", Some("git@github.com:other/app.git")).is_none());
-    }
-
-    #[test]
-    fn short_tags() {
-        assert_eq!(auto_short("工作"), "工作");
-        assert_eq!(auto_short("個人帳號專用"), "個人");
-        assert_eq!(auto_short("Work EMU account"), "EMU");
-        assert_eq!(auto_short("personal"), "personal");
-        assert_eq!(auto_short(""), "身分");
     }
 
     #[test]

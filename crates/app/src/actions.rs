@@ -78,7 +78,7 @@ impl GitTabs {
                             this.set_view(View::Changes, cx);
                         }
                         this.select(ListKind::U, conflicts[0].clone(), cx);
-                    } else {
+                    } else if !matches!(this.modal, Some(Modal::Choice(_))) {
                         this.toast(crate::i18n::tr("{label}失敗", &[("label", (label).to_string())], &[]), ToastKind::Err, Some(e), cx);
                     }
                 });
@@ -396,12 +396,11 @@ impl GitTabs {
             Some(crate::i18n::tr("已 pull {name}", &[("name", (name).to_string())], &[])),
             move |r| ops::pull(r, mode),
             move |this, res, cx| {
-                // The op already toasted a failure; a diverged branch gets the better question.
+                // A diverged branch gets the better question instead of the failure toast (op_with skips it).
                 if let Err(e) = res
                     && mode == "ff"
                     && ["fast-forward", "diverg", "Not possible"].iter().any(|k| e.to_lowercase().contains(&k.to_lowercase()))
                 {
-                    this.toasts.pop();
                     let p = p.clone();
                     this.choose(
                         crate::i18n::t("本地和遠端各有新的 commit"),
@@ -712,7 +711,7 @@ impl GitTabs {
         let ctx = self.ctx.clone();
         let v = json!({ "repo": path.display().to_string(), "identity": ident });
         let msg = match &ident {
-            Some(i) => crate::i18n::tr("{name} 改用 {}（{}）", &[("name", (name).to_string())], &[(i.name).to_string(), (if i.account.is_empty() { &i.email } else { &i.account }).to_string()]),
+            Some(i) => crate::i18n::tr("{name} 改用 {}", &[("name", (name).to_string())], &[(i.name).to_string()]),
             None => crate::i18n::tr("{name} 改回自動", &[("name", (name).to_string())], &[]),
         };
         self.op_with(&path, label, true, None, move |_| gitcore::dispatch(&ctx, "identity_pin", v).map(|_| String::new()), move |this, res, cx| {

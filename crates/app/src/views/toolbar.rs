@@ -6,7 +6,6 @@ use gpui_kit::{
 };
 
 use crate::app::GitTabs;
-use crate::identity::tag_of;
 use crate::model::*;
 use crate::ui::*;
 
@@ -55,8 +54,7 @@ impl GitTabs {
         for id in &self.cfg.identities {
             let key = id.id.clone();
             let checked = w.pinned && w.id.as_ref().is_some_and(|x| x.id == id.id);
-            let hint = if !id.account.is_empty() { id.account.clone() } else if !id.email.is_empty() { id.email.clone() } else { crate::i18n::t("未設定").into() };
-            items.push(MenuItem::new(crate::i18n::tr("{}　{}", &[], &[(tag_of(id)).to_string(), (id.name).to_string()]), move |t, _, cx| t.set_pin(Some(key.clone()), cx)).checked(checked).hint(hint));
+            items.push(MenuItem::new(id.name.clone(), move |t, _, cx| t.set_pin(Some(key.clone()), cx)).checked(checked));
         }
         items.push(MenuItem::sep());
         items.push(MenuItem::new(crate::i18n::t("管理身分…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon("⚙"));
@@ -160,22 +158,14 @@ impl GitTabs {
             .when_some(busy, |d, b| d.child(div().ml(px(6.)).child(sub(&p, crate::i18n::tr("{b} 執行中…", &[("b", (b).to_string())], &[])))))
             .child(div().flex_1())
             .child(if have_ids {
-                let label = match &who.id {
-                    Some(id) => {
-                        if !wide {
-                            String::new()
-                        } else if !id.account.is_empty() {
-                            id.account.clone()
-                        } else if !id.email.is_empty() {
-                            id.email.clone()
-                        } else {
-                            id.name.clone()
-                        }
-                    }
-                    None => if wide { crate::i18n::t("沒有對應的身分").into() } else { String::new() },
+                // The identity's name; icon only on a narrow window.
+                let label: String = match &who.id {
+                    Some(id) if wide => id.name.clone(),
+                    None if wide => crate::i18n::t("沒有對應的身分").into(),
+                    None => "?".into(),
+                    _ => String::new(),
                 };
-                let chip = self.repo().and_then(|r| self.id_chip_for(r));
-                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child("👤").child(div().text_color(if who.id.is_some() { p.text } else { p.warn }).child(label)).when_some(chip, |d, c| d.child(c)).child("▾"))
+                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child("👤").child(div().text_color(if who.id.is_some() { p.text } else { p.warn }).child(label)).child("▾"))
                     .tooltip_text(crate::i18n::t("切換這個 repo 用的身分"))
                     .on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                         let items = this.identity_menu();
