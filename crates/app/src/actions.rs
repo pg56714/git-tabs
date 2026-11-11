@@ -350,8 +350,18 @@ impl GitTabs {
         };
         if !self.cfg.identities.is_empty() && who.id.is_none() {
             let r = self.repo().unwrap();
-            let def = self.cfg.identities.iter().find(|i| Some(&i.id) == self.cfg.default_identity.as_ref()).map(|i| i.name.clone());
-            let body = crate::i18n::tr("**{}**（{}）沒有符合任何身分的規則，{}提交。\n\n可以點工具列的 👤 按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), (def.map(|d| crate::i18n::tr("會用預設的「{d}」", &[("d", (d).to_string())], &[])).unwrap_or_else(|| crate::i18n::t("會用 git 的全域設定").into())).to_string()]);
+            // What git would write as the author here: the global config, as nothing in the repo overrides it.
+            let cfg_get = |k: &str| {
+                let o = gitcore::runner::run(Some(&r.path), &["config", k], None, false);
+                if o.ok() { o.stdout.trim().to_string() } else { String::new() }
+            };
+            let (name, email) = (cfg_get("user.name"), cfg_get("user.email"));
+            let who_txt = if name.is_empty() && email.is_empty() { crate::i18n::t("（git 沒有設定名稱和 email）").to_string() } else { format!("{name} <{email}>") };
+            let body = crate::i18n::tr("**{}**（{}）沒有符合任何身分的規則，會用 git 的全域設定提交：
+
+**{}**
+
+可以點工具列的 👤 按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
             let go = std::rc::Rc::new(go);
             self.confirm(crate::i18n::t("這個 repo 沒有對應的身分"), body, crate::i18n::t("照樣提交"), false, cx, move |this, _, cx| go(this, cx));
         } else {

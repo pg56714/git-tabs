@@ -115,7 +115,7 @@ pub struct GitTabs {
     pub sizes_dirty: bool,
     pub pending_ids: Vec<gitcore::config::Identity>,
     /// Identities found on this computer at the first launch, waiting for a window to be shown in.
-    pub pending_first_run: Option<(Vec<gitcore::config::Identity>, Option<String>)>,
+    pub pending_first_run: Option<Vec<gitcore::config::Identity>>,
     pub tab_scroll: gpui_kit::ScrollHandle,
     pub side_scroll: gpui_kit::ScrollHandle,
     pub files_scroll: gpui_kit::ScrollHandle,
@@ -282,9 +282,9 @@ impl GitTabs {
         let ctx = self.ctx.clone();
         self.work(cx, move || gitcore::dispatch(&ctx, "identities_detect", serde_json::json!({})), |this, res, cx| {
             if let Ok(found) = res {
-                let (ids, def) = crate::identity::from_found(&found, &[]);
+                let ids = crate::identity::from_found(&found, &[]);
                 if !ids.is_empty() {
-                    this.pending_first_run = Some((ids, def));
+                    this.pending_first_run = Some(ids);
                     cx.notify();
                 }
             }
@@ -1017,14 +1017,12 @@ impl GitTabs {
         self.cfg.repos.iter().find(|x| Path::new(&x.path) == r.path).and_then(|x| x.pin.clone())
     }
 
-    /// The identity git will use for this repo: a pin, else the first matching rule, else the
-    /// fallback identity. `fallback` is true when the fallback was used.
+    /// The identity git will use for this repo: a pin, else the first matching rule, else none.
     pub fn identity_of(&self, r: &RepoState) -> IdentityInfo {
         let rule = crate::identity::match_identity(&self.cfg.identities, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).cloned();
-        let def = if rule.is_some() { None } else { self.cfg.identities.iter().find(|i| Some(&i.id) == self.cfg.default_identity.as_ref()).cloned() };
-        let auto = rule.or(def.clone());
+        let auto = rule;
         let pinned = self.pin_of(r).and_then(|pin| self.cfg.identities.iter().find(|i| i.id == pin).cloned());
-        IdentityInfo { id: pinned.clone().or(auto.clone()), pinned: pinned.is_some(), auto, fallback: pinned.is_none() && def.is_some() }
+        IdentityInfo { id: pinned.clone().or(auto.clone()), pinned: pinned.is_some(), auto }
     }
 
     // ----- tabs and views -----
@@ -1159,7 +1157,6 @@ pub struct IdentityInfo {
     pub id: Option<gitcore::config::Identity>,
     pub pinned: bool,
     pub auto: Option<gitcore::config::Identity>,
-    pub fallback: bool,
 }
 
 pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {

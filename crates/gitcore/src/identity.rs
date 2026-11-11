@@ -52,7 +52,7 @@ pub fn conditions(t: &str, v: &str) -> Vec<String> {
 }
 
 /// Rewrites this app's part of the global gitconfig. Returns what was added.
-pub fn apply(cfg_dir: &Path, ids: &[Identity], default: Option<&str>, old: &[Managed]) -> Result<Vec<Managed>, String> {
+pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Managed>, String> {
     for m in old {
         let _ = run(None, &["config", "--global", "--fixed-value", "--unset-all", &m.key, &m.value], None, true);
     }
@@ -82,10 +82,6 @@ pub fn apply(cfg_dir: &Path, ids: &[Identity], default: Option<&str>, old: &[Man
             std::fs::write(&f, "").map_err(|e| e.to_string())?;
         }
         files.push((id, slash(&fs)));
-    }
-    // The fallback goes first so any matching includeIf further down wins.
-    if let Some((_, f)) = files.iter().find(|(id, _)| Some(id.id.as_str()) == default) {
-        add("include.path".into(), f.clone())?;
     }
     for (id, f) in &files {
         for r in &id.rules {

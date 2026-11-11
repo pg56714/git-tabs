@@ -198,12 +198,9 @@ impl GitTabs {
         std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_else(|_| "C:\\Users\\user".into())
     }
 
-    pub fn open_settings(&mut self, tab: SettingsTab, detected: Option<(Vec<Identity>, Option<String>)>, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn open_settings(&mut self, tab: SettingsTab, detected: Option<Vec<Identity>>, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        let (ids, def) = match detected {
-            Some((ids, def)) => (ids, def.unwrap_or_default()),
-            None => (self.cfg.identities.clone(), self.cfg.default_identity.clone().unwrap_or_default()),
-        };
+        let ids = detected.unwrap_or_else(|| self.cfg.identities.clone());
         let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。", &[], &[(ids.len()).to_string()]));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
@@ -212,7 +209,6 @@ impl GitTabs {
         self.modal = Some(Modal::Settings(Box::new(SettingsModal {
             tab,
             ids: drafts,
-            default: def,
             theme: self.cfg.theme.clone(),
             git,
             fetch: self.cfg.fetch_minutes.to_string(),
@@ -243,10 +239,7 @@ impl GitTabs {
         if let Some(Modal::Settings(m)) = &mut self.modal
             && i < m.ids.len()
         {
-            let gone = m.ids.remove(i).id.id;
-            if m.default == gone {
-                m.default = m.ids.first().map(|d| d.id.id.clone()).unwrap_or_default();
-            }
+            m.ids.remove(i);
         }
         cx.notify();
     }
@@ -272,13 +265,8 @@ impl GitTabs {
             let existing: Vec<Identity> = m.ids.iter().map(|d| d.id.clone()).collect();
             match res {
                 Ok(found) => {
-                    let (ids, def) = from_found(&found, &existing);
+                    let ids = from_found(&found, &existing);
                     let n = ids.len();
-                    if m.default.is_empty()
-                        && let Some(d) = def
-                    {
-                        m.default = d;
-                    }
                     this.pending_ids = ids;
                     this.toast(if n > 0 { crate::i18n::tr("找到 {n} 個新的身分，確認後按儲存", &[("n", (n).to_string())], &[]) } else { crate::i18n::t("沒有找到新的 SSH key 或身分設定").into() }, ToastKind::Info, None, cx);
                 }
@@ -419,17 +407,15 @@ impl GitTabs {
             ids.push(id);
         }
         m.saving = true;
-        let def = Some(m.default.clone()).filter(|d| ids.iter().any(|i| &i.id == d));
         let (theme, git, clone) = (m.theme.clone(), m.git.read(cx).value().trim().to_string(), m.clone.read(cx).value().trim().to_string());
         let fetch: u32 = m.fetch.parse().unwrap_or(0);
         let ctx = self.ctx.clone();
-        let (ids2, def2) = (ids.clone(), def.clone());
+        let ids2 = ids.clone();
         cx.notify();
-        self.work(cx, move || gitcore::dispatch(&ctx, "identities_apply", json!({ "identities": ids2, "default": def2 })), move |this, res, cx| {
+        self.work(cx, move || gitcore::dispatch(&ctx, "identities_apply", json!({ "identities": ids2 })), move |this, res, cx| {
             match res {
                 Ok(_) => {
                     this.cfg.identities = ids.clone();
-                    this.cfg.default_identity = def;
                     this.cfg.theme = theme;
                     this.cfg.git_path = git.clone();
                     this.cfg.fetch_minutes = fetch;

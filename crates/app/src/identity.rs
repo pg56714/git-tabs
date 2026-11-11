@@ -140,9 +140,9 @@ fn file_name(p: &str) -> &str {
 }
 
 /// Identities for what is already on this computer: one per existing includeIf file, then one
-/// per SSH key no include uses. The default key (id_ed25519 / id_rsa) becomes the fallback.
+/// per SSH key no include uses.
 /// `found` is the JSON the `identities_detect` command returns.
-pub fn from_found(found: &Value, existing: &[Identity]) -> (Vec<Identity>, Option<String>) {
+pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
     let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let (f_name, f_email) = (text(found, "name"), text(found, "email"));
     let mut ids: Vec<Identity> = Vec::new();
@@ -186,7 +186,6 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> (Vec<Identity>, Optio
         }
     }
     let used: Vec<String> = existing.iter().chain(ids.iter()).map(|i| norm_path(&i.key)).filter(|k| !k.is_empty()).collect();
-    let mut def = None;
     for k in found.get("keys").and_then(Value::as_array).into_iter().flatten() {
         let path = text(k, "path");
         if used.contains(&norm_path(&path)) {
@@ -213,7 +212,7 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> (Vec<Identity>, Optio
         let comment = text(k, "comment");
         let comment_is_email = comment.split_once('@').is_some_and(|(u, d)| !u.is_empty() && !u.contains(char::is_whitespace) && d.contains('.') && !d.contains('@'));
         let host = hosts.first().map(|h| h.1.clone()).unwrap_or_else(|| "github.com".into());
-        let i = add(&mut ids, existing, &|id| {
+        add(&mut ids, existing, &|id| {
             id.name = if name.is_empty() { file.clone() } else { name.clone() };
             id.user = f_name.clone();
             id.email = if comment_is_email { comment.clone() } else { f_email.clone() };
@@ -221,12 +220,8 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> (Vec<Identity>, Optio
             id.host = host.clone();
             id.rules = vec![Rule { t: "remote".into(), v: String::new() }];
         });
-        if is_default && def.is_none() {
-            def = Some(ids[i].id.clone());
-        }
     }
-    let def = def.or_else(|| ids.iter().find(|i| !i.rules.iter().any(|r| !r.v.is_empty())).map(|i| i.id.clone()));
-    (ids, def)
+    ids
 }
 
 #[cfg(test)]
@@ -272,11 +267,10 @@ mod tests {
                 {"condition": "gitdir/i:D:/work/", "path": "C:/u/.gitconfig-work", "name": "Sam W", "email": "w@corp.com", "key": "C:/u/.ssh/work"}
             ]
         });
-        let (ids, def) = from_found(&v, &[]);
+        let ids = from_found(&v, &[]);
         assert_eq!(ids.len(), 2, "the work key is already used by the include");
         assert_eq!(ids[0].rules[0].t, "dir");
         assert_eq!(ids[0].email, "w@corp.com");
         assert_eq!(ids[1].name, "預設 key");
-        assert_eq!(def, Some(ids[1].id.clone()));
     }
 }

@@ -46,7 +46,6 @@ impl GitTabs {
         let mut items = vec![
             MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個身分", &[], &[(r.name).to_string()])),
             MenuItem::new(crate::i18n::t("自動（依規則）"), |t, _, cx| t.set_pin(None, cx)).checked(!w.pinned).hint(match &w.auto {
-                Some(a) if w.fallback => crate::i18n::tr("沒有符合的規則，用預設：{}", &[], &[(a.name).to_string()]),
                 Some(a) => crate::i18n::tr("目前是 {}", &[], &[(a.name).to_string()]),
                 None => crate::i18n::t("沒有符合的規則").into(),
             }),

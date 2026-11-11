@@ -87,10 +87,8 @@ pub fn dispatch(ctx: &Ctx, cmd: &str, a: Value) -> Result<Value, String> {
             let _g = ctx.lock.lock().unwrap();
             let mut cfg = config::load(&ctx.config_dir);
             let ids: Vec<Identity> = arg(&a["identities"])?;
-            let default = opt(&a, "default").map(String::from);
-            let added = identity::apply(&ctx.config_dir, &ids, default.as_deref(), &cfg.managed)?;
+            let added = identity::apply(&ctx.config_dir, &ids, &cfg.managed)?;
             cfg.identities = ids;
-            cfg.default_identity = default;
             cfg.managed = added;
             config::save(&ctx.config_dir, &cfg)?;
             ok(cfg.managed.len())

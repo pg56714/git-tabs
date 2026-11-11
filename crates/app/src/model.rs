@@ -312,7 +312,6 @@ pub struct RuleDraft {
 pub struct SettingsModal {
     pub tab: SettingsTab,
     pub ids: Vec<IdDraft>,
-    pub default: String,
     pub theme: String,
     pub git: Entity<InputState>,
     pub fetch: String,

@@ -99,10 +99,17 @@ const TABLE: &[(&str, &str)] = &[
     ("{}：{subj}", "{}: {subj}"),
     ("已 amend", "Amended"),
     ("已 commit", "Committed"),
-    ("**{}**（{}）沒有符合任何身分的規則，{}提交。\n\n可以點工具列的 👤 按鈕把它指定給某個身分。", "**{}** ({}) matches no identity rule; it will commit {}.\n\nUse the 👤 button in the toolbar to assign it an identity."),
+    ("**{}**（{}）沒有符合任何身分的規則，會用 git 的全域設定提交：
+
+**{}**
+
+可以點工具列的 👤 按鈕把它指定給某個身分。", "**{}** ({}) matches no identity rule; it will commit with git's global settings:
+
+**{}**
+
+Use the 👤 button in the toolbar to assign it an identity."),
+    ("（git 沒有設定名稱和 email）", "(git has no name or email set)"),
     ("沒有 remote", "no remote"),
-    ("會用預設的「{d}」", "with the default \"{d}\""),
-    ("會用 git 的全域設定", "with git's global settings"),
     ("這個 repo 沒有對應的身分", "This repo has no matching identity"),
     ("照樣提交", "Commit anyway"),
     ("已 fetch {name}", "Fetched {name}"),
@@ -350,12 +357,8 @@ const TABLE: &[(&str, &str)] = &[
     ("尋找中…", "Searching…"),
     ("從這台電腦找", "Find on this computer"),
     ("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf", "Looks at keys in ~/.ssh, ~/.ssh/config and git's includeIf"),
-    ("都沒對應時用", "When nothing matches, use"),
-    ("git 原本的全域設定", "git's own global settings"),
-    ("這些 repo 沒有符合的規則，會用預設的「{def_name}」；要換成別的身分可以在這裡指定：", "These repos match no rule and use the default \"{def_name}\"; assign another identity here:"),
     ("{}（{}）{}", "{} ({}) {}"),
     ("沒有對應的身分", "no matching identity"),
-    ("用預設", "uses the default"),
     ("指定給… ▾", "Assign to… ▾"),
     ("新身分 {}", "New identity {}"),
     ("@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@", "@@ Conflict: red is mine (HEAD), green is theirs @@"),
@@ -453,7 +456,6 @@ const TABLE: &[(&str, &str)] = &[
     ("遠端（切換會建立本地分支）", "Remote (switching creates a local branch)"),
     ("新增分支…", "New branch…"),
     ("這個 repo（{}）用哪個身分", "Which identity does this repo ({}) use"),
-    ("沒有符合的規則，用預設：{}", "No rule matches, using the default: {}"),
     ("目前是 {}", "Currently {}"),
     ("沒有符合的規則", "No rule matches"),
     ("未設定", "not set"),

@@ -119,10 +119,8 @@ impl GitTabs {
             for (i, d) in m.ids.iter().enumerate() {
                 body.push(self.render_id_card(i, d, &snapshot, cx));
             }
-            // ---- add / scan / default
-            let def_name = snapshot.iter().find(|x| x.id == m.default).map(|x| x.name.clone()).unwrap_or_default();
+            // ---- add / scan
             let scanning = m.scanning;
-            let ids_for_menu: Vec<(String, String)> = snapshot.iter().map(|x| (x.id.clone(), x.name.clone())).collect();
             body.push(
                 div()
                     .flex()
@@ -131,26 +129,6 @@ impl GitTabs {
                     .gap(px(8.))
                     .child(btn(&p, "id-add", Bk::Normal, false, crate::i18n::t("＋ 新增身分")).on_click(cx.listener(|this, _, w, cx| this.settings_add(w, cx))))
                     .child(btn(&p, "id-scan", Bk::Normal, false, if scanning { crate::i18n::t("尋找中…") } else { crate::i18n::t("從這台電腦找") }).tooltip_text(crate::i18n::t("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf")).when(!scanning, |b| b.on_click(cx.listener(|this, _, _, cx| this.settings_scan(cx)))))
-                    .child(div().flex_1())
-                    .when(!snapshot.is_empty(), |d| {
-                        d.child(sub(&p, crate::i18n::t("都沒對應時用"))).child(btn(&p, "id-default", Bk::Normal, false, format!("{} ▾", if def_name.is_empty() { crate::i18n::t("git 原本的全域設定").to_string() } else { def_name.clone() })).on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let mut items = vec![MenuItem::new(crate::i18n::t("git 原本的全域設定"), |t, _, cx| {
-                                if let Some(Modal::Settings(m)) = &mut t.modal {
-                                    m.default.clear();
-                                }
-                                cx.notify();
-                            })];
-                            for (id, name) in ids_for_menu.clone() {
-                                items.push(MenuItem::new(name, move |t, _, cx| {
-                                    if let Some(Modal::Settings(m)) = &mut t.modal {
-                                        m.default = id.clone();
-                                    }
-                                    cx.notify();
-                                }));
-                            }
-                            this.open_menu(ev.position(), items, true, cx);
-                        })))
-                    })
                     .into_any_element(),
             );
             // ---- repos without a matching rule
@@ -162,9 +140,6 @@ impl GitTabs {
                     .filter(|(_, r)| self.pin_of(r).is_none() && match_identity(&snapshot, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).is_none())
                     .map(|(i, _)| i)
                     .collect();
-                if !unmatched.is_empty() && !def_name.is_empty() {
-                    body.push(sub(&p, crate::i18n::tr("這些 repo 沒有符合的規則，會用預設的「{def_name}」；要換成別的身分可以在這裡指定：", &[("def_name", (def_name).to_string())], &[])).into_any_element());
-                }
                 for ri in &unmatched {
                     let r = &self.repos[*ri];
                     let url = norm_url(r.summary.as_ref().and_then(|s| s.remote_url.as_deref()).unwrap_or(""));
@@ -179,9 +154,9 @@ impl GitTabs {
                             .py(px(4.))
                             .rounded(px(6.))
                             .text_size(px(12.))
-                            .bg(if def_name.is_empty() { p.warn_bg } else { p.panel2 })
-                            .text_color(if def_name.is_empty() { p.warn } else { p.muted })
-                            .child(div().child(crate::i18n::tr("{}（{}）{}", &[], &[(r.name).to_string(), (if url.is_empty() { crate::i18n::t("沒有 remote").into() } else { url }).to_string(), (if def_name.is_empty() { crate::i18n::t("沒有對應的身分") } else { crate::i18n::t("用預設") }).to_string()])))
+                            .bg(p.warn_bg)
+                            .text_color(p.warn)
+                            .child(div().child(crate::i18n::tr("{}（{}）{}", &[], &[(r.name).to_string(), (if url.is_empty() { crate::i18n::t("沒有 remote").into() } else { url }).to_string(), crate::i18n::t("沒有對應的身分").to_string()])))
                             .child(div().flex_1())
                             .child(btn(&p, SharedString::from(format!("assign-{ri}")), Bk::Normal, true, crate::i18n::t("指定給… ▾")).on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                                 let items = names.iter().enumerate().map(|(k, n)| MenuItem::new(n.clone(), move |t, w, cx| t.settings_assign(ri, k, w, cx))).collect();
