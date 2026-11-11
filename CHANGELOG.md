@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.0 (2026-11-11)
+
+### Features
+
+- remove identity tags, name-only identity menu, debug log, static CRT, fix menu layering and open-folder path ([d91b8e2](https://github.com/pg56714/git-tabs/commit/d91b8e2a5b406e7d9130b8bd147f618e24473a37))
+
+### Other
+
+- remove the CI workflow (packaging is in release.yml) ([3efa463](https://github.com/pg56714/git-tabs/commit/3efa463e217181411b66e4f75864375c53a3de20))
+
 ## v0.2.0 (2026-11-10)
 
 ### Features
