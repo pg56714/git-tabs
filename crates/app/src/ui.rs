@@ -102,27 +102,30 @@ pub fn st_badge(p: &Pal, letter: char) -> Div {
 
 /// `.ref` pill: branch, remote, tag, head, detached
 pub fn ref_pill(p: &Pal, name: &str, kind: &str) -> Div {
-    let (bg, fg) = match kind {
-        "remote" => (p.accent_bg, p.accent_tx),
-        "tag" => (p.warn_bg, p.warn),
-        "detached" => (p.danger_bg, p.danger),
-        _ => (p.ok_bg, p.ok),
+    // Like Fork: branches and remote branches share one outlined colour; the current branch has a
+    // check mark and remote branches a cloud. Tags are grey so they do not pass for branches.
+    let (bg, fg, border, label) = match kind {
+        "head" => (p.warn_bg, p.text, p.warn, format!("\u{2713} {name}")),
+        "remote" => (p.warn_bg, p.text, p.warn, format!("\u{2601} {name}")),
+        "tag" => (p.panel2, p.muted, p.border_strong, format!("\u{1F3F7} {name}")),
+        "detached" => (p.danger_bg, p.danger, p.danger, name.to_string()),
+        _ => (p.warn_bg, p.text, p.warn, name.to_string()),
     };
     div()
         .flex_none()
         .px(px(6.))
         .mr(px(4.))
-        .h(px(16.))
+        .h(px(17.))
         .flex()
         .items_center()
-        .rounded(px(9.))
+        .rounded(px(5.))
         .border_1()
-        .border_color(if kind == "head" { p.ok } else { Hsla::transparent_black() })
+        .border_color(border)
         .when(kind == "head", |d| d.font_weight(FontWeight::SEMIBOLD))
         .bg(bg)
         .text_color(fg)
         .text_size(px(11.))
-        .child(name.to_string())
+        .child(label)
 }
 
 /// `kbd`

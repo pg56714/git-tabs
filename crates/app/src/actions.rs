@@ -628,9 +628,10 @@ impl GitTabs {
 
     pub fn checkout_commit(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
+        let subject = self.repo().and_then(|r| r.commits.iter().find(|c| c.sha == sha)).map(|c| c.subject.clone()).unwrap_or_default();
         self.confirm(
             crate::i18n::t("Checkout 這個 commit？"),
-            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`。之後要繼續工作，請切回分支或從這裡開新分支。", &[], &[(short(&sha)).to_string()]),
+            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回分支或從這裡開新分支。", &[], &[(short(&sha)).to_string(), subject]),
             "Checkout",
             false,
             cx,
@@ -788,10 +789,13 @@ impl GitTabs {
             self.set_view(View::History, cx);
         }
         let Some(r) = self.repo_mut() else { return };
-        if !r.commits.iter().any(|c| c.sha == sha) {
+        let Some(ix) = r.commits.iter().position(|c| c.sha == sha) else {
             self.toast(crate::i18n::t("這個 commit 不在目前載入的歷史裡"), ToastKind::Info, None, cx);
             return;
-        }
+        };
+        // Jump to it: scroll the history so the commit sits in the middle of the list.
+        self.commit_scroll.scroll_to_item(ix, gpui_kit::ScrollStrategy::Center);
+        let Some(r) = self.repo_mut() else { return };
         r.sel_commit = Some(sha);
         let p = r.path.clone();
         self.load_detail(&p, cx);

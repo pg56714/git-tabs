@@ -141,11 +141,17 @@ impl GitTabs {
                             .h(px(ROW))
                             .pr(px(10.))
                             .cursor_pointer()
-                            .bg(if on { p.accent_bg } else { Hsla::transparent_black() })
-                            .hover(move |s| s.bg(if on { p.accent_bg } else { p.hover }))
-                            .on_click(move |_, _, cx| {
+                            .bg(if on { p.accent } else { Hsla::transparent_black() })
+                            .when(on, |d| d.text_color(gpui_kit::white()))
+                            .hover(move |s| s.bg(if on { p.accent } else { p.hover }))
+                            .on_click(move |ev, _, cx| {
                                 let s = sha.clone();
-                                let _ = o1.update(cx, |this, cx| this.pick_commit(s, cx));
+                                // Double-click checks the commit out (Fork's "Checkout Commit" dialog).
+                                if ev.click_count() >= 2 {
+                                    let _ = o1.update(cx, |this, cx| this.checkout_commit(s, cx));
+                                } else {
+                                    let _ = o1.update(cx, |this, cx| this.pick_commit(s, cx));
+                                }
                             })
                             .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
                                 let (s, pos) = (sha2.clone(), ev.position);
@@ -156,7 +162,7 @@ impl GitTabs {
                                 });
                             })
                             .child(match graph.as_ref().and_then(|g| g.get(ix)) {
-                                Some(g) => graph_cell(g.clone(), gw, if on { p.accent_bg } else { p.panel }).into_any_element(),
+                                Some(g) => graph_cell(g.clone(), gw, if on { p.accent } else { p.panel }).into_any_element(),
                                 None => div().w(px(gw)).flex_none().text_color(p.accent).text_size(px(10.)).text_center().child("●").into_any_element(),
                             })
                             .child(
@@ -167,12 +173,43 @@ impl GitTabs {
                                     .items_center()
                                     .overflow_hidden()
                                     .whitespace_nowrap()
-                                    .children(c.refs.iter().map(|x| ref_pill(&p, &x.name, kind_of(x.kind))))
+                                    .children(c.refs.iter().enumerate().map(|(k, x)| {
+                                        let pill = ref_pill(&p, &x.name, kind_of(x.kind));
+                                        // Branch labels act like Fork's: double-click switches, right-click opens the branch menu.
+                                        if !matches!(x.kind, "head" | "branch" | "remote") {
+                                            return pill.into_any_element();
+                                        }
+                                        let (name, kind) = (x.name.clone(), x.kind);
+                                        let (o3, o4) = (owner.clone(), owner.clone());
+                                        let (pa, pb) = (path.clone(), path.clone());
+                                        let n2 = name.clone();
+                                        pill.id(SharedString::from(format!("pill-{ix}-{k}")))
+                                            .cursor_pointer()
+                                            .on_click(move |ev, _, cx| {
+                                                if ev.click_count() >= 2 {
+                                                    // Not also a double-click on the commit row (which would offer a checkout).
+                                                    cx.stop_propagation();
+                                                }
+                                                if ev.click_count() >= 2 && kind != "head" {
+                                                    let (pa, n) = (pa.clone(), name.clone());
+                                                    let _ = o3.update(cx, |this, cx| this.switch_branch(&pa, &n, cx));
+                                                }
+                                            })
+                                            .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
+                                                cx.stop_propagation();
+                                                let (pos, pb, n) = (ev.position, pb.clone(), n2.clone());
+                                                let _ = o4.update(cx, |this, cx| {
+                                                    let items = if kind == "remote" { this.remote_item_menu(&pb, &n) } else { this.branch_item_menu(&pb, &n, kind == "head") };
+                                                    this.open_menu(pos, items, false, cx);
+                                                });
+                                            })
+                                            .into_any_element()
+                                    }))
                                     .child(div().overflow_hidden().text_ellipsis().child(c.subject.clone())),
                             )
-                            .when(show_author, |d| d.child(div().w(px(110.)).flex_none().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(p.muted).child(c.author.clone())))
-                            .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(p.muted).font_family("Cascadia Mono").child(short(&c.sha)))
-                            .when(show_date, |d| d.child(div().w(px(88.)).flex_none().overflow_hidden().whitespace_nowrap().text_size(px(12.)).text_color(p.muted).child(ago(c.time))))
+                            .when(show_author, |d| d.child(div().w(px(110.)).flex_none().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())))
+                            .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).font_family("Cascadia Mono").child(short(&c.sha)))
+                            .when(show_date, |d| d.child(div().w(px(88.)).flex_none().overflow_hidden().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(ago(c.time))))
                             .into_any_element()
                     })
                     .collect()

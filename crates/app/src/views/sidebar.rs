@@ -10,11 +10,23 @@ use crate::model::*;
 use crate::ui::*;
 
 impl GitTabs {
-    fn fold_toggle(&mut self, key: &'static str, cx: &mut Context<Self>) {
+    fn fold_toggle(&mut self, key: &str, cx: &mut Context<Self>) {
         if !self.folded.remove(key) {
-            self.folded.insert(key);
+            self.folded.insert(key.to_string());
         }
         cx.notify();
+    }
+
+    /// A folder in a branch tree (`feature/` holding `feature/a`, `feature/b`).
+    fn dir_row(&self, key: String, name: String, indent: f32, count: usize, closed: bool, cx: &mut Context<Self>) -> AnyElement {
+        let p = self.pal;
+        let k = key.clone();
+        self.item_row(SharedString::from(format!("fd-{key}")), indent, false, false)
+            .on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(&k, cx)))
+            .child(div().w(px(10.)).flex_none().text_size(px(10.)).text_color(p.faint).child(if closed { "\u{25b8}" } else { "\u{25be}" }))
+            .child(div().overflow_hidden().text_ellipsis().text_color(p.muted).child(name))
+            .child(div().ml_auto().flex_none().text_size(px(11.)).text_color(p.faint).child(count.to_string()))
+            .into_any_element()
     }
 
     fn nav_item(&self, id: &'static str, label: String, count: Option<usize>, on: bool, view: View, cx: &mut Context<Self>) -> AnyElement {
@@ -101,9 +113,19 @@ impl GitTabs {
         // ---- branches
         rows.push(self.section("b", crate::i18n::t("分支"), refs.as_ref().map(|x| x.refs.branches.len()), cx));
         if !self.folded.contains("b") {
-            for b in refs.iter().flat_map(|x| x.refs.branches.iter()) {
+            let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).cloned().collect();
+            let items: Vec<(String, usize)> = branches.iter().enumerate().map(|(i, b)| (b.name.clone(), i)).collect();
+            for row in tree_rows(&items, "bt", &self.folded) {
+                let (label, idx, depth) = match row {
+                    TreeRow::Dir { key, name, depth, count, closed } => {
+                        rows.push(self.dir_row(key, name, 22. + 12. * depth as f32, count, closed, cx));
+                        continue;
+                    }
+                    TreeRow::Leaf { label, idx, depth } => (label, idx, depth),
+                };
+                let b = &branches[idx];
                 let (name, sha, cur) = (b.name.clone(), b.sha.clone(), b.current);
-                let (n_click, n_menu, n_dbl) = (name.clone(), name.clone(), name.clone());
+                let (n_menu, n_dbl) = (name.clone(), name.clone());
                 let (p1, p2) = (path.clone(), path.clone());
                 let tail = format!(
                     "{}{}{}",
@@ -112,7 +134,7 @@ impl GitTabs {
                     if b.gone { crate::i18n::t(" 已刪") } else { "" }
                 );
                 rows.push(
-                    self.item_row(SharedString::from(format!("br-{name}")), 22., cur, false)
+                    self.item_row(SharedString::from(format!("br-{name}")), 22. + 12. * depth as f32, cur, false)
                         .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                             if ev.click_count() >= 2 {
                                 if !cur {
@@ -131,7 +153,7 @@ impl GitTabs {
                             }),
                         )
                         .child(div().w(px(10.)).flex_none().text_color(p.ok).child(if cur { "✓" } else { "" }))
-                        .child(div().overflow_hidden().text_ellipsis().child(n_click))
+                        .child(div().overflow_hidden().text_ellipsis().child(label))
                         .child(div().ml_auto().flex_none().text_size(px(11.5)).text_color(p.accent).child(tail))
                         .into_any_element(),
                 );
@@ -151,11 +173,20 @@ impl GitTabs {
             }
             for (remote, names) in &groups {
                 rows.push(self.item_row(SharedString::from(format!("rm-{remote}")), 22., false, true).child(div().text_color(p.muted).child(remote.clone())).into_any_element());
-                for (n, sha) in names {
+                let items: Vec<(String, usize)> = names.iter().enumerate().map(|(i, (n, _))| (n.clone(), i)).collect();
+                for row in tree_rows(&items, &format!("rt:{remote}"), &self.folded) {
+                    let (label, idx, depth) = match row {
+                        TreeRow::Dir { key, name, depth, count, closed } => {
+                            rows.push(self.dir_row(key, name, 38. + 12. * depth as f32, count, closed, cx));
+                            continue;
+                        }
+                        TreeRow::Leaf { label, idx, depth } => (label, idx, depth),
+                    };
+                    let (n, sha) = &names[idx];
                     let full = format!("{remote}/{n}");
                     let (f1, f2, sha, p1, p2) = (full.clone(), full.clone(), sha.clone(), path.clone(), path.clone());
                     rows.push(
-                        self.item_row(SharedString::from(format!("rb-{full}")), 38., false, false)
+                        self.item_row(SharedString::from(format!("rb-{full}")), 38. + 12. * depth as f32, false, false)
                             .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                                 if ev.click_count() >= 2 {
                                     this.switch_branch(&p1, &f1, cx);
@@ -166,18 +197,11 @@ impl GitTabs {
                             .on_mouse_down(
                                 MouseButton::Right,
                                 cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
-                                    let (a, b, c) = (f2.clone(), f2.clone(), f2.clone());
-                                    let (pa, pb) = (p2.clone(), p2.clone());
-                                    let items = vec![
-                                        MenuItem::new(crate::i18n::t("切換（建立本地分支）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
-                                        MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)),
-                                        MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
-                                    ];
-                                    let _ = &pb;
+                                    let items = this.remote_item_menu(&p2, &f2);
                                     this.open_menu(ev.position, items, false, cx);
                                 }),
                             )
-                            .child(div().overflow_hidden().text_ellipsis().child(n.clone()))
+                            .child(div().overflow_hidden().text_ellipsis().child(label))
                             .into_any_element(),
                     );
                 }
@@ -302,6 +326,16 @@ impl GitTabs {
             .into_any_element()
     }
 
+    /// Right-click menu of a remote branch (`origin/feature/x`).
+    pub fn remote_item_menu(&self, path: &std::path::Path, full: &str) -> Vec<MenuItem> {
+        let (pa, a, b, c) = (path.to_path_buf(), full.to_string(), full.to_string(), full.to_string());
+        vec![
+            MenuItem::new(crate::i18n::t("切換（建立本地分支）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
+            MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)),
+            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
+        ]
+    }
+
     pub fn branch_item_menu(&self, path: &std::path::Path, name: &str, current: bool) -> Vec<MenuItem> {
         let (p, n) = (path.to_path_buf(), name.to_string());
         let mk = |n: &str| n.to_string();
@@ -322,4 +356,55 @@ impl GitTabs {
             MenuItem::new(crate::i18n::t("刪除分支…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),
         ]
     }
+}
+
+/// One visible line of a branch tree.
+enum TreeRow {
+    Dir { key: String, name: String, depth: usize, count: usize, closed: bool },
+    Leaf { label: String, idx: usize, depth: usize },
+}
+
+#[derive(Default)]
+struct TreeNode {
+    dirs: std::collections::BTreeMap<String, TreeNode>,
+    leaves: Vec<(String, usize)>,
+}
+
+impl TreeNode {
+    fn total(&self) -> usize {
+        self.leaves.len() + self.dirs.values().map(TreeNode::total).sum::<usize>()
+    }
+}
+
+/// Splits names on `/` into folders (folders first, like Fork) and returns the rows that are visible
+/// given the folded set. `prefix` keeps the folder keys of different lists apart.
+fn tree_rows(items: &[(String, usize)], prefix: &str, folded: &std::collections::HashSet<String>) -> Vec<TreeRow> {
+    let mut root = TreeNode::default();
+    for (name, idx) in items {
+        let mut parts: Vec<&str> = name.split('/').collect();
+        let leaf = parts.pop().unwrap_or(name);
+        let mut node = &mut root;
+        for d in parts {
+            node = node.dirs.entry(d.to_string()).or_default();
+        }
+        node.leaves.push((leaf.to_string(), *idx));
+    }
+    fn emit(node: &TreeNode, depth: usize, key: &str, folded: &std::collections::HashSet<String>, out: &mut Vec<TreeRow>) {
+        for (name, child) in &node.dirs {
+            let k = format!("{key}/{name}");
+            let closed = folded.contains(&k);
+            out.push(TreeRow::Dir { key: k.clone(), name: name.clone(), depth, count: child.total(), closed });
+            if !closed {
+                emit(child, depth + 1, &k, folded, out);
+            }
+        }
+        let mut leaves = node.leaves.clone();
+        leaves.sort();
+        for (label, idx) in leaves {
+            out.push(TreeRow::Leaf { label, idx, depth });
+        }
+    }
+    let mut out = Vec::new();
+    emit(&root, 0, prefix, folded, &mut out);
+    out
 }
