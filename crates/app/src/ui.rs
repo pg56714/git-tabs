@@ -100,32 +100,128 @@ pub fn st_badge(p: &Pal, letter: char) -> Div {
         .child(if letter == '?' { 'A' } else { letter }.to_string())
 }
 
-/// `.ref` pill: branch, remote, tag, head, detached
-pub fn ref_pill(p: &Pal, name: &str, kind: &str) -> Div {
-    // Like Fork: branches and remote branches share one outlined colour; the current branch has a
-    // check mark and remote branches a cloud. Tags are grey so they do not pass for branches.
-    let (bg, fg, border, label) = match kind {
-        "head" => (p.warn_bg, p.text, p.warn, format!("\u{2713} {name}")),
-        "remote" => (p.warn_bg, p.text, p.warn, format!("\u{2601} {name}")),
-        "tag" => (p.panel2, p.muted, p.border_strong, format!("\u{1F3F7} {name}")),
-        "detached" => (p.danger_bg, p.danger, p.danger, name.to_string()),
-        _ => (p.warn_bg, p.text, p.warn, name.to_string()),
+/// Fill and outline of branch labels: a clear yellow for local branches, a pale tan for remote ones
+/// (as in Fork). `(local fill, local outline, remote fill, remote outline)`.
+pub fn ref_colors(p: &Pal) -> (Hsla, Hsla, Hsla, Hsla) {
+    let hex = |h: u32| -> Hsla { gpui_kit::Rgba::from(gpui_kit::rgb(h)).into() };
+    if p.panel.l < 0.5 {
+        (hex(0x4a3f12), hex(0xd2a62a), hex(0x2f2c26), hex(0x8f7f60))
+    } else {
+        (hex(0xfff2b3), hex(0xe0a800), hex(0xf4eee2), hex(0x9a7b4f))
+    }
+}
+
+pub use gpui_kit::assets::IconName as Ico;
+
+// The icons the UI draws itself (Lucide, bundled with GPUI Kit), next to the ones its components use.
+gpui_kit::assets::icon_assets!(ExtraIcons, [Cloud, GitBranch, Github, Tag]);
+
+pub struct AppAssets;
+
+impl gpui_kit::AssetSource for AppAssets {
+    fn load(&self, path: &str) -> gpui_kit::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        match ExtraIcons.load(path)? {
+            Some(bytes) => Ok(Some(bytes)),
+            None => gpui_kit::assets::Assets.load(path),
+        }
+    }
+
+    fn list(&self, path: &str) -> gpui_kit::Result<Vec<SharedString>> {
+        let mut paths = gpui_kit::assets::Assets.list(path)?;
+        paths.extend(ExtraIcons.list(path)?);
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+}
+
+/// An icon in one colour.
+pub fn icon(name: Ico, size: f32, color: Hsla) -> gpui_kit::Svg {
+    gpui_kit::svg().path(name.path()).size(px(size)).flex_none().text_color(color)
+}
+
+/// A remote's icon: GitHub's mark when the repo's remote is on github.com, else a cloud.
+pub fn remote_icon(github: bool) -> Ico {
+    if github { Ico::Github } else { Ico::Cloud }
+}
+
+/// `.ref` pill: branch, remote, tag, head, detached.
+pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
+    let (lf, lb, rf, rb) = ref_colors(p);
+    let (bg, border) = match kind {
+        "remote" => (rf, rb),
+        "tag" => (p.panel, p.border_strong),
+        _ => (lf, lb),
     };
+    let mark: Option<AnyElement> = match kind {
+        "head" | "detached" => Some(div().text_color(p.ok).font_weight(FontWeight::BOLD).child("\u{2713}").into_any_element()),
+        "remote" => Some(icon(remote_icon(github), 13., p.text).into_any_element()),
+        "tag" => Some(icon(Ico::Tag, 12., p.muted).into_any_element()),
+        _ => None,
+    };
+    let shown = if kind == "detached" { String::new() } else { name.to_string() };
     div()
         .flex_none()
         .px(px(6.))
         .mr(px(4.))
-        .h(px(17.))
+        .h(px(18.))
+        .flex()
+        .items_center()
+        .gap(px(4.))
+        .rounded(px(5.))
+        .border_1()
+        .border_color(border)
+        .font_weight(if kind == "tag" { FontWeight::NORMAL } else { FontWeight::SEMIBOLD })
+        .bg(bg)
+        .text_color(p.text)
+        .text_size(px(12.))
+        .when_some(mark, |d, m| d.child(m))
+        .when(!shown.is_empty(), |d| d.child(shown))
+}
+
+/// A local branch and the remote branches of the same name on the same commit, drawn as one
+/// pill (`\u{2713} main | cloud origin`), like Fork.
+pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: &[String], github: bool) -> Div {
+    let (lf, lb, rf, rb) = ref_colors(p);
+    div()
+        .flex_none()
+        .mr(px(4.))
+        .h(px(18.))
         .flex()
         .items_center()
         .rounded(px(5.))
         .border_1()
-        .border_color(border)
-        .when(kind == "head", |d| d.font_weight(FontWeight::SEMIBOLD))
-        .bg(bg)
-        .text_color(fg)
-        .text_size(px(11.))
-        .child(label)
+        .border_color(lb)
+        .overflow_hidden()
+        .text_size(px(12.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(p.text)
+        .child(
+            div()
+                .h_full()
+                .flex()
+                .items_center()
+                .gap(px(4.))
+                .px(px(6.))
+                .bg(lf)
+                .when(current, |d| d.child(div().text_color(p.ok).font_weight(FontWeight::BOLD).child("\u{2713}")))
+                .child(name.to_string()),
+        )
+        .when(!remotes.is_empty(), |d| {
+            d.child(
+                div()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .px(px(6.))
+                    .bg(rf)
+                    .border_l_1()
+                    .border_color(rb)
+                    .child(icon(remote_icon(github), 13., p.text))
+                    .child(remotes.join(", ")),
+            )
+        })
 }
 
 /// `kbd`

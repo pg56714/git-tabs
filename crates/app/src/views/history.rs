@@ -18,10 +18,17 @@ use crate::tree::TreeFile;
 use crate::ui::*;
 use crate::views::{SplitKind, diffpane::PaneMode, on_split, splitter};
 
-const ROW: f32 = 28.;
-const LANE: f32 = 16.;
-const PAD: f32 = 9.;
-const TAIL: f32 = 7.;
+const ROW: f32 = 24.;
+const LANE: f32 = 12.;
+const PAD: f32 = 10.;
+const TAIL: f32 = 8.;
+/// The text stops moving right after this many lanes.
+const MAX_LANES: usize = 16;
+
+/// How wide a row's graph is: the text starts right after the row's own lanes, as in Fork.
+fn cell_width(row: &GraphRow) -> f32 {
+    PAD + (row.width.clamp(1, MAX_LANES) - 1) as f32 * LANE + TAIL
+}
 
 fn initials(name: &str) -> String {
     name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase()
@@ -37,30 +44,58 @@ fn kind_of(k: &str) -> &str {
     }
 }
 
-/// One row's slice of the graph: lines through the row and the dot.
-fn graph_cell(row: GraphRow, width: f32, ring: Hsla) -> impl IntoElement {
+/// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
+/// joins or leaves the commit turns into its row with a rounded corner, and a merge has a hollow dot.
+fn graph_cell(row: GraphRow, width: f32, bg: Hsla) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, _, window, _| {
-            let x = |c: usize| bounds.origin.x + px(PAD + c as f32 * LANE);
-            let y = |k: u8| bounds.origin.y + px(ROW * k as f32 / 2.);
+            let (ox, oy) = (f32::from(bounds.origin.x), f32::from(bounds.origin.y));
+            let pt = |x: f32, y: f32| point(px(ox + x), px(oy + y));
+            let lane_x = |c: usize| PAD + c as f32 * LANE;
+            let mid = ROW / 2.;
+            // How far a cubic's control points sit from its ends to draw a quarter circle.
+            const K: f32 = 0.5523;
             for s in &row.segs {
-                let (x1, x2, y1, y2) = (x(s.x1), x(s.x2), y(s.y1), y(s.y2));
+                let (x1, x2) = (lane_x(s.x1), lane_x(s.x2));
                 let mut pb = PathBuilder::stroke(px(2.));
-                pb.move_to(point(x1, y1));
                 if s.x1 == s.x2 {
-                    pb.line_to(point(x2, y2));
+                    pb.move_to(pt(x1, if s.y1 == 0 { 0. } else { mid }));
+                    pb.line_to(pt(x2, if s.y2 == 2 { ROW } else { mid }));
                 } else {
-                    let mid = (y1 + y2) / 2.;
-                    pb.cubic_bezier_to(point(x2, y2), point(x1, mid), point(x2, mid));
+                    let dir = (x2 - x1).signum();
+                    let r = (x2 - x1).abs().min(mid).min(9.);
+                    if s.y1 == 0 {
+                        // From a lane above into the dot: down, round the corner, across.
+                        pb.move_to(pt(x1, 0.));
+                        pb.line_to(pt(x1, mid - r));
+                        pb.cubic_bezier_to(pt(x1 + dir * r, mid), pt(x1, mid - r + K * r), pt(x1 + dir * r * (1. - K), mid));
+                        if (x2 - x1).abs() - r > 0.1 {
+                            pb.line_to(pt(x2, mid));
+                        }
+                    } else {
+                        // From the dot to a parent's lane: across, round the corner, down.
+                        pb.move_to(pt(x1, mid));
+                        if (x2 - x1).abs() - r > 0.1 {
+                            pb.line_to(pt(x2 - dir * r, mid));
+                        }
+                        pb.cubic_bezier_to(pt(x2, mid + r), pt(x2 - dir * r * (1. - K), mid), pt(x2, mid + r - K * r));
+                        pb.line_to(pt(x2, ROW));
+                    }
                 }
                 if let Ok(path) = pb.build() {
                     window.paint_path(path, lane_color(s.color));
                 }
             }
-            let c = point(x(row.col), y(1));
-            window.paint_quad(fill(Bounds::centered_at(c, size(px(12.), px(12.))), ring).corner_radii(px(6.)));
-            window.paint_quad(fill(Bounds::centered_at(c, size(px(9.), px(9.))), lane_color(row.color)).corner_radii(px(4.5)));
+            let c = pt(lane_x(row.col), mid);
+            let dot = |d: f32, color: Hsla| fill(Bounds::centered_at(c, size(px(d), px(d))), color).corner_radii(px(d / 2.));
+            if row.merge {
+                window.paint_quad(dot(11., lane_color(row.color)));
+                window.paint_quad(dot(7., bg));
+            } else {
+                window.paint_quad(dot(10., bg));
+                window.paint_quad(dot(8., lane_color(row.color)));
+            }
         },
     )
     .w(px(width))
@@ -69,6 +104,11 @@ fn graph_cell(row: GraphRow, width: f32, ring: Hsla) -> impl IntoElement {
 }
 
 impl GitTabs {
+    /// Whether the open repo's remote is on github.com: remote branches then carry GitHub's mark.
+    pub fn on_github(&self) -> bool {
+        self.repo().and_then(|r| r.summary.as_ref()).and_then(|s| s.remote_url.as_deref()).is_some_and(|u| u.contains("github.com"))
+    }
+
     pub fn pick_commit(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo_mut() else { return };
         r.sel_commit = Some(sha);
@@ -101,6 +141,7 @@ impl GitTabs {
     pub fn render_history(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let _ = window;
         let p = self.pal;
+        let gh = self.on_github();
         let Some(r) = self.repo() else { return div().into_any_element() };
         let commits: Arc<Vec<Commit>> = r.commits.clone();
         let graph = r.graph.clone();
@@ -114,7 +155,6 @@ impl GitTabs {
         // ---- list geometry
         let list_w = f32::from(self.window_size.width) - self.sizes.side_bar - 5.;
         let (show_author, show_date) = (list_w >= 720., list_w >= 520.);
-        let gw = graph.as_ref().map_or(16., |g| (g.iter().map(|x| x.width).max().unwrap_or(1).clamp(1, 10) - 1) as f32 * LANE + PAD + TAIL);
         let owner = cx.entity().downgrade();
         let list = uniform_list("commits", count, {
             let (commits, graph, sel, owner, path) = (commits.clone(), graph.clone(), sel_commit.clone(), owner.clone(), path.clone());
@@ -132,6 +172,9 @@ impl GitTabs {
                         let on = sel.as_deref() == Some(c.sha.as_str());
                         let (sha, sha2) = (c.sha.clone(), c.sha.clone());
                         let (o1, o2) = (owner.clone(), owner.clone());
+                        let lane = graph.as_ref().and_then(|g| g.get(ix));
+                        // Merges and commits HEAD does not reach are greyed, as in Fork.
+                        let dim = !on && lane.is_some_and(|g| g.merge || g.off_head);
                         div()
                             .id(SharedString::from(format!("c-{}", c.sha)))
                             .flex()
@@ -161,9 +204,9 @@ impl GitTabs {
                                     this.open_menu(pos, items, false, cx);
                                 });
                             })
-                            .child(match graph.as_ref().and_then(|g| g.get(ix)) {
-                                Some(g) => graph_cell(g.clone(), gw, if on { p.accent } else { p.panel }).into_any_element(),
-                                None => div().w(px(gw)).flex_none().text_color(p.accent).text_size(px(10.)).text_center().child("●").into_any_element(),
+                            .child(match lane {
+                                Some(g) => graph_cell(g.clone(), cell_width(g), if on { p.accent } else { p.panel }).into_any_element(),
+                                None => div().w(px(PAD + TAIL)).flex_none().text_color(p.accent).text_size(px(10.)).text_center().child("●").into_any_element(),
                             })
                             .child(
                                 div()
@@ -173,39 +216,62 @@ impl GitTabs {
                                     .items_center()
                                     .overflow_hidden()
                                     .whitespace_nowrap()
-                                    .children(c.refs.iter().enumerate().map(|(k, x)| {
-                                        let pill = ref_pill(&p, &x.name, kind_of(x.kind));
+                                    .children({
                                         // Branch labels act like Fork's: double-click switches, right-click opens the branch menu.
-                                        if !matches!(x.kind, "head" | "branch" | "remote") {
-                                            return pill.into_any_element();
-                                        }
-                                        let (name, kind) = (x.name.clone(), x.kind);
-                                        let (o3, o4) = (owner.clone(), owner.clone());
-                                        let (pa, pb) = (path.clone(), path.clone());
-                                        let n2 = name.clone();
-                                        pill.id(SharedString::from(format!("pill-{ix}-{k}")))
-                                            .cursor_pointer()
-                                            .on_click(move |ev, _, cx| {
-                                                if ev.click_count() >= 2 {
-                                                    // Not also a double-click on the commit row (which would offer a checkout).
+                                        let make = |pill: gpui_kit::Div, id: String, name: String, kind: &'static str| {
+                                            let (o3, o4) = (owner.clone(), owner.clone());
+                                            let (pa, pb) = (path.clone(), path.clone());
+                                            let (n1, n2) = (name.clone(), name);
+                                            pill.id(SharedString::from(id))
+                                                .cursor_pointer()
+                                                .on_click(move |ev, _, cx| {
+                                                    if ev.click_count() >= 2 {
+                                                        // Not also a double-click on the commit row (which would offer a checkout).
+                                                        cx.stop_propagation();
+                                                        if kind != "head" {
+                                                            let (pa, n) = (pa.clone(), n1.clone());
+                                                            let _ = o3.update(cx, |this, cx| this.switch_branch(&pa, &n, cx));
+                                                        }
+                                                    }
+                                                })
+                                                .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
                                                     cx.stop_propagation();
+                                                    let (pos, pb, n) = (ev.position, pb.clone(), n2.clone());
+                                                    let _ = o4.update(cx, |this, cx| {
+                                                        let items = if kind == "remote" { this.remote_item_menu(&pb, &n) } else { this.branch_item_menu(&pb, &n, kind == "head") };
+                                                        this.open_menu(pos, items, false, cx);
+                                                    });
+                                                })
+                                                .into_any_element()
+                                        };
+                                        let mut used = vec![false; c.refs.len()];
+                                        let mut pills: Vec<AnyElement> = Vec::new();
+                                        for (k, x) in c.refs.iter().enumerate() {
+                                            if used[k] {
+                                                continue;
+                                            }
+                                            let id = format!("pill-{ix}-{k}");
+                                            match x.kind {
+                                                "head" | "branch" => {
+                                                    // The remote branches of the same name on this commit join this pill.
+                                                    let mut remotes = Vec::new();
+                                                    for (j, y) in c.refs.iter().enumerate() {
+                                                        if let ("remote", Some((r, b))) = (y.kind, y.name.split_once('/'))
+                                                            && b == x.name
+                                                        {
+                                                            used[j] = true;
+                                                            remotes.push(r.to_string());
+                                                        }
+                                                    }
+                                                    pills.push(make(ref_group(&p, &x.name, x.kind == "head", &remotes, gh), id, x.name.clone(), x.kind));
                                                 }
-                                                if ev.click_count() >= 2 && kind != "head" {
-                                                    let (pa, n) = (pa.clone(), name.clone());
-                                                    let _ = o3.update(cx, |this, cx| this.switch_branch(&pa, &n, cx));
-                                                }
-                                            })
-                                            .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
-                                                cx.stop_propagation();
-                                                let (pos, pb, n) = (ev.position, pb.clone(), n2.clone());
-                                                let _ = o4.update(cx, |this, cx| {
-                                                    let items = if kind == "remote" { this.remote_item_menu(&pb, &n) } else { this.branch_item_menu(&pb, &n, kind == "head") };
-                                                    this.open_menu(pos, items, false, cx);
-                                                });
-                                            })
-                                            .into_any_element()
-                                    }))
-                                    .child(div().overflow_hidden().text_ellipsis().child(c.subject.clone())),
+                                                "remote" => pills.push(make(ref_pill(&p, &x.name, "remote", gh), id, x.name.clone(), "remote")),
+                                                other => pills.push(ref_pill(&p, &x.name, kind_of(other), gh).into_any_element()),
+                                            }
+                                        }
+                                        pills
+                                    })
+                                    .child(div().overflow_hidden().text_ellipsis().when(dim, |d| d.text_color(p.muted)).child(c.subject.clone())),
                             )
                             .when(show_author, |d| d.child(div().w(px(110.)).flex_none().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())))
                             .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).font_family("Cascadia Mono").child(short(&c.sha)))
@@ -355,7 +421,10 @@ impl GitTabs {
                     .gap(px(4.))
                     .text_size(px(12.))
                     .text_color(p.muted)
-                    .when(!d.refs.is_empty(), |c| c.child(kv("REFS", div().flex().flex_wrap().text_color(p.text).children(d.refs.iter().map(|x| ref_pill(&p, &x.name, kind_of(x.kind)))).into_any_element())))
+                    .when(!d.refs.is_empty(), |c| c.child(kv("REFS", div().flex().flex_wrap().text_color(p.text).children({
+                        let gh = self.on_github();
+                        d.refs.iter().map(move |x| ref_pill(&p, &x.name, kind_of(x.kind), gh))
+                    }).into_any_element())))
                     .child(kv(
                         "SHA",
                         div()

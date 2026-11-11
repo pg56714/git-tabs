@@ -651,7 +651,8 @@ impl GitTabs {
                     }
                     r.graph = if r.log_query.is_empty() && r.log_path.is_none() {
                         let v: Vec<(&str, &[String])> = r.commits.iter().map(|c| (c.sha.as_str(), c.parents.as_slice())).collect();
-                        Some(Arc::new(crate::graph::layout(&v)))
+                        let head = r.commits.iter().find(|c| c.refs.iter().any(|x| matches!(x.kind, "head" | "detached"))).map(|c| c.sha.as_str());
+                        Some(Arc::new(crate::graph::layout(&v, head)))
                     } else {
                         None
                     };

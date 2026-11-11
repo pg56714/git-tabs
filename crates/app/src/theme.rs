@@ -80,7 +80,8 @@ impl Pal {
 }
 
 /// The graph's lane colours.
-pub const LANE_COLORS: [u32; 8] = [0x2f6fdf, 0x1d9e75, 0xd85a30, 0x9b59d0, 0xc2185b, 0x0f8fa8, 0xb7791f, 0x5c6bc0];
+/// Warm colours first (amber, red, brown), as in Fork.
+pub const LANE_COLORS: [u32; 8] = [0xf0a30a, 0xe5484d, 0x9a6b4c, 0x2f9e6e, 0x3b82f6, 0x9b59d0, 0x0f8fa8, 0xd6409f];
 
 pub fn lane_color(i: usize) -> Hsla {
     c(LANE_COLORS[i % LANE_COLORS.len()])

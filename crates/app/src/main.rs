@@ -57,7 +57,7 @@ fn main() {
 
     crate::debug::log("start", || format!("git-tabs {} on {}", env!("CARGO_PKG_VERSION"), std::env::consts::OS));
     let ctx = Arc::new(gitcore::Ctx::new(dir));
-    gpui_kit::application().run(move |cx| {
+    gpui_kit::application().with_assets(ui::AppAssets).run(move |cx| {
         gpui_kit::init(cx);
         views::bind_keys(cx);
         let options = WindowOptions {

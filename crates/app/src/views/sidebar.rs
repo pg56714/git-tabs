@@ -18,14 +18,13 @@ impl GitTabs {
     }
 
     /// A folder in a branch tree (`feature/` holding `feature/a`, `feature/b`).
-    fn dir_row(&self, key: String, name: String, indent: f32, count: usize, closed: bool, cx: &mut Context<Self>) -> AnyElement {
+    fn dir_row(&self, key: String, name: String, indent: f32, _count: usize, closed: bool, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
         let k = key.clone();
         self.item_row(SharedString::from(format!("fd-{key}")), indent, false, false)
             .on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(&k, cx)))
             .child(div().w(px(10.)).flex_none().text_size(px(10.)).text_color(p.faint).child(if closed { "\u{25b8}" } else { "\u{25be}" }))
             .child(div().overflow_hidden().text_ellipsis().text_color(p.muted).child(name))
-            .child(div().ml_auto().flex_none().text_size(px(11.)).text_color(p.faint).child(count.to_string()))
             .into_any_element()
     }
 
@@ -54,7 +53,7 @@ impl GitTabs {
             .into_any_element()
     }
 
-    fn section(&self, id: &'static str, title: &str, count: Option<usize>, cx: &mut Context<Self>) -> AnyElement {
+    fn section(&self, id: &'static str, title: &str, _count: Option<usize>, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
         let closed = self.folded.contains(id);
         div()
@@ -65,14 +64,13 @@ impl GitTabs {
             .pt(px(12.))
             .pb(px(3.))
             .px(px(14.))
-            .text_size(px(12.))
+            .text_size(px(13.))
             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-            .text_color(p.muted)
+            .text_color(p.text)
             .cursor_pointer()
-            .hover(move |s| s.text_color(p.text))
             .on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(id, cx)))
-            .child(format!("{} {}", if closed { "▸" } else { "▾" }, title))
-            .when_some(count.filter(|c| *c > 0), |d, c| d.child(div().ml_1().font_weight(gpui_kit::FontWeight::NORMAL).text_color(p.faint).child(c.to_string())))
+            .child(div().w(px(12.)).flex_none().text_size(px(10.)).text_color(p.muted).child(if closed { "▸" } else { "▾" }))
+            .child(title.to_string())
             .into_any_element()
     }
 
@@ -88,6 +86,7 @@ impl GitTabs {
             .pr(px(8.))
             .py(px(3.))
             .min_h(px(26.))
+            .text_size(px(13.))
             .rounded(px(6.))
             .whitespace_nowrap()
             .group("si")
@@ -98,16 +97,15 @@ impl GitTabs {
 
     pub fn render_sidebar(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
+        let gh = self.on_github();
         let Some(r) = self.repo() else { return div().into_any_element() };
         let path = r.path.clone();
         let view = r.view;
-        let default = r.refs.as_ref().and_then(|x| x.default_branch.clone()).unwrap_or_else(|| "main".into());
         let changes = r.summary.as_ref().map_or(0, |s| s.changes);
         let refs = r.refs.clone();
         let mut rows: Vec<AnyElement> = vec![
             self.nav_item("nav-changes", crate::i18n::t("✎ 未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
             self.nav_item("nav-history", crate::i18n::t("◷ 歷史").into(), None, view == View::History, View::History, cx),
-            self.nav_item("nav-range", crate::i18n::tr("⇄ 分支 vs {default}", &[("default", (default).to_string())], &[]), None, view == View::Range, View::Range, cx),
         ];
 
         // ---- branches
@@ -152,7 +150,11 @@ impl GitTabs {
                                 this.open_menu(ev.position, items, false, cx);
                             }),
                         )
-                        .child(div().w(px(10.)).flex_none().text_color(p.ok).child(if cur { "✓" } else { "" }))
+                        .child(if cur {
+                            div().w(px(13.)).flex_none().text_color(p.ok).font_weight(gpui_kit::FontWeight::BOLD).child("\u{2713}").into_any_element()
+                        } else {
+                            icon(Ico::GitBranch, 13., p.muted).into_any_element()
+                        })
                         .child(div().overflow_hidden().text_ellipsis().child(label))
                         .child(div().ml_auto().flex_none().text_size(px(11.5)).text_color(p.accent).child(tail))
                         .into_any_element(),
@@ -172,7 +174,22 @@ impl GitTabs {
                 }
             }
             for (remote, names) in &groups {
-                rows.push(self.item_row(SharedString::from(format!("rm-{remote}")), 22., false, true).child(div().text_color(p.muted).child(remote.clone())).into_any_element());
+                let gkey = format!("rg:{remote}");
+                let gclosed = self.folded.contains(&gkey);
+                rows.push(
+                    self.item_row(SharedString::from(format!("rm-{remote}")), 14., false, false)
+                        .on_click(cx.listener({
+                            let k = gkey.clone();
+                            move |this, _, _, cx| this.fold_toggle(&k, cx)
+                        }))
+                        .child(div().w(px(10.)).flex_none().text_size(px(10.)).text_color(p.faint).child(if gclosed { "▸" } else { "▾" }))
+                        .child(icon(remote_icon(gh), 14., p.text))
+                        .child(div().child(remote.clone()))
+                        .into_any_element(),
+                );
+                if gclosed {
+                    continue;
+                }
                 let items: Vec<(String, usize)> = names.iter().enumerate().map(|(i, (n, _))| (n.clone(), i)).collect();
                 for row in tree_rows(&items, &format!("rt:{remote}"), &self.folded) {
                     let (label, idx, depth) = match row {
@@ -243,7 +260,7 @@ impl GitTabs {
                                 this.open_menu(ev.position, items, false, cx);
                             }),
                         )
-                        .child(div().flex_none().child("🏷"))
+                        .child(icon(Ico::Tag, 13., p.muted))
                         .child(div().overflow_hidden().text_ellipsis().child(n1))
                         .into_any_element(),
                 );
@@ -339,18 +356,12 @@ impl GitTabs {
     pub fn branch_item_menu(&self, path: &std::path::Path, name: &str, current: bool) -> Vec<MenuItem> {
         let (p, n) = (path.to_path_buf(), name.to_string());
         let mk = |n: &str| n.to_string();
-        let (a, b, c, d, e, f, g) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
+        let (a, b, c, d, f, g) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
         vec![
             MenuItem::new(crate::i18n::t("切換到這個分支"), move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
             MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
             MenuItem::new(crate::i18n::t("把目前的分支 rebase 到這裡"), move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
             MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
-            MenuItem::new(crate::i18n::t("跟 main 比較"), move |t, _, cx| {
-                if let Some(r) = t.repo_mut() {
-                    r.range_head = Some(e.clone());
-                }
-                t.set_view(View::Range, cx);
-            }),
             MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(f.clone(), crate::i18n::t("分支名稱"), cx)),
             MenuItem::sep(),
             MenuItem::new(crate::i18n::t("刪除分支…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),

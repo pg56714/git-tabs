@@ -221,7 +221,6 @@ impl GitTabs {
             v.push(item(crate::i18n::t("新增分支"), n.clone(), |t, w, cx| t.new_branch(None, w, cx)));
             v.push(item(crate::i18n::t("看未提交的修改"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Changes, cx)));
             v.push(item(crate::i18n::t("看歷史"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::History, cx)));
-            v.push(item(crate::i18n::t("看分支 vs main"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Range, cx)));
             v.push(item(crate::i18n::t("看 Reflog"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Reflog, cx)));
             let ps = p.display().to_string();
             let ps2 = ps.clone();
