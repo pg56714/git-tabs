@@ -114,7 +114,10 @@ pub fn ref_colors(p: &Pal) -> (Hsla, Hsla, Hsla, Hsla) {
 pub use gpui_kit::assets::IconName as Ico;
 
 // The icons the UI draws itself (Lucide, bundled with GPUI Kit), next to the ones its components use.
-gpui_kit::assets::icon_assets!(ExtraIcons, [Cloud, GitBranch, Github, Tag]);
+gpui_kit::assets::icon_assets!(
+    ExtraIcons,
+    [Archive, ChevronDown, ChevronRight, Cloud, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitVertical, Github, Plus, RotateCcw, Tag]
+);
 
 pub struct AppAssets;
 
@@ -179,9 +182,44 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
         .when(!shown.is_empty(), |d| d.child(shown))
 }
 
-/// A local branch and the remote branches of the same name on the same commit, drawn as one
-/// pill (`\u{2713} main | cloud origin`), like Fork.
-pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: &[String], github: bool) -> Div {
+/// One label to draw for a commit.
+pub enum RefView<'a> {
+    /// A local branch. `remotes` counts the remotes whose branch of the same name sits on this
+    /// commit too: they are drawn as an icon in front of the name instead of as labels of their own.
+    Branch { name: &'a str, current: bool, remotes: usize },
+    /// HEAD without a branch.
+    Detached,
+    Remote(&'a str),
+    Tag(&'a str),
+}
+
+/// A commit's labels in the order they are drawn: the checked-out branch, the other local branches,
+/// the remote branches no local branch stands for, then the tags.
+pub fn ref_views(refs: &[gitcore::parse::RefLabel]) -> Vec<RefView<'_>> {
+    let branch_of = |remote: &'_ str| remote.split_once('/').map(|(_, b)| b.to_string());
+    let local = |x: &gitcore::parse::RefLabel| matches!(x.kind, "head" | "branch");
+    let mut out = Vec::new();
+    if refs.iter().any(|x| x.kind == "detached") {
+        out.push(RefView::Detached);
+    }
+    for current in [true, false] {
+        for x in refs.iter().filter(|x| local(x) && (x.kind == "head") == current) {
+            let remotes = refs.iter().filter(|y| y.kind == "remote" && branch_of(&y.name).as_deref() == Some(x.name.as_str())).count();
+            out.push(RefView::Branch { name: &x.name, current, remotes });
+        }
+    }
+    for y in refs.iter().filter(|y| y.kind == "remote") {
+        if !refs.iter().any(|x| local(x) && branch_of(&y.name).as_deref() == Some(x.name.as_str())) {
+            out.push(RefView::Remote(&y.name));
+        }
+    }
+    out.extend(refs.iter().filter(|x| x.kind == "tag").map(|x| RefView::Tag(&x.name)));
+    out
+}
+
+/// A local branch's label. When its remote branch is on the same commit, the remote's icon goes in
+/// front of the name (`[icon | \u{2713} main]`), like Fork, rather than a second `origin/main` label.
+pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
     div()
         .flex_none()
@@ -196,6 +234,20 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: &[String], github:
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(p.text)
+        .when(remotes > 0, |d| {
+            d.child(
+                div()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(3.))
+                    .px(px(4.))
+                    .bg(rf)
+                    .border_r_1()
+                    .border_color(rb)
+                    .children((0..remotes.min(3)).map(|_| icon(remote_icon(github), 13., p.text))),
+            )
+        })
         .child(
             div()
                 .h_full()
@@ -207,21 +259,6 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: &[String], github:
                 .when(current, |d| d.child(div().text_color(p.ok).font_weight(FontWeight::BOLD).child("\u{2713}")))
                 .child(name.to_string()),
         )
-        .when(!remotes.is_empty(), |d| {
-            d.child(
-                div()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .px(px(6.))
-                    .bg(rf)
-                    .border_l_1()
-                    .border_color(rb)
-                    .child(icon(remote_icon(github), 13., p.text))
-                    .child(remotes.join(", ")),
-            )
-        })
 }
 
 /// `kbd`
@@ -338,4 +375,37 @@ pub fn icon_plus(color: Hsla) -> impl IntoElement {
 
 pub fn icon_chevron_down(color: Hsla) -> impl IntoElement {
     stroke_icon(color, &[&[(2., 4.5), (6., 8.5), (10., 4.5)]])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gitcore::parse::RefLabel;
+
+    fn l(name: &str, kind: &'static str) -> RefLabel {
+        RefLabel { name: name.into(), kind }
+    }
+
+    #[test]
+    fn a_remote_branch_joins_its_local_branch_whatever_order_git_lists_them_in() {
+        // git lists `tag: v1, origin/main, main`: the remote comes before the local branch
+        let refs = [l("v1", "tag"), l("origin/main", "remote"), l("main", "branch"), l("origin/fix/x", "remote")];
+        let got: Vec<String> = ref_views(&refs)
+            .iter()
+            .map(|v| match v {
+                RefView::Branch { name, current, remotes } => format!("branch {name} {current} {remotes}"),
+                RefView::Detached => "detached".into(),
+                RefView::Remote(n) => format!("remote {n}"),
+                RefView::Tag(n) => format!("tag {n}"),
+            })
+            .collect();
+        assert_eq!(got, ["branch main false 1", "remote origin/fix/x", "tag v1"]);
+    }
+
+    #[test]
+    fn the_checked_out_branch_comes_first() {
+        let refs = [l("main", "branch"), l("origin/dev", "remote"), l("dev", "head")];
+        let got: Vec<&str> = ref_views(&refs).iter().filter_map(|v| if let RefView::Branch { name, .. } = v { Some(*name) } else { None }).collect();
+        assert_eq!(got, ["dev", "main"]);
+    }
 }

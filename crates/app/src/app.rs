@@ -1021,9 +1021,8 @@ impl GitTabs {
     /// The identity git will use for this repo: a pin, else the first matching rule, else none.
     pub fn identity_of(&self, r: &RepoState) -> IdentityInfo {
         let rule = crate::identity::match_identity(&self.cfg.identities, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).cloned();
-        let auto = rule;
         let pinned = self.pin_of(r).and_then(|pin| self.cfg.identities.iter().find(|i| i.id == pin).cloned());
-        IdentityInfo { id: pinned.clone().or(auto.clone()), pinned: pinned.is_some(), auto }
+        IdentityInfo { pinned: pinned.is_some(), id: pinned.or(rule) }
     }
 
     // ----- tabs and views -----
@@ -1156,8 +1155,8 @@ pub fn gated<T>(gate: &Gate, ticket: u64, f: impl FnOnce() -> T) -> T {
 
 pub struct IdentityInfo {
     pub id: Option<gitcore::config::Identity>,
+    /// Picked for this repo by hand, rather than matched by a rule.
     pub pinned: bool,
-    pub auto: Option<gitcore::config::Identity>,
 }
 
 pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {

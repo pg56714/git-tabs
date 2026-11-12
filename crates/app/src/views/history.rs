@@ -34,16 +34,6 @@ fn initials(name: &str) -> String {
     name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase()
 }
 
-fn kind_of(k: &str) -> &str {
-    match k {
-        "head" => "head",
-        "remote" => "remote",
-        "tag" => "tag",
-        "detached" => "detached",
-        _ => "",
-    }
-}
-
 /// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
 /// joins or leaves the commit turns into its row with a rounded corner, and a merge has a hollow dot.
 fn graph_cell(row: GraphRow, width: f32, bg: Hsla) -> impl IntoElement {
@@ -244,34 +234,35 @@ impl GitTabs {
                                                 })
                                                 .into_any_element()
                                         };
-                                        let mut used = vec![false; c.refs.len()];
-                                        let mut pills: Vec<AnyElement> = Vec::new();
-                                        for (k, x) in c.refs.iter().enumerate() {
-                                            if used[k] {
-                                                continue;
-                                            }
-                                            let id = format!("pill-{ix}-{k}");
-                                            match x.kind {
-                                                "head" | "branch" => {
-                                                    // The remote branches of the same name on this commit join this pill.
-                                                    let mut remotes = Vec::new();
-                                                    for (j, y) in c.refs.iter().enumerate() {
-                                                        if let ("remote", Some((r, b))) = (y.kind, y.name.split_once('/'))
-                                                            && b == x.name
-                                                        {
-                                                            used[j] = true;
-                                                            remotes.push(r.to_string());
-                                                        }
+                                        ref_views(&c.refs)
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(k, v)| {
+                                                let id = format!("pill-{ix}-{k}");
+                                                match v {
+                                                    RefView::Branch { name, current, remotes } => {
+                                                        make(ref_group(&p, name, current, remotes, gh), id, name.to_string(), if current { "head" } else { "branch" })
                                                     }
-                                                    pills.push(make(ref_group(&p, &x.name, x.kind == "head", &remotes, gh), id, x.name.clone(), x.kind));
+                                                    RefView::Remote(name) => make(ref_pill(&p, name, "remote", gh), id, name.to_string(), "remote"),
+                                                    RefView::Detached => ref_pill(&p, "", "detached", gh).into_any_element(),
+                                                    RefView::Tag(name) => ref_pill(&p, name, "tag", gh).into_any_element(),
                                                 }
-                                                "remote" => pills.push(make(ref_pill(&p, &x.name, "remote", gh), id, x.name.clone(), "remote")),
-                                                other => pills.push(ref_pill(&p, &x.name, kind_of(other), gh).into_any_element()),
-                                            }
-                                        }
-                                        pills
+                                            })
+                                            .collect::<Vec<AnyElement>>()
                                     })
-                                    .child(div().overflow_hidden().text_ellipsis().when(dim, |d| d.text_color(p.muted)).child(c.subject.clone())),
+                                    .child({
+                                        // Black for what the checked-out branch has, clearly lighter for the rest; the
+                                        // `fix(scope):` prefix in bold. Both as Fork draws them.
+                                        let (head, rest) = crate::format::split_subject(&c.subject);
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .when(dim, |d| d.text_color(p.faint))
+                                            .when(!head.is_empty(), |d| d.child(div().flex_none().mr(px(4.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child(head.to_string())))
+                                            .child(div().min_w_0().overflow_hidden().text_ellipsis().child(rest.to_string()))
+                                    }),
                             )
                             .when(show_author, |d| d.child(div().w(px(110.)).flex_none().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())))
                             .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).font_family("Cascadia Mono").child(short(&c.sha)))
@@ -423,7 +414,12 @@ impl GitTabs {
                     .text_color(p.muted)
                     .when(!d.refs.is_empty(), |c| c.child(kv("REFS", div().flex().flex_wrap().text_color(p.text).children({
                         let gh = self.on_github();
-                        d.refs.iter().map(move |x| ref_pill(&p, &x.name, kind_of(x.kind), gh))
+                        ref_views(&d.refs).into_iter().map(move |v| match v {
+                            RefView::Branch { name, current, remotes } => ref_group(&p, name, current, remotes, gh),
+                            RefView::Remote(name) => ref_pill(&p, name, "remote", gh),
+                            RefView::Detached => ref_pill(&p, "", "detached", gh),
+                            RefView::Tag(name) => ref_pill(&p, name, "tag", gh),
+                        })
                     }).into_any_element())))
                     .child(kv(
                         "SHA",

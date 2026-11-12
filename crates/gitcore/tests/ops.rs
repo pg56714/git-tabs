@@ -251,3 +251,20 @@ fn detects_keys_ssh_hosts_and_includes() {
     assert_eq!(f.includes[0].email, "me@corp.com");
     assert_eq!(f.includes[0].key, "C:/k/id_work");
 }
+
+#[test]
+fn worktree_for_an_existing_branch_and_for_a_new_one() {
+    let _s = serial();
+    let (d, _ctx) = repo();
+    git(d.path(), &["branch", "feat/old"]);
+    let out = tempfile::tempdir().unwrap();
+    let (a, b) = (out.path().join("old"), out.path().join("new"));
+    gitcore::ops::worktree_add(d.path(), &a.display().to_string(), "feat/old").unwrap();
+    gitcore::ops::worktree_add(d.path(), &b.display().to_string(), "feat/new").unwrap();
+    assert_eq!(git(&a, &["branch", "--show-current"]).trim(), "feat/old");
+    assert_eq!(git(&b, &["branch", "--show-current"]).trim(), "feat/new", "an unknown name is created from HEAD");
+    let all = gitcore::ops::refs(d.path()).unwrap();
+    assert_eq!(all.worktrees.len(), 3);
+    // the branch of the main worktree is taken: git refuses, and the error comes back
+    assert!(gitcore::ops::worktree_add(d.path(), &out.path().join("dup").display().to_string(), "main").is_err());
+}

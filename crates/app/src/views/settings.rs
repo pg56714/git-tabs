@@ -397,7 +397,7 @@ impl GitTabs {
         let pin = m.pin.clone();
         let busy = m.busy;
         let ids: Vec<(String, String)> = self.cfg.identities.iter().map(|i| (i.id.clone(), crate::i18n::tr("{}（{}）", &[], &[(i.name).to_string(), (if i.account.is_empty() { &i.email } else { &i.account }).to_string()]))).collect();
-        let pin_label = ids.iter().find(|x| x.0 == pin).map(|x| x.1.clone()).unwrap_or_else(|| crate::i18n::t("自動（依規則）").into());
+        let pin_label = ids.iter().find(|x| x.0 == pin).map(|x| x.1.clone()).unwrap_or_else(|| crate::i18n::t("之後再選").into());
         let fresh2 = fresh.clone();
         let rows: Vec<AnyElement> = fresh
             .iter()
@@ -501,7 +501,7 @@ impl GitTabs {
                     crate::i18n::t("身分"),
                     btn(&p, "ar-pin", Bk::Normal, false, format!("{pin_label} ▾"))
                         .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let mut items = vec![MenuItem::new(crate::i18n::t("自動（依規則）"), |t, _, cx| {
+                            let mut items = vec![MenuItem::new(crate::i18n::t("之後再選"), |t, _, cx| {
                                 if let Some(Modal::AddRepo(m)) = &mut t.modal {
                                     m.pin.clear();
                                 }

@@ -5,7 +5,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 
-use gitcore::config::Identity;
 use gitcore::ops::{self, LineAction};
 use gpui_kit::{ClipboardItem, Context, Window};
 use serde_json::json;
@@ -714,22 +713,20 @@ impl GitTabs {
         });
     }
 
-    pub fn set_pin(&mut self, id: Option<String>, cx: &mut Context<Self>) {
+    /// Uses this identity for the open repo from now on (written into the repo's own git config).
+    pub fn set_pin(&mut self, id: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let (path, name) = (r.path.clone(), r.name.clone());
-        let ident: Option<Identity> = id.as_ref().and_then(|i| self.cfg.identities.iter().find(|x| &x.id == i).cloned());
+        let Some(ident) = self.cfg.identities.iter().find(|x| x.id == id).cloned() else { return };
         let label = crate::i18n::t("改用身分");
         let ctx = self.ctx.clone();
+        let msg = crate::i18n::tr("{name} 改用 {}", &[("name", (name).to_string())], &[(ident.name).to_string()]);
         let v = json!({ "repo": path.display().to_string(), "identity": ident });
-        let msg = match &ident {
-            Some(i) => crate::i18n::tr("{name} 改用 {}", &[("name", (name).to_string())], &[(i.name).to_string()]),
-            None => crate::i18n::tr("{name} 改回自動", &[("name", (name).to_string())], &[]),
-        };
         self.op_with(&path, label, true, None, move |_| gitcore::dispatch(&ctx, "identity_pin", v).map(|_| String::new()), move |this, res, cx| {
             if res.is_ok() {
                 let p = this.repo().map(|r| r.path.display().to_string()).unwrap_or_default();
                 if let Some(e) = this.cfg.repos.iter_mut().find(|x| x.path == p) {
-                    e.pin = id.clone();
+                    e.pin = Some(id.clone());
                 }
                 this.save_config();
                 this.ok(msg, cx);
@@ -800,6 +797,48 @@ impl GitTabs {
         let p = r.path.clone();
         self.load_detail(&p, cx);
         cx.notify();
+    }
+
+    /// Asks for a branch and a folder, adds a worktree there and opens it as a tab.
+    pub fn new_worktree(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        let path = r.path.clone();
+        // Next to the repo unless a folder is given: `<parent>/<repo>-<branch>`.
+        let base = path.parent().map(|p| p.join(&r.name)).unwrap_or_else(|| path.clone()).display().to_string();
+        self.prompt(
+            crate::i18n::t("新增 worktree"),
+            vec![
+                FieldSpec::text("branch", crate::i18n::t("要放哪個分支")).placeholder("feat/my-change").check(branch_name_check),
+                FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr("留空就用 {}-<分支>", &[], &[base.clone()])),
+                FieldSpec::checkbox("open", crate::i18n::t("建好就開成新分頁"), true),
+            ],
+            crate::i18n::t("建立"),
+            window,
+            cx,
+            move |this, v, _, cx| {
+                let branch = v["branch"].trim().to_string();
+                let dir = match v.get("dir").map(|d| d.trim()).unwrap_or("") {
+                    "" => format!("{base}-{}", branch.replace('/', "-")),
+                    d => d.to_string(),
+                };
+                let open = v.get("open").is_some_and(|x| x == "1");
+                let ok = crate::i18n::tr("已建立 worktree {dir}", &[("dir", dir.clone())], &[]);
+                let (d1, d2) = (dir.clone(), dir);
+                this.op_with(
+                    &path,
+                    crate::i18n::t("建立 worktree"),
+                    false,
+                    Some(ok),
+                    move |r| ops::worktree_add(r, &d1, &branch),
+                    move |this, res, cx| {
+                        if res.is_ok() && open {
+                            this.open_worktree(d2, cx);
+                        }
+                    },
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn open_worktree(&mut self, path: String, cx: &mut Context<Self>) {

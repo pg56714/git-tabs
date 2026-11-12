@@ -9,6 +9,17 @@ use crate::app::GitTabs;
 use crate::model::*;
 use crate::ui::*;
 
+/// Where the icon of a top-level row starts, and how far each level of a tree moves it right.
+const IND: f32 = 22.;
+const STEP: f32 = 14.;
+/// The room a fold arrow takes before an icon (its width and the gap after it).
+const CHEV: f32 = 18.;
+
+/// The fold arrow of a section, a folder or a remote.
+fn chevron(p: &crate::theme::Pal, closed: bool) -> gpui_kit::Svg {
+    icon(if closed { Ico::ChevronRight } else { Ico::ChevronDown }, 12., p.muted)
+}
+
 impl GitTabs {
     fn fold_toggle(&mut self, key: &str, cx: &mut Context<Self>) {
         if !self.folded.remove(key) {
@@ -17,19 +28,22 @@ impl GitTabs {
         cx.notify();
     }
 
-    /// A folder in a branch tree (`feature/` holding `feature/a`, `feature/b`).
-    fn dir_row(&self, key: String, name: String, indent: f32, _count: usize, closed: bool, cx: &mut Context<Self>) -> AnyElement {
+    /// A folder in a branch tree (`feature/` holding `feature/a`, `feature/b`). `indent` is where
+    /// its folder icon goes, in line with the icons of the branches beside it; the arrow sits before.
+    fn dir_row(&self, key: String, name: String, indent: f32, closed: bool, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
         let k = key.clone();
-        self.item_row(SharedString::from(format!("fd-{key}")), indent, false, false)
+        self.item_row(SharedString::from(format!("fd-{key}")), indent - CHEV, false, false)
             .on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(&k, cx)))
-            .child(div().w(px(10.)).flex_none().text_size(px(10.)).text_color(p.faint).child(if closed { "\u{25b8}" } else { "\u{25be}" }))
-            .child(div().overflow_hidden().text_ellipsis().text_color(p.muted).child(name))
+            .child(chevron(&p, closed))
+            .child(icon(if closed { Ico::Folder } else { Ico::FolderOpen }, 13., p.muted))
+            .child(div().overflow_hidden().text_ellipsis().child(name))
             .into_any_element()
     }
 
-    fn nav_item(&self, id: &'static str, label: String, count: Option<usize>, on: bool, view: View, cx: &mut Context<Self>) -> AnyElement {
+    fn nav_item(&self, id: &'static str, ico: Ico, label: String, count: Option<usize>, on: bool, view: View, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
+        let fg = if on { p.accent_tx } else { p.text };
         div()
             .id(id)
             .flex()
@@ -42,36 +56,39 @@ impl GitTabs {
             .rounded(px(6.))
             .cursor_pointer()
             .bg(if on { p.accent_bg } else { gpui_kit::Hsla::transparent_black() })
-            .text_color(if on { p.accent_tx } else { p.muted })
+            .text_color(fg)
+            .when(on, |d| d.font_weight(gpui_kit::FontWeight::MEDIUM))
             .hover(move |s| s.bg(if on { p.accent_bg } else { p.hover }))
             .on_click(cx.listener(move |this, _, w, cx| {
                 this.set_view(view, cx);
                 this.nav_focus.focus(w, cx);
             }))
+            .child(icon(ico, 15., if on { p.accent_tx } else { p.muted }))
             .child(label)
-            .when_some(count.filter(|c| *c > 0), |d, c| d.child(div().ml_auto().text_size(px(11.5)).child(c.to_string())))
+            .when_some(count.filter(|c| *c > 0), |d, c| {
+                d.child(div().ml_auto().px(px(6.)).rounded(px(8.)).bg(if on { p.panel } else { p.hover }).text_size(px(11.5)).text_color(p.muted).child(c.to_string()))
+            })
             .into_any_element()
     }
 
-    fn section(&self, id: &'static str, title: &str, _count: Option<usize>, cx: &mut Context<Self>) -> AnyElement {
+    /// A section title. An empty section is greyed and has no arrow: there is nothing to unfold.
+    fn section(&self, id: &'static str, title: &str, empty: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let p = self.pal;
         let closed = self.folded.contains(id);
         div()
             .id(SharedString::from(format!("sh-{id}")))
             .flex()
             .items_center()
-            .gap(px(4.))
+            .gap(px(6.))
             .pt(px(12.))
             .pb(px(3.))
-            .px(px(14.))
+            .px(px(12.))
             .text_size(px(13.))
             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-            .text_color(p.text)
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(id, cx)))
-            .child(div().w(px(12.)).flex_none().text_size(px(10.)).text_color(p.muted).child(if closed { "▸" } else { "▾" }))
+            .text_color(if empty { p.faint } else { p.text })
+            .when(!empty, |d| d.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.fold_toggle(id, cx))))
+            .child(if empty { div().w(px(12.)).flex_none().into_any_element() } else { chevron(&p, closed).into_any_element() })
             .child(title.to_string())
-            .into_any_element()
     }
 
     fn item_row(&self, id: SharedString, indent: f32, cur: bool, none: bool) -> gpui_kit::Stateful<gpui_kit::Div> {
@@ -104,19 +121,19 @@ impl GitTabs {
         let changes = r.summary.as_ref().map_or(0, |s| s.changes);
         let refs = r.refs.clone();
         let mut rows: Vec<AnyElement> = vec![
-            self.nav_item("nav-changes", crate::i18n::t("✎ 未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
-            self.nav_item("nav-history", crate::i18n::t("◷ 歷史").into(), None, view == View::History, View::History, cx),
+            self.nav_item("nav-changes", Ico::FilePenLine, crate::i18n::t("未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
+            self.nav_item("nav-history", Ico::GitCommitVertical, crate::i18n::t("歷史").into(), None, view == View::History, View::History, cx),
         ];
 
         // ---- branches
-        rows.push(self.section("b", crate::i18n::t("分支"), refs.as_ref().map(|x| x.refs.branches.len()), cx));
+        let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).cloned().collect();
+        rows.push(self.section("b", crate::i18n::t("分支"), branches.is_empty(), cx).into_any_element());
         if !self.folded.contains("b") {
-            let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).cloned().collect();
             let items: Vec<(String, usize)> = branches.iter().enumerate().map(|(i, b)| (b.name.clone(), i)).collect();
             for row in tree_rows(&items, "bt", &self.folded) {
                 let (label, idx, depth) = match row {
-                    TreeRow::Dir { key, name, depth, count, closed } => {
-                        rows.push(self.dir_row(key, name, 22. + 12. * depth as f32, count, closed, cx));
+                    TreeRow::Dir { key, name, depth, closed } => {
+                        rows.push(self.dir_row(key, name, IND + STEP * depth as f32, closed, cx));
                         continue;
                     }
                     TreeRow::Leaf { label, idx, depth } => (label, idx, depth),
@@ -125,14 +142,15 @@ impl GitTabs {
                 let (name, sha, cur) = (b.name.clone(), b.sha.clone(), b.current);
                 let (n_menu, n_dbl) = (name.clone(), name.clone());
                 let (p1, p2) = (path.clone(), path.clone());
+                // Commits to push and to pull, the way Fork writes them: `2↑ 1↓`.
                 let tail = format!(
                     "{}{}{}",
-                    if b.ahead > 0 { format!("↑{}", b.ahead) } else { String::new() },
-                    if b.behind > 0 { format!(" ↓{}", b.behind) } else { String::new() },
+                    if b.ahead > 0 { format!("{}↑", b.ahead) } else { String::new() },
+                    if b.behind > 0 { format!(" {}↓", b.behind) } else { String::new() },
                     if b.gone { crate::i18n::t(" 已刪") } else { "" }
                 );
                 rows.push(
-                    self.item_row(SharedString::from(format!("br-{name}")), 22. + 12. * depth as f32, cur, false)
+                    self.item_row(SharedString::from(format!("br-{name}")), IND + STEP * depth as f32, cur, false)
                         .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                             if ev.click_count() >= 2 {
                                 if !cur {
@@ -156,33 +174,33 @@ impl GitTabs {
                             icon(Ico::GitBranch, 13., p.muted).into_any_element()
                         })
                         .child(div().overflow_hidden().text_ellipsis().child(label))
-                        .child(div().ml_auto().flex_none().text_size(px(11.5)).text_color(p.accent).child(tail))
+                        .child(div().ml_auto().flex_none().text_size(px(12.)).font_weight(gpui_kit::FontWeight::NORMAL).text_color(p.muted).child(tail))
                         .into_any_element(),
                 );
             }
         }
 
         // ---- remotes
-        rows.push(self.section("r", crate::i18n::t("遠端"), None, cx));
-        if !self.folded.contains("r") {
-            let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
-            for b in refs.iter().flat_map(|x| x.refs.remotes.iter()) {
-                let (remote, rest) = b.name.split_once('/').unwrap_or((&b.name, ""));
-                match groups.iter_mut().find(|g| g.0 == remote) {
-                    Some(g) => g.1.push((rest.to_string(), b.sha.clone())),
-                    None => groups.push((remote.to_string(), vec![(rest.to_string(), b.sha.clone())])),
-                }
+        let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        for b in refs.iter().flat_map(|x| x.refs.remotes.iter()) {
+            let (remote, rest) = b.name.split_once('/').unwrap_or((&b.name, ""));
+            match groups.iter_mut().find(|g| g.0 == remote) {
+                Some(g) => g.1.push((rest.to_string(), b.sha.clone())),
+                None => groups.push((remote.to_string(), vec![(rest.to_string(), b.sha.clone())])),
             }
+        }
+        rows.push(self.section("r", crate::i18n::t("遠端"), groups.is_empty(), cx).into_any_element());
+        if !self.folded.contains("r") {
             for (remote, names) in &groups {
                 let gkey = format!("rg:{remote}");
                 let gclosed = self.folded.contains(&gkey);
                 rows.push(
-                    self.item_row(SharedString::from(format!("rm-{remote}")), 14., false, false)
+                    self.item_row(SharedString::from(format!("rm-{remote}")), IND - CHEV, false, false)
                         .on_click(cx.listener({
                             let k = gkey.clone();
                             move |this, _, _, cx| this.fold_toggle(&k, cx)
                         }))
-                        .child(div().w(px(10.)).flex_none().text_size(px(10.)).text_color(p.faint).child(if gclosed { "▸" } else { "▾" }))
+                        .child(chevron(&p, gclosed))
                         .child(icon(remote_icon(gh), 14., p.text))
                         .child(div().child(remote.clone()))
                         .into_any_element(),
@@ -193,8 +211,8 @@ impl GitTabs {
                 let items: Vec<(String, usize)> = names.iter().enumerate().map(|(i, (n, _))| (n.clone(), i)).collect();
                 for row in tree_rows(&items, &format!("rt:{remote}"), &self.folded) {
                     let (label, idx, depth) = match row {
-                        TreeRow::Dir { key, name, depth, count, closed } => {
-                            rows.push(self.dir_row(key, name, 38. + 12. * depth as f32, count, closed, cx));
+                        TreeRow::Dir { key, name, depth, closed } => {
+                            rows.push(self.dir_row(key, name, IND + STEP * (depth + 1) as f32, closed, cx));
                             continue;
                         }
                         TreeRow::Leaf { label, idx, depth } => (label, idx, depth),
@@ -203,7 +221,7 @@ impl GitTabs {
                     let full = format!("{remote}/{n}");
                     let (f1, f2, sha, p1, p2) = (full.clone(), full.clone(), sha.clone(), path.clone(), path.clone());
                     rows.push(
-                        self.item_row(SharedString::from(format!("rb-{full}")), 38. + 12. * depth as f32, false, false)
+                        self.item_row(SharedString::from(format!("rb-{full}")), IND + STEP * (depth + 1) as f32, false, false)
                             .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                                 if ev.click_count() >= 2 {
                                     this.switch_branch(&p1, &f1, cx);
@@ -218,24 +236,22 @@ impl GitTabs {
                                     this.open_menu(ev.position, items, false, cx);
                                 }),
                             )
+                            .child(icon(Ico::GitBranch, 13., p.muted))
                             .child(div().overflow_hidden().text_ellipsis().child(label))
                             .into_any_element(),
                     );
                 }
             }
-            if groups.is_empty() {
-                rows.push(self.item_row("rm-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有遠端分支")).into_any_element());
-            }
         }
 
         // ---- tags
-        rows.push(self.section("Tags", "Tags", refs.as_ref().map(|x| x.refs.tags.len()), cx));
+        rows.push(self.section("Tags", "Tags", refs.as_ref().is_none_or(|x| x.refs.tags.is_empty()), cx).into_any_element());
         if !self.folded.contains("Tags") {
             for t in refs.iter().flat_map(|x| x.refs.tags.iter()) {
                 let (name, sha) = (t.name.clone(), t.sha.clone());
                 let (n1, n2) = (name.clone(), name.clone());
                 rows.push(
-                    self.item_row(SharedString::from(format!("tg-{name}")), 22., false, false)
+                    self.item_row(SharedString::from(format!("tg-{name}")), IND, false, false)
                         .on_click(cx.listener(move |this, _, _, cx| this.show_commit(sha.clone(), cx)))
                         .on_mouse_down(
                             MouseButton::Right,
@@ -265,20 +281,18 @@ impl GitTabs {
                         .into_any_element(),
                 );
             }
-            if refs.as_ref().is_none_or(|x| x.refs.tags.is_empty()) {
-                rows.push(self.item_row("tg-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有 tag")).into_any_element());
-            }
         }
 
         // ---- stashes
-        rows.push(self.section("s", "Stashes", refs.as_ref().map(|x| x.stashes.len()), cx));
+        rows.push(self.section("s", "Stashes", refs.as_ref().is_none_or(|x| x.stashes.is_empty()), cx).into_any_element());
         if !self.folded.contains("s") {
             for s in refs.iter().flat_map(|x| x.stashes.iter()) {
                 let (idx, msg) = (s.index as usize, s.message.clone());
                 let (a, b, c) = (path.clone(), path.clone(), idx);
                 let small = |id: String, label: &'static str| btn(&p, SharedString::from(id), Bk::Normal, true, label);
                 rows.push(
-                    self.item_row(SharedString::from(format!("st-{idx}")), 22., false, false)
+                    self.item_row(SharedString::from(format!("st-{idx}")), IND, false, false)
+                        .child(icon(Ico::Archive, 13., p.muted))
                         .child(div().overflow_hidden().text_ellipsis().child(msg))
                         .child(
                             div()
@@ -293,20 +307,47 @@ impl GitTabs {
                         .into_any_element(),
                 );
             }
-            if refs.as_ref().is_none_or(|x| x.stashes.is_empty()) {
-                rows.push(self.item_row("st-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有 stash")).into_any_element());
-            }
         }
 
         // ---- worktrees
-        let others: Vec<_> = refs.iter().flat_map(|x| x.worktrees.iter().skip(1)).cloned().collect();
-        rows.push(self.section("w", "Worktrees", Some(others.len()), cx));
+        // Every worktree but the one this tab shows (which need not be the main one).
+        let same = |a: &str| {
+            let n = |p: &str| {
+                let p = p.replace('\\', "/").trim_end_matches('/').to_string();
+                if cfg!(windows) { p.to_lowercase() } else { p }
+            };
+            n(a) == n(&path.display().to_string())
+        };
+        let others: Vec<_> = refs.iter().flat_map(|x| x.worktrees.iter()).filter(|w| !same(&w.path)).cloned().collect();
+        rows.push(
+            self.section("w", "Worktrees", others.is_empty(), cx)
+                .child(div().flex_1())
+                .child(
+                    // The one place a worktree is made, so it stays lit when the section is empty.
+                    div()
+                        .id("wt-add")
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(20.))
+                        .rounded(px(5.))
+                        .cursor_pointer()
+                        .hover(move |s| s.bg(p.hover))
+                        .tooltip_text(crate::i18n::t("新增 worktree"))
+                        .on_click(cx.listener(|this, _, w, cx| {
+                            cx.stop_propagation();
+                            this.new_worktree(w, cx);
+                        }))
+                        .child(icon(Ico::Plus, 14., p.muted)),
+                )
+                .into_any_element(),
+        );
         if !self.folded.contains("w") {
             for w in &others {
                 let (wp, label) = (w.path.clone(), w.branch.clone().unwrap_or_else(|| w.head.chars().take(7).collect()));
                 let (w1, w2) = (wp.clone(), wp.clone());
                 rows.push(
-                    self.item_row(SharedString::from(format!("wt-{wp}")), 22., false, false)
+                    self.item_row(SharedString::from(format!("wt-{wp}")), IND, false, false)
                         .on_click(cx.listener(move |this, _, _, cx| this.open_worktree(w1.clone(), cx)))
                         .on_mouse_down(
                             MouseButton::Right,
@@ -321,16 +362,13 @@ impl GitTabs {
                                 this.open_menu(ev.position, items, false, cx);
                             }),
                         )
-                        .child("🌿")
+                        .child(icon(Ico::FolderGit2, 13., p.muted))
                         .child(div().overflow_hidden().text_ellipsis().child(label))
                         .into_any_element(),
                 );
             }
-            if others.is_empty() {
-                rows.push(self.item_row("wt-none".into(), 22., false, true).text_size(px(12.)).child(crate::i18n::t("沒有其他 worktree")).into_any_element());
-            }
         }
-        rows.push(div().mt(px(8.)).child(self.nav_item("nav-reflog", "↺ Reflog".into(), None, view == View::Reflog, View::Reflog, cx)).into_any_element());
+        rows.push(div().mt(px(10.)).child(self.nav_item("nav-reflog", Ico::RotateCcw, "Reflog".into(), None, view == View::Reflog, View::Reflog, cx)).into_any_element());
 
         div()
             .id("sidebar")
@@ -371,7 +409,7 @@ impl GitTabs {
 
 /// One visible line of a branch tree.
 enum TreeRow {
-    Dir { key: String, name: String, depth: usize, count: usize, closed: bool },
+    Dir { key: String, name: String, depth: usize, closed: bool },
     Leaf { label: String, idx: usize, depth: usize },
 }
 
@@ -379,12 +417,6 @@ enum TreeRow {
 struct TreeNode {
     dirs: std::collections::BTreeMap<String, TreeNode>,
     leaves: Vec<(String, usize)>,
-}
-
-impl TreeNode {
-    fn total(&self) -> usize {
-        self.leaves.len() + self.dirs.values().map(TreeNode::total).sum::<usize>()
-    }
 }
 
 /// Splits names on `/` into folders (folders first, like Fork) and returns the rows that are visible
@@ -404,7 +436,7 @@ fn tree_rows(items: &[(String, usize)], prefix: &str, folded: &std::collections:
         for (name, child) in &node.dirs {
             let k = format!("{key}/{name}");
             let closed = folded.contains(&k);
-            out.push(TreeRow::Dir { key: k.clone(), name: name.clone(), depth, count: child.total(), closed });
+            out.push(TreeRow::Dir { key: k.clone(), name: name.clone(), depth, closed });
             if !closed {
                 emit(child, depth + 1, &k, folded, out);
             }

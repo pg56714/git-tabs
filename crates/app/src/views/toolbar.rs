@@ -43,17 +43,17 @@ impl GitTabs {
     fn identity_menu(&self) -> Vec<MenuItem> {
         let Some(r) = self.repo() else { return vec![] };
         let w = self.identity_of(r);
-        let mut items = vec![
-            MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個身分", &[], &[(r.name).to_string()])),
-            MenuItem::new(crate::i18n::t("自動（依規則）"), |t, _, cx| t.set_pin(None, cx)).checked(!w.pinned).hint(match &w.auto {
-                Some(a) => crate::i18n::tr("目前是 {}", &[], &[(a.name).to_string()]),
-                None => crate::i18n::t("沒有符合的規則").into(),
-            }),
-        ];
+        // Only the identities: the one in use is checked, whether it was picked here or comes from
+        // a rule in the settings (then it says so). Picking one keeps it for this repo.
+        let mut items = vec![MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個身分", &[], &[(r.name).to_string()]))];
         for id in &self.cfg.identities {
             let key = id.id.clone();
-            let checked = w.pinned && w.id.as_ref().is_some_and(|x| x.id == id.id);
-            items.push(MenuItem::new(id.name.clone(), move |t, _, cx| t.set_pin(Some(key.clone()), cx)).checked(checked));
+            let checked = w.id.as_ref().is_some_and(|x| x.id == id.id);
+            items.push(
+                MenuItem::new(id.name.clone(), move |t, _, cx| t.set_pin(key.clone(), cx))
+                    .checked(checked)
+                    .hint(if checked && !w.pinned { crate::i18n::t("符合規則") } else { "" }),
+            );
         }
         items.push(MenuItem::sep());
         items.push(MenuItem::new(crate::i18n::t("管理身分…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon("⚙"));

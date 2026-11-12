@@ -496,6 +496,14 @@ pub fn delete_branch(repo: &Path, name: &str, force: bool) -> Result<String, Str
     write(repo, &["branch", if force { "-D" } else { "-d" }, name])
 }
 
+/// Adds a worktree for `branch` in `dir`. A branch that exists (here or on a remote) is checked
+/// out there; any other name becomes a new branch from HEAD.
+pub fn worktree_add(repo: &Path, dir: &str, branch: &str) -> Result<String, String> {
+    let local = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/heads/{branch}")]).is_ok();
+    let remote = || read(repo, &["for-each-ref", "--format=%(refname)", &format!("refs/remotes/*/{branch}")]).is_ok_and(|o| !o.trim().is_empty());
+    if local || remote() { write(repo, &["worktree", "add", dir, branch]) } else { write(repo, &["worktree", "add", "-b", branch, dir]) }
+}
+
 pub fn simple(repo: &Path, op: &str, arg: &str) -> Result<String, String> {
     match op {
         "merge" => write(repo, &["merge", "--no-edit", arg]),

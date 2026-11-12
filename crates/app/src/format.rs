@@ -84,6 +84,17 @@ pub fn base_name(p: &str) -> String {
     p.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or(p).to_string()
 }
 
+/// Splits `fix(api): keep the peer` into its Conventional Commits prefix (`fix(api):`) and the
+/// rest, so the list can draw the prefix bold as Fork does. Without such a prefix all is the rest.
+pub fn split_subject(s: &str) -> (&str, &str) {
+    let Some(i) = s.find(": ") else { return ("", s) };
+    let head = s[..i].strip_suffix('!').unwrap_or(&s[..i]);
+    let (kind, scope) = head.split_at(head.find('(').unwrap_or(head.len()));
+    let word = !kind.is_empty() && kind.chars().all(|c| c.is_ascii_alphabetic());
+    let scoped = scope.is_empty() || (scope.ends_with(')') && scope.matches(['(', ')']).count() == 2);
+    if word && scoped { (&s[..i + 1], s[i + 2..].trim_start()) } else { ("", s) }
+}
+
 /// Every word of the query appears somewhere in the text, in any order.
 pub fn fuzzy(query: &str, text: &str) -> bool {
     let t = text.to_lowercase();
@@ -93,6 +104,16 @@ pub fn fuzzy(query: &str, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conventional_prefix_is_split_off() {
+        assert_eq!(split_subject("fix(api): keep the peer"), ("fix(api):", "keep the peer"));
+        assert_eq!(split_subject("feat!: drop the old flag"), ("feat!:", "drop the old flag"));
+        assert_eq!(split_subject("wip: before i18n"), ("wip:", "before i18n"));
+        assert_eq!(split_subject("Merge pull request #19 from a/b: x"), ("", "Merge pull request #19 from a/b: x"));
+        assert_eq!(split_subject("no prefix here"), ("", "no prefix here"));
+        assert_eq!(split_subject("修正: 中文標題"), ("", "修正: 中文標題"));
+    }
 
     #[test]
     fn relative_times() {

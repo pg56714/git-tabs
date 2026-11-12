@@ -232,10 +232,9 @@ impl GitTabs {
                 v.push(item(crate::i18n::tr("切換分支：{}", &[], &[(b.name).to_string()]), n.clone(), move |t, _, cx| t.switch_branch(&path, &name, cx)));
             }
             if !self.cfg.identities.is_empty() {
-                v.push(item(crate::i18n::t("身分：自動（依規則）"), n.clone(), |t, _, cx| t.set_pin(None, cx)));
                 for id in &self.cfg.identities {
                     let key = id.id.clone();
-                    v.push(item(crate::i18n::tr("身分：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(Some(key.clone()), cx)));
+                    v.push(item(crate::i18n::tr("身分：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(key.clone(), cx)));
                 }
             }
             for (i, x) in self.repos.iter().enumerate() {
