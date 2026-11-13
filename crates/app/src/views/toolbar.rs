@@ -81,6 +81,10 @@ impl GitTabs {
             _ => Ico::SunMoon,
         };
         let down = || icon(Ico::ChevronDown, 13., p.muted);
+        // An icon in front of a button's word, as on Fork's toolbar.
+        let with_icon = |ico: Ico, label: &'static str| div().flex().items_center().gap(px(5.)).child(icon(ico, 14., p.muted)).child(label);
+        // How many commits wait to be pulled or pushed, as a small badge after the word.
+        let count = |n: u32, fg: gpui_kit::Hsla, bg: gpui_kit::Hsla| div().px(px(5.)).rounded(px(8.)).bg(bg).text_color(fg).text_size(px(11.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child(n.to_string());
         let rpath = path.display().to_string();
         let (p1, p2, p3, p4, p5, p6) = (path.clone(), path.clone(), path.clone(), path.clone(), path.clone(), path.clone());
         let (q1, q2) = (rpath.clone(), rpath.clone());
@@ -112,13 +116,13 @@ impl GitTabs {
                     .when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.sync_repo(&p1, cx)))),
                 dis,
             ))
-            .child(dim(btn(&p, "fetch", Bk::Normal, false, "Fetch").when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.fetch_repo(&p2, cx)))), dis))
+            .child(dim(btn(&p, "fetch", Bk::Normal, false, with_icon(Ico::CloudDownload, "Fetch")).when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.fetch_repo(&p2, cx)))), dis))
             .child(
                 div()
                     .flex()
                     .flex_none()
                     .child(dim(
-                        btn(&p, "pull", Bk::Normal, false, div().flex().child("Pull").when(behind > 0, |d| d.child(div().ml_1().text_color(p.warn).child(format!("↓{behind}")))))
+                        btn(&p, "pull", Bk::Normal, false, with_icon(Ico::ArrowDownLeft, "Pull").when(behind > 0, |d| d.child(count(behind, p.warn, p.warn_bg))))
                             .rounded_r(px(0.))
                             .when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.pull_repo(&p3, "ff", cx)))),
                         dis,
@@ -138,7 +142,7 @@ impl GitTabs {
                     .flex()
                     .flex_none()
                     .child(dim(
-                        btn(&p, "push", Bk::Normal, false, div().flex().child("Push").when(ahead > 0, |d| d.child(div().ml_1().text_color(p.accent).child(format!("↑{ahead}")))))
+                        btn(&p, "push", Bk::Normal, false, with_icon(Ico::ArrowUpRight, "Push").when(ahead > 0, |d| d.child(count(ahead, p.accent_tx, p.accent_bg))))
                             .rounded_r(px(0.))
                             .when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.push_repo(&p5, false, cx)))),
                         dis,
@@ -153,8 +157,8 @@ impl GitTabs {
                     }))),
             )
             .child(sep(&p))
-            .child(btn(&p, "stash", Bk::Normal, false, "Stash").on_click(cx.listener(|this, _, w, cx| this.stash_push(w, cx))))
-            .child(btn(&p, "newbranch", Bk::Normal, false, crate::i18n::t("＋ 分支")).on_click(cx.listener(|this, _, w, cx| this.new_branch(None, w, cx))))
+            .child(btn(&p, "stash", Bk::Normal, false, with_icon(Ico::Archive, "Stash")).on_click(cx.listener(|this, _, w, cx| this.stash_push(w, cx))))
+            .child(btn(&p, "newbranch", Bk::Normal, false, with_icon(Ico::GitBranchPlus, crate::i18n::t("開分支"))).on_click(cx.listener(|this, _, w, cx| this.new_branch(None, w, cx))))
             .when_some(busy, |d, b| d.child(div().ml(px(6.)).child(sub(&p, crate::i18n::tr("{b} 執行中…", &[("b", (b).to_string())], &[])))))
             .child(div().flex_1())
             .child(if have_ids {

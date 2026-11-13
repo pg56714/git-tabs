@@ -117,7 +117,7 @@ pub use gpui_kit::assets::IconName as Ico;
 gpui_kit::assets::icon_assets!(
     ExtraIcons,
     [
-        Archive, ChevronDown, ChevronLeft, ChevronRight, Cloud, Copy, Ellipsis, File, FileClock, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch,
+        Archive, ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Cloud, CloudDownload, Copy, Ellipsis, File, FileClock, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch, GitBranchPlus,
         GitCommitVertical, Github, ListFilter, Moon, Package, Plus, RefreshCw, RotateCcw, ScrollText, Search, Settings, Square, SquareCheck, SquarePen,
         SquareTerminal, Sun, SunMoon, Tag, TextWrap, Trash, User, X
     ]

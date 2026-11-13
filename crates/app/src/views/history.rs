@@ -20,8 +20,7 @@ use crate::views::{SplitKind, diffpane::PaneMode, on_split, splitter};
 
 const ROW: f32 = 24.;
 const LANE: f32 = 12.;
-/// Left of the first lane; wide enough for the dot of a commit that is not pushed yet.
-const PAD: f32 = 17.;
+const PAD: f32 = 10.;
 const TAIL: f32 = 8.;
 /// The text stops moving right after this many lanes.
 const MAX_LANES: usize = 16;
@@ -37,7 +36,7 @@ fn initials(name: &str) -> String {
 
 /// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
 /// joins or leaves the commit turns into its row with a rounded corner, and a merge has a hollow dot.
-fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool, ahead: Option<Hsla>) -> impl IntoElement {
+fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, _, window, _| {
@@ -77,10 +76,6 @@ fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool, ahead: Option<Hsla
                 if let Ok(path) = pb.build() {
                     window.paint_path(path, lane_color(s.color));
                 }
-            }
-            // A commit no remote has yet: a small dot in front of the graph, as in Fork.
-            if let Some(color) = ahead {
-                window.paint_quad(fill(Bounds::centered_at(pt(5., mid), size(px(6.), px(6.))), color).corner_radii(px(3.)));
             }
             // A merge's dot is a button of its own (it folds the merge), drawn over this cell.
             if dot {
@@ -157,6 +152,7 @@ impl GitTabs {
         let shown = r.shown.clone();
         let collapsed = Arc::new(r.collapsed.clone());
         let unpushed = r.unpushed.clone();
+        let any_ahead = unpushed.iter().any(|u| *u);
         let count = shown.as_ref().map_or(commits.len(), |v| v.len());
 
         // ---- list geometry
@@ -178,7 +174,8 @@ impl GitTabs {
                     .map(|ix| {
                         let at = shown.as_ref().map_or(ix, |v| v[ix]);
                         let Some(c) = commits.get(at) else { return div().into_any_element() };
-                        // Not on any remote yet: marked with a dot (white on the selected row, to stay visible).
+                        // Not on any remote yet: a dot between the graph and the text, as in Fork (white on the
+                        // selected row, to stay visible).
                         let ahead = unpushed.get(at).copied().unwrap_or(false).then(|| if sel.as_deref() == Some(c.sha.as_str()) { gpui_kit::white() } else { p.accent });
                         let on = sel.as_deref() == Some(c.sha.as_str());
                         let (sha, sha2) = (c.sha.clone(), c.sha.clone());
@@ -225,7 +222,7 @@ impl GitTabs {
                                         .flex_none()
                                         .w(px(cell_width(g)))
                                         .h(px(ROW))
-                                        .child(graph_cell(g.clone(), cell_width(g), bg, false, ahead))
+                                        .child(graph_cell(g.clone(), cell_width(g), bg, false))
                                         .child(
                                             div()
                                                 .id(SharedString::from(format!("fold-{}", c.sha)))
@@ -252,7 +249,7 @@ impl GitTabs {
                                         )
                                         .into_any_element()
                                 }
-                                Some(g) => graph_cell(g.clone(), cell_width(g), if on { p.accent } else { p.panel }, true, ahead).into_any_element(),
+                                Some(g) => graph_cell(g.clone(), cell_width(g), if on { p.accent } else { p.panel }, true).into_any_element(),
                                 None => div().w(px(PAD + TAIL)).flex_none().text_color(p.accent).text_size(px(10.)).text_center().child("●").into_any_element(),
                             })
                             .child(
@@ -263,6 +260,10 @@ impl GitTabs {
                                     .items_center()
                                     .overflow_hidden()
                                     .whitespace_nowrap()
+                                    .when(any_ahead, |d| {
+                                        // The same room on every row, so the texts stay lined up.
+                                        d.child(div().flex().flex_none().items_center().justify_center().w(px(16.)).children(ahead.map(|color| div().size(px(6.)).rounded(px(3.)).bg(color))))
+                                    })
                                     .children({
                                         // Branch labels act like Fork's: double-click switches, right-click opens the branch menu.
                                         let make = |pill: gpui_kit::Div, id: String, name: String, kind: &'static str| {
