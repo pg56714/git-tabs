@@ -152,7 +152,6 @@ impl GitTabs {
         let shown = r.shown.clone();
         let collapsed = Arc::new(r.collapsed.clone());
         let unpushed = r.unpushed.clone();
-        let any_ahead = unpushed.iter().any(|u| *u);
         let count = shown.as_ref().map_or(commits.len(), |v| v.len());
 
         // ---- list geometry
@@ -260,10 +259,8 @@ impl GitTabs {
                                     .items_center()
                                     .overflow_hidden()
                                     .whitespace_nowrap()
-                                    .when(any_ahead, |d| {
-                                        // The same room on every row, so the texts stay lined up.
-                                        d.child(div().flex().flex_none().items_center().justify_center().w(px(16.)).children(ahead.map(|color| div().size(px(6.)).rounded(px(3.)).bg(color))))
-                                    })
+                                    // As in Fork: only a row with a dot makes room for it, the others sit close to the graph.
+                                    .when_some(ahead, |d, color| d.child(div().flex_none().size(px(7.)).rounded(px(3.5)).ml(px(2.)).mr(px(7.)).bg(color)))
                                     .children({
                                         // Branch labels act like Fork's: double-click switches, right-click opens the branch menu.
                                         let make = |pill: gpui_kit::Div, id: String, name: String, kind: &'static str| {
