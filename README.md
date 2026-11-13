@@ -30,13 +30,12 @@ Grab the file for your system from the [latest release](https://github.com/pg567
 - **Review**: file tree with a "reviewed" checkbox and progress, unified or side-by-side diff, syntax colors, changed words highlighted inside a line. `↑`/`↓` next/previous file, `←`/`→` previous/next hunk, `Enter` mark reviewed (and jump to the next unreviewed file), `S` stage/unstage.
 - **Staging**: stage, unstage or discard a whole file, one hunk, or selected lines (click the line, drag or Shift-click for more, then `S`).
 - **Commit**: commit, commit and push, amend (`Ctrl+Enter`, `Ctrl+Shift+Enter`).
-- **History** (laid out like Fork's All Commits: list on top, Commit / Changes tabs below): commit graph across all branches, search by message or SHA, commit details, per-file diff, cherry-pick, revert, checkout, reset (soft / mixed / hard), tag, new branch. File history and blame.
-- **Branch vs main**: everything a branch changed compared with the default branch, with the same review flow, then merge.
-- **Remotes**: Sync (fetch → pull → push), fetch, pull (fast-forward, rebase or merge), push (normal or `--force-with-lease`), background fetch.
-- **Branches, tags, stashes, worktrees, reflog** in the sidebar. A worktree opens as its own tab.
+- **History** (laid out like Fork's All Commits: list on top, Commit / Changes / File Tree tabs below): commit graph across all branches, drawn the way Fork draws it; commits the checked-out branch does not have are greyed, commits no remote has yet carry a dot, and a merge's dot folds away what it brought in. Search by message or SHA, commit details, per-file diff, the whole file tree of a commit with each file as it was then, cherry-pick, revert, checkout (also by double-click), reset (soft / mixed / hard), tag, new branch. For commits of the branch itself: edit the message, squash into the previous commit, drop. Branch labels switch on double-click and have the branch menu. File history and blame.
+- **Remotes**: Sync (fetch → pull → push), fetch, pull (fast-forward, rebase or merge), push (normal or `--force-with-lease`), background fetch. Add, re-point or remove a remote; delete a branch on the remote.
+- **Branches, remotes, tags, stashes, worktrees, submodules, reflog** in the sidebar, with a filter box. Branches with a `/` in their name are grouped into folders; a branch can be renamed. Clicking a stash shows what it holds. A worktree is added from the sidebar and opens as its own tab; so does a submodule.
 - **Conflicts**: a banner while a merge/rebase/cherry-pick is in progress, conflict regions highlighted, "use mine" / "use theirs" / "mark resolved", continue or abort.
-- **Identities**: several SSH keys / names / emails, picked automatically by remote URL or folder, or pinned per repo. Test a key against GitHub, generate a new ed25519 key.
-- Panes can be resized by dragging the dividers; sizes are remembered. Lots of tabs scroll sideways with the mouse wheel.
+- **Identities**: several SSH keys / names / emails, picked by remote URL or folder, or chosen per repo. A repo no rule matches has no identity until you choose one, and committing there first shows the author git would use. Test a key against GitHub, generate a new ed25519 key.
+- Panes can be resized by dragging the dividers; their sizes are remembered, and so are the window's size and place. Lots of tabs scroll sideways with the mouse wheel.
 - **Command palette** (`Ctrl+K`), command log of every git command that changed something, light/dark theme.
 
 ## How identities work
@@ -45,11 +44,10 @@ Saving identities writes, to your **global** gitconfig:
 
 - `includeIf "hasconfig:remote.*.url:git@github.com:org/**"` (and the https / ssh:// forms) for each remote rule,
 - `includeIf "gitdir/i:D:/work/"` for each folder rule,
-- `include.path` for the fallback identity,
 
 each pointing at a small file (`identities/<id>.gitconfig` in the app's config folder) holding `user.name`, `user.email` and `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes`.
 
-Plain `git` in a terminal therefore uses the same identity as the app. The app remembers exactly which lines it added and removes only those when you change or delete identities. Pinning an identity to one repo writes the same three settings into that repo's own `.git/config`, which wins over the global rules.
+Plain `git` in a terminal therefore uses the same identity as the app. The app remembers exactly which lines it added and removes only those when you change or delete identities. A repo that matches no rule gets no identity from the app: git uses whatever your global config says, until you choose one for it. Choosing an identity for one repo writes the same three settings into that repo's own `.git/config`, which wins over the global rules.
 
 ## Languages
 

@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use gitcore::config::Identity;
 use gitcore::ops::{BlameLine, CommitDetail, RefsAll, Summary};
-use gitcore::parse::{ChangedFile, Commit, FileDiff, ReflogEntry, StatusEntry};
+use gitcore::parse::{Commit, FileDiff, ReflogEntry, StatusEntry};
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::{Context, Entity, Point, Pixels, Subscription, Window};
 
@@ -22,16 +22,14 @@ pub type Act = Rc<dyn Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>)>;
 pub enum View {
     Changes,
     History,
-    Range,
     Reflog,
 }
 
-/// Which list the selected file is in: unstaged, staged, branch-vs-main range, or a commit.
+/// Which list the selected file is in: unstaged, staged, or a commit.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum ListKind {
     U,
     S,
-    R,
     C,
 }
 
@@ -40,7 +38,6 @@ impl ListKind {
         match self {
             ListKind::U => "u",
             ListKind::S => "s",
-            ListKind::R => "r",
             ListKind::C => "c",
         }
     }
@@ -52,6 +49,15 @@ pub struct Sel {
     pub path: String,
 }
 
+/// What the File Tree tab shows of the picked file.
+#[derive(Clone)]
+pub enum FileShown {
+    Loading,
+    Lines(Arc<Vec<gpui_kit::SharedString>>),
+    /// Why there is nothing to read: binary, too large, or what git said.
+    Note(String),
+}
+
 pub struct RepoState {
     pub path: PathBuf,
     pub name: String,
@@ -60,6 +66,22 @@ pub struct RepoState {
     pub refs: Option<RefsAll>,
     pub commits: Arc<Vec<Commit>>,
     pub graph: Option<Arc<Vec<GraphRow>>>,
+    /// The graph's lanes below the rows laid out so far, to append the next page to.
+    pub layout: crate::graph::Layout,
+    /// Merges whose merged-in commits are folded away, and then which commits are left: for each
+    /// row of the list its place in `commits` (None while nothing is folded).
+    pub collapsed: HashSet<String>,
+    pub shown: Option<Arc<Vec<usize>>>,
+    /// Which commits no remote has yet, by their place in `commits` (drawn with a dot, as in Fork).
+    pub unpushed: Arc<Vec<bool>>,
+    /// The File Tree tab: the commit whose files are listed, the files, the folders unfolded,
+    /// the lines on screen, the file picked and what it held.
+    pub tree_of: String,
+    pub tree_paths: Arc<Vec<String>>,
+    pub tree_open: HashSet<String>,
+    pub tree_rows: Arc<Vec<crate::tree::FtRow>>,
+    pub tree_sel: Option<String>,
+    pub tree_file: Option<FileShown>,
     pub log_done: bool,
     pub log_query: String,
     pub log_path: Option<String>,
@@ -68,9 +90,6 @@ pub struct RepoState {
     pub sel: Option<Sel>,
     pub sel_commit: Option<String>,
     pub detail: Option<CommitDetail>,
-    pub range_head: Option<String>,
-    pub range_files: Vec<ChangedFile>,
-    pub range_commits: Vec<Commit>,
     pub reflog: Vec<ReflogEntry>,
     pub diff: Option<FileDiff>,
     pub diff_for: String,
@@ -95,6 +114,16 @@ impl RepoState {
             refs: None,
             commits: Arc::default(),
             graph: None,
+            layout: Default::default(),
+            collapsed: HashSet::new(),
+            shown: None,
+            unpushed: Arc::default(),
+            tree_of: String::new(),
+            tree_paths: Arc::default(),
+            tree_open: HashSet::new(),
+            tree_rows: Arc::default(),
+            tree_sel: None,
+            tree_file: None,
             log_done: false,
             log_query: String::new(),
             log_path: None,
@@ -103,9 +132,6 @@ impl RepoState {
             sel: None,
             sel_commit: None,
             detail: None,
-            range_head: None,
-            range_files: Vec::new(),
-            range_commits: Vec::new(),
             reflog: Vec::new(),
             diff: None,
             diff_for: String::new(),
@@ -137,7 +163,7 @@ impl RepoState {
 pub struct MenuItem {
     pub label: String,
     pub hint: String,
-    pub icon: &'static str,
+    pub icon: Option<crate::ui::Ico>,
     pub danger: bool,
     pub checked: bool,
     pub header: bool,
@@ -148,7 +174,7 @@ pub struct MenuItem {
 
 impl MenuItem {
     fn blank() -> Self {
-        Self { label: String::new(), hint: String::new(), icon: "", danger: false, checked: false, header: false, sep: false, disabled: false, on: None }
+        Self { label: String::new(), hint: String::new(), icon: None, danger: false, checked: false, header: false, sep: false, disabled: false, on: None }
     }
 
     pub fn new(label: impl Into<String>, on: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static) -> Self {
@@ -183,8 +209,8 @@ impl MenuItem {
         self
     }
 
-    pub fn icon(mut self, i: &'static str) -> Self {
-        self.icon = i;
+    pub fn icon(mut self, i: crate::ui::Ico) -> Self {
+        self.icon = Some(i);
         self
     }
 }

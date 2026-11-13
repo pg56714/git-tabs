@@ -280,7 +280,7 @@ impl GitTabs {
                     div().text_size(px(11.5)).text_color(p.faint).child(crate::i18n::t("還沒驗證這把 key 對應哪個帳號"))
                 })
                 .child(div().flex_1())
-                .child(btn(&p, SharedString::from(format!("rm-{i}")), Bk::Ghost, true, "🗑").tooltip_text(crate::i18n::t("刪除這個身分")).on_click(cx.listener(move |this, _, _, cx| this.settings_remove(i, cx))))
+                .child(btn(&p, SharedString::from(format!("rm-{i}")), Bk::Ghost, true, icon(Ico::Trash, 14., p.muted)).tooltip_text(crate::i18n::t("刪除這個身分")).on_click(cx.listener(move |this, _, _, cx| this.settings_remove(i, cx))))
                 .into_any_element(),
         );
         rows.push(row(
@@ -424,7 +424,7 @@ impl GitTabs {
                         }
                         cx.notify();
                     }))
-                    .child(if on { "☑" } else { "☐" })
+                    .child(check_box(&p, on))
                     .child(div().flex_none().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(base_name(f)))
                     .child(div().overflow_hidden().text_ellipsis().font_family("Cascadia Mono").child(sub(&p, f.clone())))
                     .into_any_element()
@@ -455,7 +455,11 @@ impl GitTabs {
                                 .px(px(4.))
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .cursor_pointer()
-                                .child(crate::i18n::tr("{} 全選", &[], &[(if all_picked { "☑" } else { "☐" }).to_string()]))
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .child(check_box(&p, all_picked))
+                                .child(crate::i18n::t("全選"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     if let Some(Modal::AddRepo(m)) = &mut this.modal {
                                         if all_picked {

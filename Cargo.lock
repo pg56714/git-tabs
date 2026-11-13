@@ -1916,6 +1916,7 @@ dependencies = [
  "notify-debouncer-mini",
  "serde_json",
  "sys-locale",
+ "tempfile",
  "winresource",
 ]
 

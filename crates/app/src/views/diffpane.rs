@@ -48,11 +48,11 @@ impl GitTabs {
         let rev = if sel.list == ListKind::C { r.detail.as_ref().map(|d| d.sha.clone()) } else { None };
         let (a, b, c, d) = (sel.path.clone(), sel.path.clone(), sel.path.clone(), sel.path.clone());
         vec![
-            MenuItem::new(crate::i18n::t("用編輯器開啟"), move |t, _, cx| t.open_file(&a, cx)).icon("✎"),
-            MenuItem::new(crate::i18n::t("在檔案總管顯示資料夾"), move |t, _, cx| t.open_folder(full.clone(), cx)).icon("📂"),
-            MenuItem::new(crate::i18n::t("這個檔案的歷史"), move |t, _, cx| t.file_history(b.clone(), cx)).icon("◷"),
-            MenuItem::new(crate::i18n::t("Blame（逐行看是誰改的）"), move |t, _, cx| t.open_blame(c.clone(), rev.clone(), cx)).icon("☰"),
-            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("路徑"), cx)).icon("⧉"),
+            MenuItem::new(crate::i18n::t("用編輯器開啟"), move |t, _, cx| t.open_file(&a, cx)).icon(Ico::SquarePen),
+            MenuItem::new(crate::i18n::t("在檔案總管顯示資料夾"), move |t, _, cx| t.open_folder(full.clone(), cx)).icon(Ico::FolderOpen),
+            MenuItem::new(crate::i18n::t("這個檔案的歷史"), move |t, _, cx| t.file_history(b.clone(), cx)).icon(Ico::FileClock),
+            MenuItem::new(crate::i18n::t("Blame（逐行看是誰改的）"), move |t, _, cx| t.open_blame(c.clone(), rev.clone(), cx)).icon(Ico::ScrollText),
+            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("路徑"), cx)).icon(Ico::Copy),
         ]
     }
 
@@ -100,7 +100,7 @@ impl GitTabs {
             .children(extra)
             .when(can_seen, |d| {
                 d.child(
-                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, crate::i18n::tr("{} 已看", &[], &[(if seen { "☑" } else { "☐" }).to_string()]))
+                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, div().flex().items_center().gap_1().child(check_box(&p, seen)).child(crate::i18n::t("已看")))
                         .tooltip_text(crate::i18n::t("看完勾起來，會跳到下一個沒看的檔案（Enter）"))
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_seen(true, cx))),
                 )
@@ -149,13 +149,13 @@ impl GitTabs {
                     ),
             )
             .child(
-                btn(&p, "wrap", if wrap { Bk::On } else { Bk::Normal }, true, "↩").tooltip_text(crate::i18n::t("自動換行")).on_click(cx.listener(|this, _, _, cx| {
+                btn(&p, "wrap", if wrap { Bk::On } else { Bk::Normal }, true, icon(Ico::TextWrap, 14., if wrap { p.accent_tx } else { p.text })).tooltip_text(crate::i18n::t("自動換行")).on_click(cx.listener(|this, _, _, cx| {
                     this.wrap = !this.wrap;
                     this.save_prefs();
                     cx.notify();
                 })),
             )
-            .child(btn(&p, "more", Bk::Normal, true, "⋯").tooltip_text(crate::i18n::t("更多")).on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
+            .child(btn(&p, "more", Bk::Normal, true, icon(Ico::Ellipsis, 14., p.text)).tooltip_text(crate::i18n::t("更多")).on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                 let items = this.diff_more_menu();
                 this.open_menu(ev.position(), items, true, cx);
             })))
@@ -225,8 +225,8 @@ impl GitTabs {
             .bg(p.accent_bg)
             .text_color(p.accent_tx)
             .text_size(px(12.))
-            .child(btn(&p, "hunk-prev", Bk::Ghost, true, "◀").tooltip_text(crate::i18n::t("上一段改動 (←)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(-1, cx))))
-            .child(btn(&p, "hunk-next", Bk::Ghost, true, "▶").tooltip_text(crate::i18n::t("下一段改動 (→)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(1, cx))))
+            .child(btn(&p, "hunk-prev", Bk::Ghost, true, icon(Ico::ChevronLeft, 15., p.text)).tooltip_text(crate::i18n::t("上一段改動 (←)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(-1, cx))))
+            .child(btn(&p, "hunk-next", Bk::Ghost, true, icon(Ico::ChevronRight, 15., p.text)).tooltip_text(crate::i18n::t("下一段改動 (→)")).on_click(cx.listener(|this, _, _, cx| this.goto_hunk(1, cx))))
             .child(div().flex_none().child(crate::i18n::tr("第 {}/{n} 段", &[("n", (n).to_string())], &[(cur + 1).to_string()])))
             .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().font_family("Cascadia Mono").child(header))
             .when(mode == PaneMode::Unstaged, |d| {

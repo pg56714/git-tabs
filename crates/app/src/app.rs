@@ -64,6 +64,7 @@ pub use acts::*;
 pub enum HistTab {
     Commit,
     Changes,
+    Tree,
 }
 
 /// Runs queued stage/unstage calls strictly in the order they were issued.
@@ -95,6 +96,8 @@ pub struct GitTabs {
     pub commit_err: String,
     pub committing: bool,
     pub search: Entity<InputState>,
+    /// The sidebar's filter over branches, remotes, tags, stashes and worktrees.
+    pub side_filter: Entity<InputState>,
     pub nav_focus: FocusHandle,
     pub modal_focus: FocusHandle,
     pub menu: Option<MenuState>,
@@ -111,6 +114,9 @@ pub struct GitTabs {
     pub collapsed: HashSet<String>,
     pub folded: HashSet<String>,
     pub window_size: gpui_kit::Size<gpui_kit::Pixels>,
+    /// Where the window is, to open it there again next time.
+    window_place: Option<WindowPlace>,
+    window_save: Option<Task<()>>,
     pub sizes: Sizes,
     pub sizes_dirty: bool,
     pub pending_ids: Vec<gitcore::config::Identity>,
@@ -145,13 +151,20 @@ impl GitTabs {
         let dark = resolve_dark(&cfg.theme, window.appearance());
         theme::apply(dark, Some(window), cx);
         let prefs = load_prefs(&ctx.config_dir);
+        let window_place = load_window(&ctx.config_dir);
         crate::i18n::set_from_setting(&prefs.lang);
         let diff = cx.new(|cx| DiffState::new([], cx).with_mode(DiffMode::Unified));
         let subject = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Commit 標題")));
         let desc = cx.new(|cx| TextareaState::new(window, cx).placeholder(crate::i18n::t("說明（可留空）")));
         let search = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA")));
+        let side_filter = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("篩選")));
         let nav_focus = cx.focus_handle().tab_stop(true);
         let mut subs = Vec::new();
+        subs.push(cx.subscribe(&side_filter, |_, _, ev: &InputEvent, cx| {
+            if matches!(ev, InputEvent::Change) {
+                cx.notify();
+            }
+        }));
         subs.push(cx.observe(&diff, |_, _, cx| cx.notify()));
         subs.push(cx.subscribe(&diff, |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
             use gpui_kit::component::diff::DiffEvent;
@@ -179,6 +192,7 @@ impl GitTabs {
                 this.on_search(q, cx);
             }
         }));
+        subs.push(cx.observe_window_bounds(window, |this, window, cx| this.window_moved(window, cx)));
         subs.push(cx.observe_window_appearance(window, |this, window, cx| {
             if this.cfg.theme == "system" {
                 this.apply_theme(window, cx);
@@ -199,7 +213,11 @@ impl GitTabs {
             diff,
             side_by_side: prefs.side,
             wrap: prefs.wrap,
-            hist_tab: if prefs.hist_tab == "changes" { HistTab::Changes } else { HistTab::Commit },
+            hist_tab: match prefs.hist_tab.as_str() {
+                "changes" => HistTab::Changes,
+                "tree" => HistTab::Tree,
+                _ => HistTab::Commit,
+            },
             lang: prefs.lang.clone(),
             cur_hunk: 0,
             stored_sel: None,
@@ -210,6 +228,7 @@ impl GitTabs {
             commit_err: String::new(),
             committing: false,
             search,
+            side_filter,
             nav_focus,
             modal_focus: cx.focus_handle(),
             menu: None,
@@ -226,6 +245,8 @@ impl GitTabs {
             collapsed: HashSet::new(),
             folded: HashSet::from(["Tags".to_string()]),
             window_size: window.viewport_size(),
+            window_place,
+            window_save: None,
             sizes: prefs.sizes,
             sizes_dirty: false,
             pending_ids: Vec::new(),
@@ -389,15 +410,40 @@ impl GitTabs {
         self.subject.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Commit 標題"), window, cx));
         self.desc.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("說明（可留空）"), window, cx));
         self.search.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
+        self.side_filter.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("篩選"), window, cx));
         cx.notify();
+    }
+
+    /// The window was moved, resized or maximized: remember it, and write it down once it rests.
+    fn window_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (b, maximized) = match window.window_bounds() {
+            gpui_kit::WindowBounds::Windowed(b) => (b, false),
+            gpui_kit::WindowBounds::Maximized(b) | gpui_kit::WindowBounds::Fullscreen(b) => (b, true),
+        };
+        let place = WindowPlace { rect: [b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into()], maximized };
+        if self.window_place == Some(place) {
+            return;
+        }
+        self.window_place = Some(place);
+        // A drag reports every step; replacing the task cancels the one before it.
+        self.window_save = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_millis(600)).await;
+            let _ = this.update(cx, |this, _| this.save_prefs());
+        }));
     }
 
     pub fn save_prefs(&self) {
         let v = serde_json::json!({
+            "window": self.window_place.map(|w| w.rect),
+            "maximized": self.window_place.is_some_and(|w| w.maximized),
             "side": self.side_by_side,
             "wrap": self.wrap,
             "lang": self.lang,
-            "hist_tab": if self.hist_tab == HistTab::Changes { "changes" } else { "commit" },
+            "hist_tab": match self.hist_tab {
+                HistTab::Changes => "changes",
+                HistTab::Tree => "tree",
+                HistTab::Commit => "commit",
+            },
             "sizes": { "side_bar": self.sizes.side_bar, "files": self.sizes.files, "hist_top": self.sizes.hist_top, "hist_files": self.sizes.hist_files },
         });
         let _ = std::fs::create_dir_all(&self.ctx.config_dir);
@@ -601,7 +647,6 @@ impl GitTabs {
                 }
                 let view = this.repos.iter().find(|r| r.path == path).map(|r| r.view);
                 match view {
-                    Some(View::Range) => this.load_range(&path, cx),
                     Some(View::Reflog) => this.load_reflog(&path, cx),
                     Some(View::Changes) => this.ensure_sel(&path),
                     _ => {}
@@ -649,14 +694,10 @@ impl GitTabs {
                     } else {
                         Arc::make_mut(&mut r.commits).extend(page);
                     }
-                    r.graph = if r.log_query.is_empty() && r.log_path.is_none() {
-                        let v: Vec<(&str, &[String])> = r.commits.iter().map(|c| (c.sha.as_str(), c.parents.as_slice())).collect();
-                        let head = r.commits.iter().find(|c| c.refs.iter().any(|x| matches!(x.kind, "head" | "detached"))).map(|c| c.sha.as_str());
-                        Some(Arc::new(crate::graph::layout(&v, head)))
-                    } else {
-                        None
-                    };
-                    if reset && r.sel_commit.as_ref().is_none_or(|s| !r.commits.iter().any(|c| &c.sha == s)) {
+                    Self::relayout(r, reset);
+                    let is_stash = |s: &String| r.refs.iter().flat_map(|x| x.stashes.iter()).any(|x| &x.sha == s);
+                    // A stash being looked at is not in the log, and stays selected all the same.
+                    if reset && r.sel_commit.as_ref().is_none_or(|s| !r.commits.iter().any(|c| &c.sha == s) && !is_stash(s)) {
                         r.sel_commit = r.commits.first().map(|c| c.sha.clone());
                     }
                     if reset {
@@ -680,6 +721,9 @@ impl GitTabs {
             if self.active_path().as_deref() == Some(path) {
                 self.load_diff(cx);
             }
+            if self.hist_tab == HistTab::Tree {
+                self.load_tree(path, cx);
+            }
             return;
         }
         r.detail_seq += 1;
@@ -701,60 +745,14 @@ impl GitTabs {
                     if this.active_path().as_deref() == Some(&p) {
                         this.load_diff(cx);
                     }
+                    if this.hist_tab == HistTab::Tree {
+                        this.load_tree(&p, cx);
+                    }
                 }
                 Err(e) => {
                     r.detail = None;
                     this.toast(crate::i18n::t("讀不到 commit"), ToastKind::Err, Some(e), cx);
                 }
-            }
-            cx.notify();
-        });
-    }
-
-    pub fn range_base(r: &RepoState) -> Option<String> {
-        r.refs.as_ref().and_then(|x| x.default_branch.clone())
-    }
-
-    pub fn range_candidates(r: &RepoState) -> Vec<String> {
-        let base = Self::range_base(r);
-        let mut v: Vec<&gitcore::parse::Branch> = r.refs.iter().flat_map(|x| x.refs.branches.iter()).filter(|b| Some(&b.name) != base.as_ref()).collect();
-        v.sort_by(|a, b| b.current.cmp(&a.current).then(b.time.cmp(&a.time)));
-        v.into_iter().map(|b| b.name.clone()).collect()
-    }
-
-    pub fn load_range(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let Some(r) = self.repo_by_path(path) else { return };
-        let base = Self::range_base(r);
-        let cands = Self::range_candidates(r);
-        if r.range_head.as_ref().is_none_or(|h| !cands.contains(h)) {
-            r.range_head = cands.first().cloned();
-        }
-        let (Some(base), Some(head)) = (base, r.range_head.clone()) else {
-            r.range_files.clear();
-            r.range_commits.clear();
-            return;
-        };
-        let p = path.to_path_buf();
-        let p2 = p.clone();
-        let (b2, h2) = (base.clone(), head.clone());
-        self.work(cx, move || ops::range_files(&p2, &b2, &h2).and_then(|f| ops::range_commits(&p2, &b2, &h2).map(|c| (f, c))), move |this, res, cx| {
-            let Some(r) = this.repo_by_path(&p) else { return };
-            if r.range_head.as_deref() != Some(&head) {
-                return;
-            }
-            match res {
-                Ok((files, commits)) => {
-                    let keep = r.sel.as_ref().is_some_and(|s| s.list == ListKind::R && files.iter().any(|f| f.path == s.path));
-                    if !keep {
-                        r.sel = files.first().map(|f| Sel { list: ListKind::R, path: f.path.clone() });
-                    }
-                    r.range_files = files;
-                    r.range_commits = commits;
-                    if this.active_path().as_deref() == Some(&p) {
-                        this.load_diff(cx);
-                    }
-                }
-                Err(e) => this.toast(crate::i18n::t("比較失敗"), ToastKind::Err, Some(e), cx),
             }
             cx.notify();
         });
@@ -796,7 +794,6 @@ impl GitTabs {
     pub fn ordered_files(r: &RepoState) -> Vec<Sel> {
         use crate::tree::tree_sort;
         match r.view {
-            View::Range => tree_sort(&r.range_files, |f| &f.path).into_iter().map(|f| Sel { list: ListKind::R, path: f.path }).collect(),
             View::History => r.detail.iter().flat_map(|d| d.files.iter()).map(|f| Sel { list: ListKind::C, path: f.path.clone() }).collect(),
             _ => {
                 let u: Vec<String> = r.unstaged().iter().map(|f| f.path.clone()).collect();
@@ -830,13 +827,148 @@ impl GitTabs {
         self.select(f.list, f.path, cx);
     }
 
+    // ----- the File Tree tab -----
+
+    /// Lists the files of the commit shown, unless they are the ones listed already.
+    pub fn load_tree(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(sha) = r.detail.as_ref().map(|d| d.sha.clone()) else { return };
+        if r.tree_of == sha {
+            return;
+        }
+        r.tree_of = sha.clone();
+        r.tree_file = r.tree_sel.as_ref().map(|_| FileShown::Loading);
+        let (p, p2, s2) = (path.to_path_buf(), path.to_path_buf(), sha.clone());
+        self.work(cx, move || ops::tree(&p2, &s2), move |this, res, cx| {
+            let Some(r) = this.repo_by_path(&p) else { return };
+            // Stepping through commits fires many loads; only the commit still shown may land.
+            if r.tree_of != sha {
+                return;
+            }
+            match res {
+                Ok(paths) => {
+                    r.tree_rows = Arc::new(crate::tree::file_tree_rows(&paths, &r.tree_open));
+                    // The file being read stays picked from commit to commit, while the commit has it.
+                    if r.tree_sel.as_ref().is_some_and(|s| !paths.contains(s)) {
+                        r.tree_sel = None;
+                    }
+                    r.tree_paths = Arc::new(paths);
+                    this.load_tree_file(&p, cx);
+                }
+                Err(e) => {
+                    r.tree_paths = Arc::default();
+                    r.tree_rows = Arc::default();
+                    r.tree_file = Some(FileShown::Note(e));
+                }
+            }
+            cx.notify();
+        });
+    }
+
+    pub fn toggle_tree_dir(&mut self, dir: String, cx: &mut Context<Self>) {
+        let Some(r) = self.repo_mut() else { return };
+        if !r.tree_open.remove(&dir) {
+            r.tree_open.insert(dir);
+        }
+        r.tree_rows = Arc::new(crate::tree::file_tree_rows(&r.tree_paths, &r.tree_open));
+        cx.notify();
+    }
+
+    pub fn pick_tree_file(&mut self, file: String, cx: &mut Context<Self>) {
+        let Some(r) = self.repo_mut() else { return };
+        r.tree_sel = Some(file);
+        let p = r.path.clone();
+        self.load_tree_file(&p, cx);
+        cx.notify();
+    }
+
+    /// Reads the picked file as it was at the commit shown.
+    fn load_tree_file(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let Some(r) = self.repo_by_path(path) else { return };
+        let (Some(file), sha) = (r.tree_sel.clone(), r.tree_of.clone()) else {
+            r.tree_file = None;
+            return;
+        };
+        r.tree_file = Some(FileShown::Loading);
+        let (p, p2, s2, f2) = (path.to_path_buf(), path.to_path_buf(), sha.clone(), file.clone());
+        self.work(cx, move || ops::file_at(&p2, &s2, &f2), move |this, res, cx| {
+            let Some(r) = this.repo_by_path(&p) else { return };
+            if r.tree_of != sha || r.tree_sel.as_ref() != Some(&file) {
+                return;
+            }
+            r.tree_file = Some(match res {
+                Ok(ops::FileText::Text(t)) => FileShown::Lines(Arc::new(t.lines().map(|l| gpui_kit::SharedString::from(l.replace('\t', "    "))).collect())),
+                Ok(ops::FileText::Binary) => FileShown::Note(crate::i18n::t("二進位檔案，沒有文字可以顯示").into()),
+                Ok(ops::FileText::Large(n)) => FileShown::Note(crate::i18n::tr("檔案太大（{} MB），不在這裡顯示", &[], &[format!("{:.1}", n as f64 / 1e6)])),
+                Err(e) => FileShown::Note(e),
+            });
+            cx.notify();
+        });
+    }
+
+    /// Lays the graph out for the commits loaded so far. While no merge is folded only the new
+    /// page is laid out, continuing below the rows there are; folding hides commits, and then
+    /// the rows that are left are laid out afresh.
+    pub fn relayout(r: &mut RepoState, reset: bool) {
+        // Let go of the rows first, so that appending to them copies nothing.
+        r.graph = None;
+        r.shown = None;
+        r.unpushed = Arc::default();
+        if reset {
+            r.layout = Default::default();
+        }
+        if !r.log_query.is_empty() || r.log_path.is_some() {
+            r.layout = Default::default();
+            return;
+        }
+        let pairs: Vec<(&str, &[String])> = r.commits.iter().map(|c| (c.sha.as_str(), c.parents.as_slice())).collect();
+        let remote_tips: HashSet<&str> = r.commits.iter().filter(|c| c.refs.iter().any(|x| x.kind == "remote")).map(|c| c.sha.as_str()).collect();
+        r.unpushed = Arc::new(crate::graph::unpushed(&pairs, &remote_tips));
+        let head = r.commits.iter().find(|c| c.refs.iter().any(|x| matches!(x.kind, "head" | "detached"))).map(|c| c.sha.as_str());
+        if r.collapsed.is_empty() {
+            let done = r.layout.rows.len();
+            r.layout.extend(&pairs[done..], head);
+            r.graph = Some(r.layout.rows.clone());
+        } else {
+            let hide = crate::graph::hidden(&pairs, &r.collapsed);
+            let rows = crate::graph::shown(&pairs, &r.collapsed, &hide);
+            let left: Vec<(&str, &[String])> = rows.iter().map(|(i, ps)| (pairs[*i].0, ps.as_slice())).collect();
+            let mut l = crate::graph::Layout::default();
+            l.extend(&left, head);
+            r.graph = Some(l.rows);
+            r.shown = Some(Arc::new(rows.iter().map(|(i, _)| *i).collect()));
+            // Not the rows of every commit any more: unfolding starts over from the top.
+            r.layout = Default::default();
+        }
+    }
+
+    /// Folds away what a merge brought in, or shows it again.
+    pub fn toggle_merge(&mut self, sha: String, cx: &mut Context<Self>) {
+        let Some(r) = self.repo_mut() else { return };
+        if !r.collapsed.remove(&sha) {
+            r.collapsed.insert(sha.clone());
+        }
+        Self::relayout(r, false);
+        // A selected commit that just got folded away hands the selection to the merge.
+        let gone = r.sel_commit.as_ref().is_some_and(|s| r.commits.iter().position(|c| &c.sha == s).is_some_and(|i| r.shown.as_ref().is_some_and(|v| !v.contains(&i))));
+        if gone {
+            r.sel_commit = Some(sha);
+            let p = r.path.clone();
+            self.load_detail(&p, cx);
+        }
+        cx.notify();
+    }
+
     pub fn move_commit(&mut self, d: isize, cx: &mut Context<Self>) {
         let Some(r) = self.repo_mut() else { return };
         if r.commits.is_empty() {
             return;
         }
-        let i = r.commits.iter().position(|c| Some(&c.sha) == r.sel_commit.as_ref()).map_or(0, |i| i as isize);
-        let j = (i + d).clamp(0, r.commits.len() as isize - 1) as usize;
+        // Up and down move over the rows on screen, which skip what is folded away.
+        let rows: Vec<usize> = r.shown.as_ref().map_or_else(|| (0..r.commits.len()).collect(), |v| v.to_vec());
+        let at = r.commits.iter().position(|c| Some(&c.sha) == r.sel_commit.as_ref());
+        let i = at.and_then(|a| rows.iter().position(|x| *x == a)).map_or(0, |i| i as isize);
+        let j = rows[(i + d).clamp(0, rows.len() as isize - 1) as usize];
         if r.sel_commit.as_ref() == Some(&r.commits[j].sha) {
             return;
         }
@@ -861,7 +993,6 @@ impl GitTabs {
         let key = format!("{}:{}", sel.list.tag(), sel.path);
         enum Job {
             Commit { sha: String, old: Option<String> },
-            Range { base: String, head: String, old: Option<String> },
             Work { staged: bool, untracked: bool, conflicted: bool },
         }
         let job = match sel.list {
@@ -869,11 +1000,6 @@ impl GitTabs {
                 let Some(d) = &r.detail else { return };
                 let old = d.files.iter().find(|f| f.path == sel.path).and_then(|f| f.old_path.clone());
                 Job::Commit { sha: d.sha.clone(), old }
-            }
-            ListKind::R => {
-                let old = r.range_files.iter().find(|f| f.path == sel.path).and_then(|f| f.old_path.clone());
-                let (Some(base), Some(head)) = (Self::range_base(r), r.range_head.clone()) else { return };
-                Job::Range { base, head, old }
             }
             l => {
                 let st = r.status.iter().find(|x| x.path == sel.path);
@@ -895,7 +1021,6 @@ impl GitTabs {
             cx,
             move || match job {
                 Job::Commit { sha, old } => ops::commit_file_diff(&repo, &sha, &path, old.as_deref()).map(|d| (repo, d)),
-                Job::Range { base, head, old } => ops::range_file_diff(&repo, &base, &head, &path, old.as_deref()).map(|d| (repo, d)),
                 Job::Work { conflicted: true, .. } => Ok((repo.clone(), ops::conflict_view(&repo, &path))),
                 Job::Work { staged, untracked, .. } => ops::diff_file(&repo, &path, staged, untracked).map(|d| (repo, d)),
             },
@@ -950,7 +1075,6 @@ impl GitTabs {
     pub fn seen_key(&self, r: &RepoState, list: ListKind, path: &str) -> Option<String> {
         match list {
             ListKind::U | ListKind::S => Some(format!("{}|w|{}", r.path.display(), path)),
-            ListKind::R => Some(format!("{}|r:{}...{}|{}", r.path.display(), Self::range_base(r).unwrap_or_default(), r.range_head.clone().unwrap_or_default(), path)),
             ListKind::C => None,
         }
     }
@@ -1061,7 +1185,6 @@ impl GitTabs {
                     self.load_detail(&p, cx);
                 }
             }
-            View::Range => self.load_range(&p, cx),
             View::Reflog => self.load_reflog(&p, cx),
             View::Changes => {
                 self.ensure_sel(&p);
@@ -1196,6 +1319,49 @@ pub struct Prefs {
     pub sizes: Sizes,
 }
 
+/// The window's restored (not maximized) rectangle, `[x, y, width, height]`, and whether it is maximized.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct WindowPlace {
+    pub rect: [f32; 4],
+    pub maximized: bool,
+}
+
+pub fn load_window(dir: &Path) -> Option<WindowPlace> {
+    let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json")).ok().and_then(|s| serde_json::from_str(&s).ok())?;
+    let r: Vec<f32> = v["window"].as_array()?.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect();
+    Some(WindowPlace { rect: r.try_into().ok()?, maximized: v["maximized"].as_bool().unwrap_or(false) })
+}
+
+/// The size to open with when nothing fits better: the usual one, but never larger than the screen.
+pub fn default_window_size(screen: Option<(f32, f32)>) -> (f32, f32) {
+    match screen {
+        Some((w, h)) => ((w - 40.).clamp(640., 1400.), (h - 90.).clamp(480., 900.)),
+        None => (1400., 900.),
+    }
+}
+
+/// Whether a saved window can be opened as it was: big enough to use, and with the middle of its
+/// title bar on one of the screens (a screen may have been unplugged since).
+pub fn window_fits(place: &WindowPlace, screens: &[[f32; 4]]) -> bool {
+    let [x, y, w, h] = place.rect;
+    let (gx, gy) = (x + w / 2., y + 12.);
+    w >= 480. && h >= 360. && screens.iter().any(|[sx, sy, sw, sh]| gx >= *sx && gx < sx + sw && gy >= *sy && gy < sy + sh)
+}
+
+/// The bounds to open the window with.
+pub fn initial_window(saved: Option<WindowPlace>, cx: &gpui_kit::App) -> gpui_kit::WindowBounds {
+    use gpui_kit::{Bounds, WindowBounds, point, px, size};
+    let screens: Vec<[f32; 4]> = cx.displays().iter().map(|d| d.bounds()).map(|b| [b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into()]).collect();
+    if let Some(p) = saved.filter(|p| window_fits(p, &screens)) {
+        let [x, y, w, h] = p.rect;
+        let b = Bounds::new(point(px(x), px(y)), size(px(w), px(h)));
+        return if p.maximized { WindowBounds::Maximized(b) } else { WindowBounds::Windowed(b) };
+    }
+    let screen = cx.primary_display().map(|d| d.bounds().size).map(|s| (f32::from(s.width), f32::from(s.height)));
+    let (w, h) = default_window_size(screen);
+    WindowBounds::centered(size(px(w), px(h)), cx)
+}
+
 fn load_prefs(dir: &Path) -> Prefs {
     let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     let z = |k: &str, d: f32| v["sizes"][k].as_f64().map(|x| x as f32).unwrap_or(d);
@@ -1225,3 +1391,23 @@ impl Render for GitTabs {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_window_is_never_larger_than_the_screen() {
+        assert_eq!(default_window_size(Some((2560., 1440.))), (1400., 900.));
+        assert_eq!(default_window_size(Some((1024., 768.))), (984., 678.));
+        assert_eq!(default_window_size(None), (1400., 900.));
+    }
+
+    #[test]
+    fn a_saved_window_is_reused_only_while_its_screen_is_there() {
+        let (one, two) = ([0., 0., 1920., 1080.], [1920., 0., 1920., 1080.]);
+        let on_second = WindowPlace { rect: [2000., 100., 1200., 800.], maximized: false };
+        assert!(window_fits(&on_second, &[one, two]));
+        assert!(!window_fits(&on_second, &[one]), "the second screen was unplugged");
+        assert!(!window_fits(&WindowPlace { rect: [10., 10., 200., 100.], maximized: false }, &[one]), "too small to use");
+    }
+}

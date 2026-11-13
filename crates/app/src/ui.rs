@@ -56,8 +56,8 @@ pub fn dim(b: Stateful<Div>, off: bool) -> Stateful<Div> {
 }
 
 /// `.btn.icon`
-pub fn icon_btn(p: &Pal, id: impl Into<ElementId>, glyph: &'static str) -> Stateful<Div> {
-    let mut b = btn(p, id, Bk::Normal, false, glyph);
+pub fn icon_btn(p: &Pal, id: impl Into<ElementId>, ico: Ico) -> Stateful<Div> {
+    let mut b = btn(p, id, Bk::Normal, false, icon(ico, 16., p.text));
     b = b.w(px(30.)).px_0();
     b
 }
@@ -116,7 +116,11 @@ pub use gpui_kit::assets::IconName as Ico;
 // The icons the UI draws itself (Lucide, bundled with GPUI Kit), next to the ones its components use.
 gpui_kit::assets::icon_assets!(
     ExtraIcons,
-    [Archive, ChevronDown, ChevronRight, Cloud, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch, GitCommitVertical, Github, Plus, RotateCcw, Tag]
+    [
+        Archive, ChevronDown, ChevronLeft, ChevronRight, Cloud, Copy, Ellipsis, File, FileClock, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch,
+        GitCommitVertical, Github, ListFilter, Moon, Package, Plus, RefreshCw, RotateCcw, ScrollText, Search, Settings, Square, SquareCheck, SquarePen,
+        SquareTerminal, Sun, SunMoon, Tag, TextWrap, Trash, User, X
+    ]
 );
 
 pub struct AppAssets;
@@ -141,6 +145,11 @@ impl gpui_kit::AssetSource for AppAssets {
 /// An icon in one colour.
 pub fn icon(name: Ico, size: f32, color: Hsla) -> gpui_kit::Svg {
     gpui_kit::svg().path(name.path()).size(px(size)).flex_none().text_color(color)
+}
+
+/// A check box, ticked or not.
+pub fn check_box(p: &Pal, on: bool) -> gpui_kit::Svg {
+    icon(if on { Ico::SquareCheck } else { Ico::Square }, 15., if on { p.accent } else { p.muted })
 }
 
 /// A remote's icon: GitHub's mark when the repo's remote is on github.com, else a cloud.

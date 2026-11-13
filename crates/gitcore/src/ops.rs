@@ -213,16 +213,6 @@ pub fn commit_file_diff(repo: &Path, sha: &str, path: &str, old_path: Option<&st
     Ok(one(parse::parse_diff(&read(repo, &args)?), path))
 }
 
-pub fn range_file_diff(repo: &Path, base: &str, head: &str, path: &str, old_path: Option<&str>) -> Result<FileDiff, String> {
-    let range = format!("{base}...{head}");
-    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "-M", range.as_str(), "--"];
-    if let Some(o) = old_path {
-        args.push(o);
-    }
-    args.push(path);
-    Ok(one(parse::parse_diff(&read(repo, &args)?), path))
-}
-
 fn first_parent(repo: &Path, sha: &str) -> Option<String> {
     let s = read(repo, &["rev-list", "--parents", "-n", "1", sha]).ok()?;
     s.split_whitespace().nth(1).map(String::from)
@@ -427,6 +417,61 @@ pub struct RefsAll {
     pub stashes: Vec<Stash>,
     pub worktrees: Vec<Worktree>,
     pub default_branch: Option<String>,
+    /// Every remote, also one nothing was fetched from yet.
+    pub remote_list: Vec<Remote>,
+    pub submodules: Vec<Submodule>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Submodule {
+    pub path: String,
+    pub sha: String,
+    /// "ok", "uninit" (not cloned yet), "changed" (checked out at another commit than the one
+    /// recorded) or "conflict"
+    pub state: &'static str,
+}
+
+/// `git submodule status`: a state character, the commit, the path, then maybe ` (describe)`.
+pub fn parse_submodules(out: &str) -> Vec<Submodule> {
+    out.lines()
+        .filter_map(|l| {
+            let state = match l.chars().next()? {
+                '-' => "uninit",
+                '+' => "changed",
+                'U' => "conflict",
+                _ => "ok",
+            };
+            let (sha, rest) = l.get(1..)?.split_once(' ')?;
+            // The description in parentheses is git's own addition, not part of the path.
+            let path = match rest.rfind(" (") {
+                Some(i) if rest.ends_with(')') => &rest[..i],
+                _ => rest,
+            };
+            Some(Submodule { path: path.into(), sha: sha.into(), state })
+        })
+        .collect()
+}
+
+/// Clones the submodule if it is not there yet and checks out the commit the repo records for it.
+pub fn submodule_update(repo: &Path, path: &str) -> Result<String, String> {
+    write(repo, &["submodule", "update", "--init", "--recursive", "--", path])
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Remote {
+    pub name: String,
+    pub url: String,
+}
+
+/// `git remote -v`, the fetch URLs.
+pub fn parse_remotes(out: &str) -> Vec<Remote> {
+    out.lines()
+        .filter_map(|l| {
+            let (name, rest) = l.split_once('\t')?;
+            let url = rest.strip_suffix(" (fetch)")?;
+            Some(Remote { name: name.into(), url: url.into() })
+        })
+        .collect()
 }
 
 pub fn refs(repo: &Path) -> Result<RefsAll, String> {
@@ -434,12 +479,17 @@ pub fn refs(repo: &Path) -> Result<RefsAll, String> {
         let stash = sc.spawn(|| read(repo, &["stash", "list", "--format=%gd%x1f%H%x1f%s"]).unwrap_or_default());
         let wt = sc.spawn(|| read(repo, &["worktree", "list", "--porcelain"]).unwrap_or_default());
         let head = sc.spawn(|| read(repo, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).ok());
+        let remotes = sc.spawn(|| read(repo, &["remote", "-v"]).unwrap_or_default());
+        // Asking costs a git call per refresh, so only repos that declare submodules pay it.
+        let subs = sc.spawn(|| if repo.join(".gitmodules").is_file() { read(repo, &["submodule", "status"]).unwrap_or_default() } else { String::new() });
         let fmt = format!("--format={}", parse::REF_FORMAT);
         let r = parse::parse_refs(&read(repo, &["for-each-ref", &fmt, "refs/heads", "refs/remotes", "refs/tags"])?);
         let stashes = parse::parse_stashes(&stash.join().unwrap_or_default());
         let worktrees = parse::parse_worktrees(&wt.join().unwrap_or_default());
         let default_branch = default_branch(head.join().ok().flatten(), &r);
-        Ok(RefsAll { refs: r, stashes, worktrees, default_branch })
+        let remote_list = parse_remotes(&remotes.join().unwrap_or_default());
+        let submodules = parse_submodules(&subs.join().unwrap_or_default());
+        Ok(RefsAll { refs: r, stashes, worktrees, default_branch, remote_list, submodules })
     })
 }
 
@@ -453,15 +503,6 @@ pub fn default_branch(origin_head: Option<String>, r: &Refs) -> Option<String> {
         return Some(format!("origin/{name}"));
     }
     ["main", "master", "trunk", "develop"].iter().find(|n| r.branches.iter().any(|b| &b.name == *n)).map(|s| s.to_string())
-}
-
-pub fn range_files(repo: &Path, base: &str, head: &str) -> Result<Vec<ChangedFile>, String> {
-    changed_files(repo, &format!("{base}...{head}"), None)
-}
-
-pub fn range_commits(repo: &Path, base: &str, head: &str) -> Result<Vec<Commit>, String> {
-    let fmt = format!("--format={}", parse::LOG_FORMAT);
-    Ok(parse::parse_log(&read(repo, &["log", "--decorate=full", &fmt, &format!("{base}..{head}")])?))
 }
 
 pub fn reflog(repo: &Path, limit: usize) -> Result<Vec<ReflogEntry>, String> {
@@ -490,6 +531,57 @@ pub fn create_branch(repo: &Path, name: &str, from: Option<&str>, checkout: bool
         args.push(f);
     }
     write(repo, &args)
+}
+
+/// Every file of the repo as it was at `rev`.
+pub fn tree(repo: &Path, rev: &str) -> Result<Vec<String>, String> {
+    let out = read(repo, &["ls-tree", "-r", "-z", "--name-only", rev])?;
+    Ok(out.split('\0').filter(|s| !s.is_empty()).map(String::from).collect())
+}
+
+/// What a file held at some commit, for reading.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FileText {
+    Text(String),
+    Binary,
+    /// Too large to show; its size in bytes.
+    Large(u64),
+}
+
+/// A file above this size is not read into the window.
+const SHOW_LIMIT: u64 = 2_000_000;
+
+/// The file `path` as it was at `rev`.
+pub fn file_at(repo: &Path, rev: &str, path: &str) -> Result<FileText, String> {
+    let spec = format!("{rev}:{path}");
+    let size: u64 = read(repo, &["cat-file", "-s", &spec])?.trim().parse().unwrap_or(0);
+    if size > SHOW_LIMIT {
+        return Ok(FileText::Large(size));
+    }
+    let text = read(repo, &["cat-file", "blob", &spec])?;
+    Ok(if text.contains('\0') { FileText::Binary } else { FileText::Text(text) })
+}
+
+pub fn rename_branch(repo: &Path, old: &str, new: &str) -> Result<String, String> {
+    write(repo, &["branch", "-m", old, new])
+}
+
+/// Deletes `origin/feat/x` on its remote (the local branch, if any, stays).
+pub fn delete_remote_branch(repo: &Path, full: &str) -> Result<String, String> {
+    let (remote, branch) = full.split_once('/').ok_or_else(|| format!("{full} 不是遠端分支"))?;
+    write(repo, &["push", remote, "--delete", branch])
+}
+
+pub fn remote_add(repo: &Path, name: &str, url: &str) -> Result<String, String> {
+    write(repo, &["remote", "add", name, url])
+}
+
+pub fn remote_set_url(repo: &Path, name: &str, url: &str) -> Result<String, String> {
+    write(repo, &["remote", "set-url", name, url])
+}
+
+pub fn remote_remove(repo: &Path, name: &str) -> Result<String, String> {
+    write(repo, &["remote", "remove", name])
 }
 
 pub fn delete_branch(repo: &Path, name: &str, force: bool) -> Result<String, String> {

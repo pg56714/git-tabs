@@ -71,7 +71,7 @@ impl GitTabs {
                             }
                             cx.notify();
                         }))
-                        .child(div().w(px(10.)).flex_none().text_size(px(10.)).child(if closed { "▸" } else { "▾" }))
+                        .child(icon(if closed { Ico::ChevronRight } else { Ico::ChevronDown }, 12., p.muted))
                         .child(div().overflow_hidden().text_ellipsis().child(name))
                         .into_any_element()
                 }

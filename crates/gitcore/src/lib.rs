@@ -6,12 +6,13 @@ pub mod identity;
 pub mod ops;
 pub mod parse;
 pub mod patch;
+pub mod rewrite;
 pub mod runner;
 
 use config::{AppConfig, Identity};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -132,12 +133,6 @@ pub fn dispatch(ctx: &Ctx, cmd: &str, a: Value) -> Result<Value, String> {
         "commit_detail" => ok(ops::commit_detail(&repo_path(&a)?, s(&a, "sha"))?),
         "commit_file_diff" => ok(ops::commit_file_diff(&repo_path(&a)?, s(&a, "sha"), s(&a, "path"), opt(&a, "old_path"))?),
         "refs" => ok(ops::refs(&repo_path(&a)?)?),
-        "range_files" => {
-            let repo = repo_path(&a)?;
-            let (base, head) = (s(&a, "base"), s(&a, "head"));
-            ok(json!({ "files": ops::range_files(&repo, base, head)?, "commits": ops::range_commits(&repo, base, head)? }))
-        }
-        "range_file_diff" => ok(ops::range_file_diff(&repo_path(&a)?, s(&a, "base"), s(&a, "head"), s(&a, "path"), opt(&a, "old_path"))?),
         "reflog" => ok(ops::reflog(&repo_path(&a)?, n(&a, "limit", 200))?),
         "blame" => ok(ops::blame(&repo_path(&a)?, s(&a, "path"), opt(&a, "rev"))?),
         "last_message" => ok(ops::last_message(&repo_path(&a)?)?),

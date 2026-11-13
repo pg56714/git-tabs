@@ -30,13 +30,12 @@
 - **Review**：檔案樹可以勾「已看」並顯示進度；diff 可切換單欄或並排，有語法上色，同一行裡改動的字會特別標出。`↑`/`↓` 上/下一個檔案，`←`/`→` 上/下一段改動，`Enter` 標記已看（並跳到下一個沒看的檔案），`S` Stage／取消 Stage。
 - **Stage**：可以 stage、取消 stage 或捨棄整個檔案、單一區段，或選取的幾行（點一行，拖曳或按住 Shift 選多行，再按 `S`）。
 - **Commit**：commit、commit 並 push、amend（`Ctrl+Enter`、`Ctrl+Shift+Enter`）。
-- **歷史**（版面跟 Fork 的 All Commits 一樣：上面是列表，下面是 Commit／Changes 分頁）：涵蓋所有分支的 commit 圖，可用訊息或 SHA 搜尋；有 commit 詳細資訊、每個檔案的 diff，以及 cherry-pick、revert、checkout、reset（soft／mixed／hard）、加 tag、開新分支。也有單一檔案的歷史和 blame。
-- **分支 vs main**：一次看完一條分支相對預設分支改了什麼，用同樣的 review 流程，看完就能 merge。
-- **遠端**：Sync（fetch → pull → push）、fetch、pull（只快轉、rebase 或 merge）、push（一般或 `--force-with-lease`）、背景定時 fetch。
-- 側欄有**分支、tag、stash、worktree、reflog**。worktree 可以直接開成新分頁。
+- **歷史**（版面跟 Fork 的 All Commits 一樣：上面是列表，下面是 Commit／Changes／File Tree 分頁）：涵蓋所有分支的 commit 圖，畫法跟 Fork 一樣；目前分支沒有的 commit 會變灰，還沒 push 的 commit 前面有一個點，點 merge 的圓點可以把它帶進來的 commit 收起來。可用訊息或 SHA 搜尋；有 commit 詳細資訊、每個檔案的 diff、那個 commit 當時完整的檔案樹和檔案內容，以及 cherry-pick、revert、checkout（雙擊也可以）、reset（soft／mixed／hard）、加 tag、開新分支。分支自己的 commit 可以改訊息、併入上一個 commit、丟掉。分支標籤雙擊可切換，右鍵有分支選單。也有單一檔案的歷史和 blame。
+- **遠端**：Sync（fetch → pull → push）、fetch、pull（只快轉、rebase 或 merge）、push（一般或 `--force-with-lease`）、背景定時 fetch。可以新增、改網址或移除 remote，也能刪除遠端上的分支。
+- 側欄有**分支、遠端、tag、stash、worktree、submodule、reflog**，上面有篩選框。名稱裡有 `/` 的分支會收進資料夾；分支可以重新命名。點 stash 可以看它裡面改了什麼。worktree 可以從側欄新增，並開成自己的分頁；submodule 也一樣能開成分頁。
 - **衝突**：merge／rebase／cherry-pick 進行中會顯示提示列，衝突區塊用顏色標出，可選「用我的」／「用對方的」／「標記已解決」，再繼續或中止。
-- **身分**：可設定多組 SSH key／名字／email，依 remote 網址或資料夾自動選擇，也能針對單一 repo 手動指定。可以測試 key 連 GitHub 對應哪個帳號，也能產生新的 ed25519 key。
-- 各個面板之間的分隔線可以拖曳調整，大小會記住。分頁很多時，用滑鼠滾輪就能左右捲動。
+- **身分**：可設定多組 SSH key／名字／email，依 remote 網址或資料夾選擇，也能針對單一 repo 指定。沒有規則對到的 repo 不會被自動套上身分，要自己選；在那之前 commit 會先顯示 git 實際會用的作者。可以測試 key 連 GitHub 對應哪個帳號，也能產生新的 ed25519 key。
+- 各個面板之間的分隔線可以拖曳調整，大小會記住；視窗的大小和位置也會記住。分頁很多時，用滑鼠滾輪就能左右捲動。
 - **指令面板**（`Ctrl+K`）、會改變東西的 git 指令都記在指令紀錄裡、深色／淺色主題。
 
 ## 身分怎麼運作
@@ -45,11 +44,10 @@
 
 - 每條 remote 規則寫一組 `includeIf "hasconfig:remote.*.url:git@github.com:org/**"`（另外加上 https 和 ssh:// 的寫法），
 - 每條資料夾規則寫一個 `includeIf "gitdir/i:D:/work/"`，
-- 預設身分寫成 `include.path`，
 
 每一條都指向 app 設定資料夾裡的一個小檔案（`identities/<id>.gitconfig`），裡面是 `user.name`、`user.email` 和 `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes`。
 
-所以在終端機直接下 `git`，用的也是和 app 一樣的身分。app 會記得自己加了哪幾行，修改或刪除身分時只會移除那幾行。對單一 repo 手動指定身分時，會把同樣三個設定寫進那個 repo 自己的 `.git/config`，優先於全域規則。
+所以在終端機直接下 `git`，用的也是和 app 一樣的身分。app 會記得自己加了哪幾行，修改或刪除身分時只會移除那幾行。沒有規則對到的 repo，app 不會給它身分：在你替它選一個之前，git 用的是你全域設定裡原本的值。對單一 repo 指定身分時，會把同樣三個設定寫進那個 repo 自己的 `.git/config`，優先於全域規則。
 
 ## 語言
 

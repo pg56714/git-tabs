@@ -201,7 +201,7 @@ impl GitTabs {
     pub fn open_settings(&mut self, tab: SettingsTab, detected: Option<Vec<Identity>>, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let ids = detected.unwrap_or_else(|| self.cfg.identities.clone());
-        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按 🗑 刪掉。", &[], &[(ids.len()).to_string()]));
+        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按垃圾桶刪掉。", &[], &[(ids.len()).to_string()]));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
         let clone = input(window, cx, &self.cfg.clone_dir.clone(), crate::i18n::t("可留空"));

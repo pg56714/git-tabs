@@ -101,8 +101,14 @@ fn quote(a: &str) -> String {
 
 /// Runs git in `repo`. `record` puts the command in the visible command log.
 pub fn run(repo: Option<&Path>, args: &[&str], stdin: Option<&[u8]>, record_it: bool) -> Out {
+    run_env(repo, args, stdin, record_it, &[])
+}
+
+/// `run`, with extra environment for this one call (the editor git should use, say).
+pub fn run_env(repo: Option<&Path>, args: &[&str], stdin: Option<&[u8]>, record_it: bool, env: &[(&str, &str)]) -> Out {
     let exe = git_exe();
     let mut c = command(&exe);
+    c.envs(env.iter().copied());
     c.args(["-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "core.pager=cat"]);
     if let Some(r) = repo {
         c.current_dir(r);
@@ -146,6 +152,11 @@ pub fn read(repo: &Path, args: &[&str]) -> Result<String, String> {
 /// Git call that changes something; shows up in the command log.
 pub fn write(repo: &Path, args: &[&str]) -> Result<String, String> {
     let o = run(Some(repo), args, None, true);
+    if o.ok() { Ok(format!("{}{}", o.stdout, o.stderr)) } else { Err(o.message()) }
+}
+
+pub fn write_env(repo: &Path, args: &[&str], env: &[(&str, &str)]) -> Result<String, String> {
+    let o = run_env(Some(repo), args, None, true, env);
     if o.ok() { Ok(format!("{}{}", o.stdout, o.stderr)) } else { Err(o.message()) }
 }
 

@@ -211,7 +211,7 @@ impl GitTabs {
                             .cursor_pointer()
                             .text_size(px(11.5))
                             .text_color(p.faint)
-                            .child(if amend { "☑" } else { "☐" })
+                            .child(check_box(&p, amend))
                             .child(crate::i18n::t("Amend（改寫上一個 commit）"))
                             .on_click(cx.listener(|this, _, w, cx| this.toggle_amend(w, cx))),
                     )

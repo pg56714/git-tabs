@@ -12,7 +12,7 @@ fn isolate() -> &'static PathBuf {
     HOME.get_or_init(|| {
         let d = tempfile::tempdir().unwrap().keep();
         let g = d.join("gitconfig");
-        std::fs::write(&g, "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n").unwrap();
+        std::fs::write(&g, "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n[protocol \"file\"]\n\tallow = always\n").unwrap();
         // SAFETY: set once, before any test spawns git.
         unsafe {
             std::env::set_var("GIT_CONFIG_GLOBAL", &g);
@@ -127,7 +127,7 @@ fn stage_lines_of_untracked_file() {
 }
 
 #[test]
-fn branches_range_stash_reflog_and_ops() {
+fn branches_stash_reflog_and_ops() {
     let _s = serial();
     let (d, ctx) = repo();
     call(&ctx, "create_branch", json!({"repo": r(&d), "name": "feat/x", "checkout": true}));
@@ -137,11 +137,6 @@ fn branches_range_stash_reflog_and_ops() {
     let refs = call(&ctx, "refs", json!({"repo": r(&d)}));
     assert_eq!(refs["default_branch"], "main");
     assert!(refs["branches"].as_array().unwrap().iter().any(|b| b["name"] == "feat/x" && b["current"] == true));
-    let range = call(&ctx, "range_files", json!({"repo": r(&d), "base": "main", "head": "feat/x"}));
-    assert_eq!(range["files"][0]["path"], "b.txt");
-    assert_eq!(range["commits"].as_array().unwrap().len(), 1);
-    let rd = call(&ctx, "range_file_diff", json!({"repo": r(&d), "base": "main", "head": "feat/x", "path": "b.txt"}));
-    assert!(rd["new_file"].as_bool().unwrap());
 
     std::fs::write(d.path().join("a.txt"), "changed\n").unwrap();
     call(&ctx, "stash_push", json!({"repo": r(&d), "message": "wip"}));
@@ -267,4 +262,82 @@ fn worktree_for_an_existing_branch_and_for_a_new_one() {
     assert_eq!(all.worktrees.len(), 3);
     // the branch of the main worktree is taken: git refuses, and the error comes back
     assert!(gitcore::ops::worktree_add(d.path(), &out.path().join("dup").display().to_string(), "main").is_err());
+}
+
+#[test]
+fn rename_a_branch_and_manage_remotes() {
+    let _s = serial();
+    let (d, _ctx) = repo();
+    let bare = tempfile::tempdir().unwrap();
+    git(bare.path(), &["init", "-q", "--bare"]);
+    let url = bare.path().display().to_string();
+
+    git(d.path(), &["branch", "feat/old"]);
+    gitcore::ops::rename_branch(d.path(), "feat/old", "feat/new").unwrap();
+    let names = |d: &Path| gitcore::ops::refs(d).unwrap().refs.branches.iter().map(|b| b.name.clone()).collect::<Vec<_>>();
+    assert!(names(d.path()).contains(&"feat/new".to_string()) && !names(d.path()).contains(&"feat/old".to_string()));
+    assert!(gitcore::ops::rename_branch(d.path(), "feat/new", "main").is_err(), "the name is taken");
+
+    gitcore::ops::remote_add(d.path(), "origin", "https://example.invalid/x.git").unwrap();
+    gitcore::ops::remote_set_url(d.path(), "origin", &url).unwrap();
+    let all = gitcore::ops::refs(d.path()).unwrap();
+    assert_eq!(all.remote_list.len(), 1, "listed although nothing was fetched from it yet");
+    assert_eq!((all.remote_list[0].name.as_str(), all.remote_list[0].url.as_str()), ("origin", url.as_str()));
+
+    git(d.path(), &["push", "-q", "origin", "feat/new"]);
+    assert!(gitcore::ops::refs(d.path()).unwrap().refs.remotes.iter().any(|b| b.name == "origin/feat/new"));
+    gitcore::ops::delete_remote_branch(d.path(), "origin/feat/new").unwrap();
+    assert!(git(d.path(), &["ls-remote", "--heads", "origin"]).trim().is_empty(), "gone on the remote");
+    assert!(!gitcore::ops::refs(d.path()).unwrap().refs.remotes.iter().any(|b| b.name == "origin/feat/new"));
+    assert!(names(d.path()).contains(&"feat/new".to_string()), "the local branch stays");
+
+    gitcore::ops::remote_remove(d.path(), "origin").unwrap();
+    assert!(gitcore::ops::refs(d.path()).unwrap().remote_list.is_empty());
+}
+
+#[test]
+fn submodules_are_listed_and_can_be_fetched() {
+    let _s = serial();
+    let (lib, _c1) = repo();
+    let (d, _c2) = repo();
+    // (the shared test gitconfig allows the file protocol, which git refuses for submodules by default)
+    git(d.path(), &["submodule", "add", "-q", &lib.path().display().to_string(), "libs/the lib"]);
+    git(d.path(), &["commit", "-q", "-m", "add the lib"]);
+    let subs = gitcore::ops::refs(d.path()).unwrap().submodules;
+    assert_eq!(subs.len(), 1);
+    assert_eq!((subs[0].path.as_str(), subs[0].state), ("libs/the lib", "ok"), "a path with a space, without git's description");
+    assert_eq!(subs[0].sha.len(), 40);
+
+    // a plain clone has the submodule's folder but nothing in it
+    let fresh = tempfile::tempdir().unwrap();
+    git(fresh.path(), &["clone", "-q", &d.path().display().to_string(), "copy"]);
+    let copy = fresh.path().join("copy");
+    assert_eq!(gitcore::ops::refs(&copy).unwrap().submodules[0].state, "uninit");
+    gitcore::ops::submodule_update(&copy, "libs/the lib").unwrap();
+    assert_eq!(gitcore::ops::refs(&copy).unwrap().submodules[0].state, "ok");
+    assert!(copy.join("libs/the lib/a.txt").is_file());
+
+    assert!(gitcore::ops::refs(lib.path()).unwrap().submodules.is_empty(), "a repo without .gitmodules is not even asked");
+}
+
+#[test]
+fn files_of_a_commit_and_what_they_held() {
+    use gitcore::ops::{FileText, file_at, tree};
+    let _s = serial();
+    let (d, _ctx) = repo();
+    std::fs::create_dir_all(d.path().join("src/deep")).unwrap();
+    std::fs::write(d.path().join("src/deep/新 檔.txt"), "第一行\nsecond\n").unwrap();
+    std::fs::write(d.path().join("src/blob.bin"), [1u8, 0, 2, 0]).unwrap();
+    git(d.path(), &["add", "."]);
+    git(d.path(), &["commit", "-q", "-m", "more files"]);
+    std::fs::write(d.path().join("a.txt"), "changed later\n").unwrap();
+    git(d.path(), &["commit", "-q", "-am", "later"]);
+
+    // the tree of the older commit, also after the files moved on
+    assert_eq!(tree(d.path(), "HEAD~1").unwrap(), ["a.txt", "src/blob.bin", "src/deep/新 檔.txt"]);
+    assert_eq!(tree(d.path(), "HEAD~2").unwrap(), ["a.txt"]);
+    assert_eq!(file_at(d.path(), "HEAD~1", "src/deep/新 檔.txt").unwrap(), FileText::Text("第一行\nsecond\n".into()));
+    assert_eq!(file_at(d.path(), "HEAD~1", "a.txt").unwrap(), FileText::Text("one\ntwo\nthree\nfour\nfive\n".into()), "as it was then, not as it is now");
+    assert_eq!(file_at(d.path(), "HEAD", "src/blob.bin").unwrap(), FileText::Binary);
+    assert!(file_at(d.path(), "HEAD", "no/such/file").is_err());
 }

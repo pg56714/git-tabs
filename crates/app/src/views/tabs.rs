@@ -27,12 +27,12 @@ impl GitTabs {
         let (path, ps) = (r.path.clone(), r.path.display().to_string());
         let (ps2, ps3) = (ps.clone(), ps.clone());
         vec![
-            MenuItem::new(crate::i18n::t("重新整理"), move |t, _, cx| t.refresh(&path, cx)).icon("⟳"),
-            MenuItem::new(crate::i18n::t("在檔案總管開啟"), move |t, _, cx| t.open_folder(ps.clone(), cx)).icon("📂"),
-            MenuItem::new(crate::i18n::t("開終端機"), move |t, _, cx| t.open_terminal(ps2.clone(), cx)).icon("⌨"),
-            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(ps3.clone(), crate::i18n::t("路徑"), cx)).icon("⧉"),
+            MenuItem::new(crate::i18n::t("重新整理"), move |t, _, cx| t.refresh(&path, cx)).icon(Ico::RefreshCw),
+            MenuItem::new(crate::i18n::t("在檔案總管開啟"), move |t, _, cx| t.open_folder(ps.clone(), cx)).icon(Ico::FolderOpen),
+            MenuItem::new(crate::i18n::t("開終端機"), move |t, _, cx| t.open_terminal(ps2.clone(), cx)).icon(Ico::SquareTerminal),
+            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(ps3.clone(), crate::i18n::t("路徑"), cx)).icon(Ico::Copy),
             MenuItem::sep(),
-            MenuItem::new(crate::i18n::t("關閉分頁"), move |t, _, cx| t.close_repo(i, cx)).icon("×"),
+            MenuItem::new(crate::i18n::t("關閉分頁"), move |t, _, cx| t.close_repo(i, cx)).icon(Ico::X),
         ]
     }
 

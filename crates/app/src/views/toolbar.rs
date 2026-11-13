@@ -36,7 +36,7 @@ impl GitTabs {
             }
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("新增分支…"), |t, w, cx| t.new_branch(None, w, cx)).icon(crate::i18n::t("＋")));
+        items.push(MenuItem::new(crate::i18n::t("新增分支…"), |t, w, cx| t.new_branch(None, w, cx)).icon(Ico::Plus));
         items
     }
 
@@ -56,7 +56,7 @@ impl GitTabs {
             );
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("管理身分…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon("⚙"));
+        items.push(MenuItem::new(crate::i18n::t("管理身分…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon(Ico::Settings));
         items
     }
 
@@ -75,15 +75,16 @@ impl GitTabs {
         let have_ids = !self.cfg.identities.is_empty();
         let wide = f32::from(self.window_size.width) >= 1100.;
         let (behind, ahead) = s.as_ref().map(|s| (s.behind, s.ahead)).unwrap_or((0, 0));
-        let theme_glyph = match self.cfg.theme.as_str() {
-            "light" => "☀",
-            "dark" => "☾",
-            _ => "◐",
+        let theme_ico = match self.cfg.theme.as_str() {
+            "light" => Ico::Sun,
+            "dark" => Ico::Moon,
+            _ => Ico::SunMoon,
         };
+        let down = || icon(Ico::ChevronDown, 13., p.muted);
         let rpath = path.display().to_string();
         let (p1, p2, p3, p4, p5, p6) = (path.clone(), path.clone(), path.clone(), path.clone(), path.clone(), path.clone());
         let (q1, q2) = (rpath.clone(), rpath.clone());
-        let split = |id: &'static str| btn(&p, id, Bk::Normal, false, "▾").px(px(6.)).ml(px(-1.)).rounded_l(px(0.));
+        let split = |id: &'static str| btn(&p, id, Bk::Normal, false, down()).px(px(6.)).ml(px(-1.)).rounded_l(px(0.));
 
         div()
             .flex()
@@ -97,7 +98,7 @@ impl GitTabs {
             .border_b_1()
             .border_color(p.border)
             .child(
-                btn(&p, "branch", Bk::Normal, false, div().flex().gap_1().child("⑂").child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(branch_label)).child("▾"))
+                btn(&p, "branch", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::GitBranch, 14., p.muted)).child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(branch_label)).child(down()))
                     .tooltip_text(crate::i18n::t("切換分支"))
                     .on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                         let items = this.branch_menu();
@@ -106,7 +107,7 @@ impl GitTabs {
             )
             .child(sep(&p))
             .child(dim(
-                btn(&p, "sync", Bk::Primary, false, format!("⟳ Sync{}{}", if behind > 0 { format!(" ↓{behind}") } else { String::new() }, if ahead > 0 { format!(" ↑{ahead}") } else { String::new() }))
+                btn(&p, "sync", Bk::Primary, false, div().flex().items_center().gap(px(5.)).child(icon(Ico::RefreshCw, 14., gpui_kit::white())).child(format!("Sync{}{}", if behind > 0 { format!(" ↓{behind}") } else { String::new() }, if ahead > 0 { format!(" ↑{ahead}") } else { String::new() })))
                     .tooltip_text("fetch → pull → push")
                     .when(!dis, |b| b.on_click(cx.listener(move |this, _, _, cx| this.sync_repo(&p1, cx)))),
                 dis,
@@ -164,26 +165,26 @@ impl GitTabs {
                     None => "?".into(),
                     _ => String::new(),
                 };
-                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child("👤").child(div().text_color(if who.id.is_some() { p.text } else { p.warn }).child(label)).child("▾"))
+                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::User, 15., if who.id.is_some() { p.muted } else { p.warn })).child(div().text_color(if who.id.is_some() { p.text } else { p.warn }).child(label)).child(down()))
                     .tooltip_text(crate::i18n::t("切換這個 repo 用的身分"))
                     .on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                         let items = this.identity_menu();
                         this.open_menu(ev.position(), items, true, cx);
                     }))
             } else {
-                btn(&p, "identity", Bk::Normal, false, format!("👤{}", if wide { crate::i18n::t(" 設定身分") } else { "" }))
+                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::User, 15., p.muted)).when(wide, |d| d.child(crate::i18n::t(" 設定身分").trim_start())))
                     .tooltip_text(crate::i18n::t("設定 SSH key 和身分"))
                     .on_click(cx.listener(|this, _, w, cx| this.open_settings(SettingsTab::Ids, None, w, cx)))
             })
             .child(
-                btn(&p, "palette", Bk::Normal, false, div().flex().items_center().gap_1().child("🔍").when(wide, |d| d.child(kbd(&p, &format!("{} K", crate::ui::mod_name())))))
+                btn(&p, "palette", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::Search, 15., p.muted)).when(wide, |d| d.child(kbd(&p, &format!("{} K", crate::ui::mod_name())))))
                     .tooltip_text(crate::i18n::t("搜尋指令、repo、分支、commit"))
                     .on_click(cx.listener(|this, _, w, cx| this.open_palette(w, cx))),
             )
-            .child(icon_btn(&p, "open-folder", "📂").tooltip_text(crate::i18n::t("在檔案總管開啟")).on_click(cx.listener(move |this, _, _, cx| this.open_folder(q1.clone(), cx))))
-            .child(icon_btn(&p, "open-term", "⌨").tooltip_text(crate::i18n::t("開終端機")).on_click(cx.listener(move |this, _, _, cx| this.open_terminal(q2.clone(), cx))))
+            .child(icon_btn(&p, "open-folder", Ico::FolderOpen).tooltip_text(crate::i18n::t("在檔案總管開啟")).on_click(cx.listener(move |this, _, _, cx| this.open_folder(q1.clone(), cx))))
+            .child(icon_btn(&p, "open-term", Ico::SquareTerminal).tooltip_text(crate::i18n::t("開終端機")).on_click(cx.listener(move |this, _, _, cx| this.open_terminal(q2.clone(), cx))))
             .child(
-                icon_btn(&p, "theme", theme_glyph)
+                icon_btn(&p, "theme", theme_ico)
                     .tooltip_text(match self.cfg.theme.as_str() {
                         "light" => crate::i18n::t("外觀：淺色"),
                         "dark" => crate::i18n::t("外觀：深色"),
@@ -191,7 +192,7 @@ impl GitTabs {
                     })
                     .on_click(cx.listener(|this, _, w, cx| this.cycle_theme(w, cx))),
             )
-            .child(icon_btn(&p, "settings", "⚙").tooltip_text(crate::i18n::t("設定")).on_click(cx.listener(|this, _, w, cx| this.open_settings(SettingsTab::Ids, None, w, cx))))
+            .child(icon_btn(&p, "settings", Ico::Settings).tooltip_text(crate::i18n::t("設定")).on_click(cx.listener(|this, _, w, cx| this.open_settings(SettingsTab::Ids, None, w, cx))))
             .into_any_element()
     }
 }

@@ -84,6 +84,16 @@ pub fn base_name(p: &str) -> String {
     p.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or(p).to_string()
 }
 
+/// Whether two paths name the same folder, however git and the system each spell it
+/// (`C:/a/b` and `c:\a\b\` on Windows).
+pub fn same_path(a: &str, b: &str) -> bool {
+    let n = |p: &str| {
+        let p = p.replace('\\', "/").trim_end_matches('/').to_string();
+        if cfg!(windows) { p.to_lowercase() } else { p }
+    };
+    n(a) == n(b)
+}
+
 /// Splits `fix(api): keep the peer` into its Conventional Commits prefix (`fix(api):`) and the
 /// rest, so the list can draw the prefix bold as Fork does. Without such a prefix all is the rest.
 pub fn split_subject(s: &str) -> (&str, &str) {
@@ -104,6 +114,13 @@ pub fn fuzzy(query: &str, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paths_compare_across_slashes() {
+        assert!(same_path("/home/a/repo/", "/home/a/repo"));
+        assert!(same_path("C:/a/b", "C:\\a\\b"));
+        assert!(!same_path("/home/a/repo", "/home/a/repo2"));
+    }
 
     #[test]
     fn conventional_prefix_is_split_off() {

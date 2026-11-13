@@ -5,6 +5,9 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::input::Input;
+
 use crate::app::GitTabs;
 use crate::model::*;
 use crate::ui::*;
@@ -112,25 +115,76 @@ impl GitTabs {
             .text_color(if none { p.faint } else { p.text })
     }
 
+    /// The `+` at the right of a section title. It stays lit when the section is empty: that is
+    /// where its first entry gets made.
+    fn add_btn(
+        &self,
+        id: &'static str,
+        tip: &'static str,
+        cx: &mut Context<Self>,
+        on: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let p = self.pal;
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(20.))
+            .rounded(px(5.))
+            .cursor_pointer()
+            .hover(move |s| s.bg(p.hover))
+            .tooltip_text(tip)
+            .on_click(cx.listener(move |this, _, w, cx| {
+                // Not also a click on the title, which would fold the section.
+                cx.stop_propagation();
+                on(this, w, cx);
+            }))
+            .child(icon(Ico::Plus, 14., p.muted))
+    }
+
+    /// Right-click menu of a remote (`origin`).
+    fn remote_menu(&self, path: &std::path::Path, name: &str, url: &str) -> Vec<MenuItem> {
+        let (p1, n1, n2, n3, u1, u2) = (path.to_path_buf(), name.to_string(), name.to_string(), name.to_string(), url.to_string(), url.to_string());
+        vec![
+            MenuItem::new("Fetch", move |t, _, cx| t.fetch_repo(&p1, cx)).icon(Ico::RefreshCw),
+            MenuItem::new(crate::i18n::t("改網址…"), move |t, w, cx| t.edit_remote_url(n1.clone(), u1.clone(), w, cx)).icon(Ico::SquarePen),
+            MenuItem::new(crate::i18n::t("複製網址"), move |t, _, cx| t.copy(u2.clone(), crate::i18n::t("網址"), cx)).icon(Ico::Copy).disabled(url.is_empty()),
+            MenuItem::sep(),
+            MenuItem::new(crate::i18n::tr("移除 {name}…", &[("name", n3.clone())], &[]), move |t, _, cx| t.remove_remote(n2.clone(), cx)).danger(),
+        ]
+    }
+
     pub fn render_sidebar(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
-        let gh = self.on_github();
         let Some(r) = self.repo() else { return div().into_any_element() };
         let path = r.path.clone();
         let view = r.view;
         let changes = r.summary.as_ref().map_or(0, |s| s.changes);
         let refs = r.refs.clone();
+        // What the filter box holds. While it holds something, every match is shown, folded or not.
+        let q = self.side_filter.read(cx).value().trim().to_lowercase();
+        let filtering = !q.is_empty();
+        let hit = |name: &str| !filtering || name.to_lowercase().contains(&q);
+        let no_folds = std::collections::HashSet::new();
+        let folds = if filtering { &no_folds } else { &self.folded };
+        let open = |key: &str| filtering || !self.folded.contains(key);
         let mut rows: Vec<AnyElement> = vec![
             self.nav_item("nav-changes", Ico::FilePenLine, crate::i18n::t("未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
             self.nav_item("nav-history", Ico::GitCommitVertical, crate::i18n::t("歷史").into(), None, view == View::History, View::History, cx),
+            div()
+                .px(px(10.))
+                .pt(px(10.))
+                .child(Input::new(&self.side_filter).small().cleanable(true).prefix(icon(Ico::ListFilter, 14., p.muted)))
+                .into_any_element(),
         ];
 
         // ---- branches
-        let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).cloned().collect();
+        let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).filter(|b| hit(&b.name)).cloned().collect();
         rows.push(self.section("b", crate::i18n::t("分支"), branches.is_empty(), cx).into_any_element());
-        if !self.folded.contains("b") {
+        if open("b") {
             let items: Vec<(String, usize)> = branches.iter().enumerate().map(|(i, b)| (b.name.clone(), i)).collect();
-            for row in tree_rows(&items, "bt", &self.folded) {
+            for row in tree_rows(&items, "bt", folds) {
                 let (label, idx, depth) = match row {
                     TreeRow::Dir { key, name, depth, closed } => {
                         rows.push(self.dir_row(key, name, IND + STEP * depth as f32, closed, cx));
@@ -181,27 +235,52 @@ impl GitTabs {
         }
 
         // ---- remotes
-        let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
-        for b in refs.iter().flat_map(|x| x.refs.remotes.iter()) {
-            let (remote, rest) = b.name.split_once('/').unwrap_or((&b.name, ""));
-            match groups.iter_mut().find(|g| g.0 == remote) {
-                Some(g) => g.1.push((rest.to_string(), b.sha.clone())),
-                None => groups.push((remote.to_string(), vec![(rest.to_string(), b.sha.clone())])),
+        // Every remote with its branches; a remote just added has none yet and is listed all the same.
+        let mut groups: Vec<(String, String, Vec<(String, String)>)> =
+            refs.iter().flat_map(|x| x.remote_list.iter()).map(|r| (r.name.clone(), r.url.clone(), Vec::new())).collect();
+        for b in refs.iter().flat_map(|x| x.refs.remotes.iter()).filter(|b| hit(&b.name)) {
+            // A remote's own name may hold a slash, so the known names are tried before the first slash.
+            let known = groups.iter().position(|g| b.name.strip_prefix(g.0.as_str()).is_some_and(|rest| rest.starts_with('/')));
+            match known {
+                Some(i) => {
+                    let rest = b.name[groups[i].0.len() + 1..].to_string();
+                    groups[i].2.push((rest, b.sha.clone()));
+                }
+                None => {
+                    let (remote, rest) = b.name.split_once('/').unwrap_or((&b.name, ""));
+                    groups.push((remote.to_string(), String::new(), vec![(rest.to_string(), b.sha.clone())]));
+                }
             }
         }
-        rows.push(self.section("r", crate::i18n::t("遠端"), groups.is_empty(), cx).into_any_element());
-        if !self.folded.contains("r") {
-            for (remote, names) in &groups {
+        if filtering {
+            groups.retain(|g| !g.2.is_empty());
+        }
+        rows.push(
+            self.section("r", crate::i18n::t("遠端"), groups.is_empty(), cx)
+                .child(div().flex_1())
+                .child(self.add_btn("rm-add", crate::i18n::t("新增 remote"), cx, |this, w, cx| this.add_remote(w, cx)))
+                .into_any_element(),
+        );
+        if open("r") {
+            for (remote, url, names) in &groups {
                 let gkey = format!("rg:{remote}");
-                let gclosed = self.folded.contains(&gkey);
+                let gclosed = !open(&gkey);
+                let (m_name, m_url, m_path) = (remote.clone(), url.clone(), path.clone());
                 rows.push(
                     self.item_row(SharedString::from(format!("rm-{remote}")), IND - CHEV, false, false)
                         .on_click(cx.listener({
                             let k = gkey.clone();
                             move |this, _, _, cx| this.fold_toggle(&k, cx)
                         }))
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
+                                let items = this.remote_menu(&m_path, &m_name, &m_url);
+                                this.open_menu(ev.position, items, false, cx);
+                            }),
+                        )
                         .child(chevron(&p, gclosed))
-                        .child(icon(remote_icon(gh), 14., p.text))
+                        .child(icon(remote_icon(url.contains("github.com")), 14., p.text))
                         .child(div().child(remote.clone()))
                         .into_any_element(),
                 );
@@ -209,7 +288,7 @@ impl GitTabs {
                     continue;
                 }
                 let items: Vec<(String, usize)> = names.iter().enumerate().map(|(i, (n, _))| (n.clone(), i)).collect();
-                for row in tree_rows(&items, &format!("rt:{remote}"), &self.folded) {
+                for row in tree_rows(&items, &format!("rt:{remote}"), folds) {
                     let (label, idx, depth) = match row {
                         TreeRow::Dir { key, name, depth, closed } => {
                             rows.push(self.dir_row(key, name, IND + STEP * (depth + 1) as f32, closed, cx));
@@ -245,9 +324,10 @@ impl GitTabs {
         }
 
         // ---- tags
-        rows.push(self.section("Tags", "Tags", refs.as_ref().is_none_or(|x| x.refs.tags.is_empty()), cx).into_any_element());
-        if !self.folded.contains("Tags") {
-            for t in refs.iter().flat_map(|x| x.refs.tags.iter()) {
+        let tags: Vec<_> = refs.iter().flat_map(|x| x.refs.tags.iter()).filter(|t| hit(&t.name)).cloned().collect();
+        rows.push(self.section("Tags", "Tags", tags.is_empty(), cx).into_any_element());
+        if open("Tags") {
+            for t in &tags {
                 let (name, sha) = (t.name.clone(), t.sha.clone());
                 let (n1, n2) = (name.clone(), name.clone());
                 rows.push(
@@ -284,26 +364,35 @@ impl GitTabs {
         }
 
         // ---- stashes
-        rows.push(self.section("s", "Stashes", refs.as_ref().is_none_or(|x| x.stashes.is_empty()), cx).into_any_element());
-        if !self.folded.contains("s") {
-            for s in refs.iter().flat_map(|x| x.stashes.iter()) {
-                let (idx, msg) = (s.index as usize, s.message.clone());
-                let (a, b, c) = (path.clone(), path.clone(), idx);
-                let small = |id: String, label: &'static str| btn(&p, SharedString::from(id), Bk::Normal, true, label);
+        let stashes: Vec<_> = refs.iter().flat_map(|x| x.stashes.iter()).filter(|s| hit(&s.message)).cloned().collect();
+        rows.push(self.section("s", "Stashes", stashes.is_empty(), cx).into_any_element());
+        if open("s") {
+            for s in &stashes {
+                let (idx, msg, sha) = (s.index as usize, s.message.clone(), s.sha.clone());
+                let m_path = path.clone();
                 rows.push(
                     self.item_row(SharedString::from(format!("st-{idx}")), IND, false, false)
+                        // A click shows what the stash holds; what to do with it is in the menu and beside the preview.
+                        .on_click(cx.listener(move |this, _, _, cx| this.show_stash(sha.clone(), cx)))
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
+                                let (a, b) = (m_path.clone(), m_path.clone());
+                                let items = vec![
+                                    MenuItem::new(crate::i18n::t("套用"), move |t, _, cx| {
+                                        t.simple_op(&a, "stash-apply", idx.to_string(), crate::i18n::t("套用 stash"), Some(crate::i18n::t("已套用 stash").into()), cx)
+                                    }),
+                                    MenuItem::new(crate::i18n::t("Pop（套用後刪除）"), move |t, _, cx| {
+                                        t.simple_op(&b, "stash-pop", idx.to_string(), "Pop stash", Some(crate::i18n::t("已套用並刪除 stash").into()), cx)
+                                    }),
+                                    MenuItem::sep(),
+                                    MenuItem::new(crate::i18n::t("刪除 stash…"), move |t, _, cx| t.stash_drop(idx, cx)).danger(),
+                                ];
+                                this.open_menu(ev.position, items, false, cx);
+                            }),
+                        )
                         .child(icon(Ico::Archive, 13., p.muted))
                         .child(div().overflow_hidden().text_ellipsis().child(msg))
-                        .child(
-                            div()
-                                .hidden()
-                                .group_hover("si", |d| d.flex())
-                                .ml_auto()
-                                .gap(px(2.))
-                                .child(small(format!("sa-{idx}"), crate::i18n::t("套用")).on_click(cx.listener(move |this, _, _, cx| this.simple_op(&a, "stash-apply", idx.to_string(), crate::i18n::t("套用 stash"), Some(crate::i18n::t("已套用 stash").into()), cx))))
-                                .child(small(format!("sp-{idx}"), "Pop").on_click(cx.listener(move |this, _, _, cx| this.simple_op(&b, "stash-pop", idx.to_string(), "Pop stash", Some(crate::i18n::t("已套用並刪除 stash").into()), cx))))
-                                .child(small(format!("sd-{idx}"), "×").on_click(cx.listener(move |this, _, _, cx| this.stash_drop(c, cx)))),
-                        )
                         .into_any_element(),
                 );
             }
@@ -311,38 +400,20 @@ impl GitTabs {
 
         // ---- worktrees
         // Every worktree but the one this tab shows (which need not be the main one).
-        let same = |a: &str| {
-            let n = |p: &str| {
-                let p = p.replace('\\', "/").trim_end_matches('/').to_string();
-                if cfg!(windows) { p.to_lowercase() } else { p }
-            };
-            n(a) == n(&path.display().to_string())
-        };
-        let others: Vec<_> = refs.iter().flat_map(|x| x.worktrees.iter()).filter(|w| !same(&w.path)).cloned().collect();
+        let others: Vec<_> = refs
+            .iter()
+            .flat_map(|x| x.worktrees.iter())
+            .filter(|w| !crate::format::same_path(&w.path, &path.display().to_string()))
+            .filter(|w| hit(w.branch.as_deref().unwrap_or(&w.path)))
+            .cloned()
+            .collect();
         rows.push(
             self.section("w", "Worktrees", others.is_empty(), cx)
                 .child(div().flex_1())
-                .child(
-                    // The one place a worktree is made, so it stays lit when the section is empty.
-                    div()
-                        .id("wt-add")
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .size(px(20.))
-                        .rounded(px(5.))
-                        .cursor_pointer()
-                        .hover(move |s| s.bg(p.hover))
-                        .tooltip_text(crate::i18n::t("新增 worktree"))
-                        .on_click(cx.listener(|this, _, w, cx| {
-                            cx.stop_propagation();
-                            this.new_worktree(w, cx);
-                        }))
-                        .child(icon(Ico::Plus, 14., p.muted)),
-                )
+                .child(self.add_btn("wt-add", crate::i18n::t("新增 worktree"), cx, |this, w, cx| this.new_worktree(w, cx)))
                 .into_any_element(),
         );
-        if !self.folded.contains("w") {
+        if open("w") {
             for w in &others {
                 let (wp, label) = (w.path.clone(), w.branch.clone().unwrap_or_else(|| w.head.chars().take(7).collect()));
                 let (w1, w2) = (wp.clone(), wp.clone());
@@ -368,6 +439,45 @@ impl GitTabs {
                 );
             }
         }
+        // ---- submodules, in a repo that has any
+        if refs.as_ref().is_some_and(|x| !x.submodules.is_empty()) {
+            let subs: Vec<_> = refs.iter().flat_map(|x| x.submodules.iter()).filter(|m| hit(&m.path)).cloned().collect();
+            rows.push(self.section("m", "Submodules", subs.is_empty(), cx).into_any_element());
+            if open("m") {
+                for m in &subs {
+                    let full = path.join(&m.path).display().to_string();
+                    // Until it has been fetched there is nothing to open: a click fetches it instead.
+                    let ready = m.state != "uninit";
+                    let (f1, f2, f3, r1, r2) = (full.clone(), full.clone(), full, m.path.clone(), m.path.clone());
+                    let note = match m.state {
+                        "uninit" => crate::i18n::t("還沒取回"),
+                        "changed" => crate::i18n::t("不是記錄的 commit"),
+                        "conflict" => crate::i18n::t("有衝突"),
+                        _ => "",
+                    };
+                    rows.push(
+                        self.item_row(SharedString::from(format!("sm-{}", m.path)), IND, false, false)
+                            .on_click(cx.listener(move |this, _, _, cx| if ready { this.open_worktree(f1.clone(), cx) } else { this.update_submodule(r1.clone(), cx) }))
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
+                                    let (a, b, c) = (f2.clone(), f3.clone(), r2.clone());
+                                    let items = vec![
+                                        MenuItem::new(crate::i18n::t("開成新分頁"), move |t, _, cx| t.open_worktree(a.clone(), cx)).disabled(!ready),
+                                        MenuItem::new(crate::i18n::t("Update（取回，並切到記錄的 commit）"), move |t, _, cx| t.update_submodule(c.clone(), cx)).icon(Ico::RefreshCw),
+                                        MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(b.clone(), crate::i18n::t("路徑"), cx)).icon(Ico::Copy),
+                                    ];
+                                    this.open_menu(ev.position, items, false, cx);
+                                }),
+                            )
+                            .child(icon(Ico::Package, 13., p.muted))
+                            .child(div().overflow_hidden().text_ellipsis().child(m.path.clone()))
+                            .when(!note.is_empty(), |d| d.child(div().ml_auto().flex_none().text_size(px(11.5)).text_color(p.warn).child(note)))
+                            .into_any_element(),
+                    );
+                }
+            }
+        }
         rows.push(div().mt(px(10.)).child(self.nav_item("nav-reflog", Ico::RotateCcw, "Reflog".into(), None, view == View::Reflog, View::Reflog, cx)).into_any_element());
 
         div()
@@ -383,23 +493,27 @@ impl GitTabs {
 
     /// Right-click menu of a remote branch (`origin/feature/x`).
     pub fn remote_item_menu(&self, path: &std::path::Path, full: &str) -> Vec<MenuItem> {
-        let (pa, a, b, c) = (path.to_path_buf(), full.to_string(), full.to_string(), full.to_string());
+        let (pa, a, b, c, d, e) = (path.to_path_buf(), full.to_string(), full.to_string(), full.to_string(), full.to_string(), full.to_string());
         vec![
             MenuItem::new(crate::i18n::t("切換（建立本地分支）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
             MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)),
             MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("分支名稱"), cx)),
+            MenuItem::sep(),
+            MenuItem::new(crate::i18n::t("刪除遠端分支…"), move |t, _, cx| t.delete_remote_branch(e.clone(), cx)).danger(),
         ]
     }
 
     pub fn branch_item_menu(&self, path: &std::path::Path, name: &str, current: bool) -> Vec<MenuItem> {
         let (p, n) = (path.to_path_buf(), name.to_string());
         let mk = |n: &str| n.to_string();
-        let (a, b, c, d, f, g) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
+        let (a, b, c, d, f, g, h) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
         vec![
             MenuItem::new(crate::i18n::t("切換到這個分支"), move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
             MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
             MenuItem::new(crate::i18n::t("把目前的分支 rebase 到這裡"), move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
             MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("重新命名…"), move |t, w, cx| t.rename_branch(h.clone(), w, cx)),
             MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(f.clone(), crate::i18n::t("分支名稱"), cx)),
             MenuItem::sep(),
             MenuItem::new(crate::i18n::t("刪除分支…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),

@@ -34,6 +34,56 @@ pub fn tree_sort<T: Clone>(files: &[T], path: impl Fn(&T) -> &str) -> Vec<T> {
     keyed.into_iter().map(|x| x.1).collect()
 }
 
+/// One visible line of the File Tree tab: a folder or a file of the commit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FtRow {
+    pub name: String,
+    pub path: String,
+    pub depth: usize,
+    pub dir: bool,
+}
+
+#[derive(Default)]
+struct FtDir<'a> {
+    dirs: std::collections::HashMap<&'a str, FtDir<'a>>,
+    files: Vec<&'a str>,
+}
+
+/// The lines to show for `paths` (every file of a commit) while only the folders in `open` are
+/// unfolded. In each folder: sub-folders first, then files, both A→Z whatever their case.
+/// Only what is unfolded gets sorted, so a huge repo costs no more than what is on screen.
+pub fn file_tree_rows(paths: &[String], open: &HashSet<String>) -> Vec<FtRow> {
+    let mut root = FtDir::default();
+    for p in paths {
+        let mut parts: Vec<&str> = p.split('/').collect();
+        let file = parts.pop().unwrap_or(p);
+        let mut at = &mut root;
+        for d in parts {
+            at = at.dirs.entry(d).or_default();
+        }
+        at.files.push(file);
+    }
+    fn emit(dir: &FtDir, prefix: &str, depth: usize, open: &HashSet<String>, out: &mut Vec<FtRow>) {
+        let by_name = |a: &&str, b: &&str| a.to_lowercase().cmp(&b.to_lowercase()).then(a.cmp(b));
+        let mut dirs: Vec<&str> = dir.dirs.keys().copied().collect();
+        dirs.sort_by(by_name);
+        for name in dirs {
+            let path = format!("{prefix}{name}");
+            let unfolded = open.contains(&path);
+            out.push(FtRow { name: name.to_string(), path: path.clone(), depth, dir: true });
+            if unfolded {
+                emit(&dir.dirs[name], &format!("{path}/"), depth + 1, open, out);
+            }
+        }
+        let mut files = dir.files.clone();
+        files.sort_by(by_name);
+        out.extend(files.into_iter().map(|name| FtRow { name: name.to_string(), path: format!("{prefix}{name}"), depth, dir: false }));
+    }
+    let mut out = Vec::new();
+    emit(&root, "", 0, open, &mut out);
+    out
+}
+
 #[derive(Default)]
 struct Node {
     // Files arrive sorted, so folders are first seen in display order; keep that order.
@@ -85,6 +135,19 @@ pub fn tree_rows(files: &[TreeFile], collapsed: &HashSet<String>) -> Vec<Row> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_whole_tree_shows_only_what_is_unfolded() {
+        let paths: Vec<String> = ["README.md", "Cargo.toml", ".gitignore", "src/main.rs", "src/views/mod.rs", "src/app.rs", "crates/x/lib.rs"].iter().map(|s| s.to_string()).collect();
+        let line = |r: &FtRow| format!("{}{}{}", "  ".repeat(r.depth), r.name, if r.dir { "/" } else { "" });
+        let folded: Vec<String> = file_tree_rows(&paths, &HashSet::new()).iter().map(line).collect();
+        assert_eq!(folded, ["crates/", "src/", ".gitignore", "Cargo.toml", "README.md"], "folders first, then files, A to Z whatever the case");
+        let open: HashSet<String> = ["src".to_string(), "src/views".to_string()].into();
+        let rows = file_tree_rows(&paths, &open);
+        assert_eq!(rows.iter().map(line).collect::<Vec<_>>(), ["crates/", "src/", "  views/", "    mod.rs", "  app.rs", "  main.rs", ".gitignore", "Cargo.toml", "README.md"]);
+        assert_eq!(rows[3].path, "src/views/mod.rs");
+        assert_eq!(rows[2].path, "src/views");
+    }
 
     fn f(p: &str) -> TreeFile {
         TreeFile { path: p.into(), status: 'M' }

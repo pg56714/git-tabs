@@ -6,7 +6,6 @@ mod diffpane;
 mod filetree;
 mod history;
 mod overlay;
-mod range;
 mod reflog;
 mod settings;
 mod sidebar;
@@ -148,7 +147,6 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
                 .into_any_element(),
             Some((View::Changes, _)) => this.render_changes(window, cx),
             Some((View::History, _)) => this.render_history(window, cx),
-            Some((View::Range, _)) => this.render_range(window, cx),
             _ => this.render_reflog(window, cx),
         };
         let side_w = this.sizes.side_bar;
@@ -166,7 +164,7 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
             .justify_center()
             .gap(px(10.))
             .bg(p.panel)
-            .child(div().size(px(72.)).rounded(px(16.)).bg(p.accent).flex().items_center().justify_center().text_color(gpui_kit::white()).text_size(px(34.)).child("⑂"))
+            .child(div().size(px(72.)).rounded(px(16.)).bg(p.accent).flex().items_center().justify_center().text_color(gpui_kit::white()).text_size(px(34.)).child(icon(Ico::GitBranch, 36., gpui_kit::white())))
             .child(div().text_size(px(22.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child("git-tabs"))
             .child(muted(&p, crate::i18n::t("每個 repo 一個分頁。先加入你的 repo。")))
             .child(btn(&p, "welcome-add", Bk::Primary, false, crate::i18n::t("＋ 加入 repo")).on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))))

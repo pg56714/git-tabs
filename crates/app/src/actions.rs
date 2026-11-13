@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 
 use gitcore::ops::{self, LineAction};
+use gitcore::rewrite::Rewrite;
 use gpui_kit::{ClipboardItem, Context, Window};
 use serde_json::json;
 
@@ -20,6 +21,19 @@ pub fn branch_name_check(v: &str) -> Option<String> {
     }
     let bad = t.chars().any(|c| c.is_whitespace() || "~^:?*[\\".contains(c)) || t.contains("..") || t.starts_with('-') || t.ends_with('/') || t.ends_with(".lock");
     bad.then(|| crate::i18n::t("分支名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元").to_string())
+}
+
+fn remote_name_check(v: &str) -> Option<String> {
+    let t = v.trim();
+    (t.is_empty() || t.chars().any(|c| c.is_whitespace() || c == '/')).then(|| crate::i18n::t("輸入 remote 名稱（不能有空白或斜線）").to_string())
+}
+
+fn url_check(v: &str) -> Option<String> {
+    (v.trim().is_empty() || v.trim().chars().any(char::is_whitespace)).then(|| crate::i18n::t("輸入網址").to_string())
+}
+
+fn message_check(v: &str) -> Option<String> {
+    v.trim().is_empty().then(|| crate::i18n::t("輸入 commit 訊息").to_string())
 }
 
 fn tag_name_check(v: &str) -> Option<String> {
@@ -360,7 +374,7 @@ impl GitTabs {
 
 **{}**
 
-可以點工具列的 👤 按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
+可以點工具列的身分按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
             let go = std::rc::Rc::new(go);
             self.confirm(crate::i18n::t("這個 repo 沒有對應的身分"), body, crate::i18n::t("照樣提交"), false, cx, move |this, _, cx| go(this, cx));
         } else {
@@ -530,6 +544,113 @@ impl GitTabs {
         );
     }
 
+    pub fn rename_branch(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        self.prompt(
+            &crate::i18n::tr("重新命名 {name}", &[("name", name.clone())], &[]),
+            vec![FieldSpec::text("name", crate::i18n::t("新名稱")).value(name.clone()).check(branch_name_check)],
+            crate::i18n::t("重新命名"),
+            window,
+            cx,
+            move |this, v, _, cx| {
+                let new = v["name"].trim().to_string();
+                if new == name {
+                    return;
+                }
+                let ok = crate::i18n::tr("已改名為 {new}", &[("new", new.clone())], &[]);
+                let old = name.clone();
+                this.op(&path, crate::i18n::t("重新命名分支"), Some(ok), move |r| ops::rename_branch(r, &old, &new), cx);
+            },
+        );
+    }
+
+    /// Deletes `origin/feat/x` on its remote, after asking.
+    pub fn delete_remote_branch(&mut self, full: String, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        let body = crate::i18n::tr("從遠端刪除 **{full}**，其他人之後也拿不到它。本地的分支不受影響。", &[("full", full.clone())], &[]);
+        self.confirm(crate::i18n::t("刪除遠端分支？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
+            let f = full.clone();
+            let ok = crate::i18n::tr("已從遠端刪除 {full}", &[("full", full.clone())], &[]);
+            this.op(&path, crate::i18n::t("刪除遠端分支"), Some(ok), move |r| ops::delete_remote_branch(r, &f), cx);
+        });
+    }
+
+    pub fn add_remote(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        let path = r.path.clone();
+        // The first remote is called origin by everyone; later ones need a name of their own.
+        let first = r.refs.as_ref().is_none_or(|x| x.remote_list.is_empty());
+        self.prompt(
+            crate::i18n::t("新增 remote"),
+            vec![
+                FieldSpec::text("name", crate::i18n::t("名稱")).value(if first { "origin" } else { "" }).placeholder("upstream").check(remote_name_check),
+                FieldSpec::text("url", crate::i18n::t("網址")).placeholder("git@github.com:owner/repo.git").check(url_check),
+            ],
+            crate::i18n::t("新增"),
+            window,
+            cx,
+            move |this, v, _, cx| {
+                let (name, url) = (v["name"].trim().to_string(), v["url"].trim().to_string());
+                let ok = crate::i18n::tr("已新增 {name}", &[("name", name.clone())], &[]);
+                let p2 = path.clone();
+                this.op_with(
+                    &path,
+                    crate::i18n::t("新增 remote"),
+                    false,
+                    Some(ok),
+                    move |r| ops::remote_add(r, &name, &url),
+                    // Its branches only show once they have been fetched.
+                    move |this, res, cx| {
+                        if res.is_ok() {
+                            this.fetch_repo(&p2, cx);
+                        }
+                    },
+                    cx,
+                );
+            },
+        );
+    }
+
+    pub fn edit_remote_url(&mut self, name: String, url: String, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        self.prompt(
+            &crate::i18n::tr("{name} 的網址", &[("name", name.clone())], &[]),
+            vec![FieldSpec::text("url", crate::i18n::t("網址")).value(url).check(url_check)],
+            crate::i18n::t("儲存"),
+            window,
+            cx,
+            move |this, v, _, cx| {
+                let (n, url) = (name.clone(), v["url"].trim().to_string());
+                let ok = crate::i18n::tr("已更新 {name} 的網址", &[("name", name.clone())], &[]);
+                this.op(&path, crate::i18n::t("改 remote 網址"), Some(ok), move |r| ops::remote_set_url(r, &n, &url), cx);
+            },
+        );
+    }
+
+    pub fn remove_remote(&mut self, name: String, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        let body = crate::i18n::tr("移除 **{name}** 和它在本地的遠端分支紀錄。遠端上的東西不會被刪。", &[("name", name.clone())], &[]);
+        self.confirm(crate::i18n::t("移除 remote？"), body, crate::i18n::t("移除"), true, cx, move |this, _, cx| {
+            let n = name.clone();
+            let ok = crate::i18n::tr("已移除 {name}", &[("name", name.clone())], &[]);
+            this.op(&path, crate::i18n::t("移除 remote"), Some(ok), move |r| ops::remote_remove(r, &n), cx);
+        });
+    }
+
+    /// Shows what a stash holds in the history view's detail pane: a stash is a commit, so its
+    /// files and diffs are read the same way.
+    pub fn show_stash(&mut self, sha: String, cx: &mut Context<Self>) {
+        if self.repo().map(|r| r.view) != Some(View::History) {
+            self.set_view(View::History, cx);
+        }
+        self.hist_tab = HistTab::Changes;
+        let Some(r) = self.repo_mut() else { return };
+        r.sel_commit = Some(sha);
+        let p = r.path.clone();
+        self.load_detail(&p, cx);
+        cx.notify();
+    }
+
     pub fn delete_branch(&mut self, name: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
@@ -636,6 +757,56 @@ impl GitTabs {
             cx,
             move |this, _, cx| this.simple_op(&path, "checkout", sha.clone(), "Checkout", None, cx),
         );
+    }
+
+    // ----- rewriting older commits -----
+
+    /// Asks for a new message for a commit of the checked-out branch.
+    pub fn reword_commit(&mut self, sha: String, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        let path = r.path.clone();
+        // The whole message when this commit's details are the ones on screen, else its title.
+        let msg = r.detail.as_ref().filter(|d| d.sha == sha).map(|d| d.message.clone()).or_else(|| r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone())).unwrap_or_default();
+        self.prompt(
+            &crate::i18n::tr("改 {} 的訊息（之後的 commit 會跟著重寫）", &[], &[short(&sha)]),
+            vec![FieldSpec::textarea("message", crate::i18n::t("訊息")).value(msg).check(message_check)],
+            crate::i18n::t("改寫"),
+            window,
+            cx,
+            move |this, v, _, cx| {
+                let how = Rewrite::Reword(v["message"].trim().to_string());
+                this.rewrite_commit(&path, sha.clone(), how, crate::i18n::t("改 commit 訊息"), crate::i18n::t("已改寫訊息。這條分支 push 過的話，下次要強制 push"), cx);
+            },
+        );
+    }
+
+    /// Folds a commit into the one before it, after asking.
+    pub fn squash_commit(&mut self, sha: String, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        let body = crate::i18n::tr("把 `{}` 併進它前面那個 commit，兩邊的訊息都留著。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha)]);
+        self.confirm(crate::i18n::t("併入上一個 commit？"), body, crate::i18n::t("併入"), false, cx, move |this, _, cx| {
+            this.rewrite_commit(&path, sha.clone(), Rewrite::Squash, crate::i18n::t("併入上一個 commit"), crate::i18n::t("已併入上一個 commit"), cx);
+        });
+    }
+
+    /// Removes a commit from the branch, after asking.
+    pub fn drop_commit(&mut self, sha: String, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        let path = r.path.clone();
+        let subject = r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone()).unwrap_or_default();
+        let body = crate::i18n::tr("`{}`（{}）會從這條分支消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha), subject]);
+        self.confirm(crate::i18n::t("丟掉這個 commit？"), body, crate::i18n::t("丟掉"), true, cx, move |this, _, cx| {
+            this.rewrite_commit(&path, sha.clone(), Rewrite::Drop, crate::i18n::t("丟掉 commit"), crate::i18n::t("已丟掉那個 commit"), cx);
+        });
+    }
+
+    fn rewrite_commit(&mut self, path: &Path, sha: String, how: Rewrite, label: &'static str, ok: &str, cx: &mut Context<Self>) {
+        // Git calls this program back as its editor while it rewrites (gitcore::rewrite).
+        let exe = match std::env::current_exe() {
+            Ok(exe) => exe,
+            Err(e) => return self.toast(crate::i18n::t("找不到程式本身的位置"), ToastKind::Err, Some(e.to_string()), cx),
+        };
+        self.op(path, label, Some(ok.to_string()), move |r| gitcore::rewrite::rewrite(r, &exe, &sha, &how), cx);
     }
 
     pub fn create_tag(&mut self, sha: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -790,8 +961,14 @@ impl GitTabs {
             self.toast(crate::i18n::t("這個 commit 不在目前載入的歷史裡"), ToastKind::Info, None, cx);
             return;
         };
+        // Folded away under a merge: unfold, so there is a row to jump to.
+        if r.shown.as_ref().is_some_and(|v| !v.contains(&ix)) {
+            r.collapsed.clear();
+            Self::relayout(r, false);
+        }
+        let row = r.shown.as_ref().map_or(Some(ix), |v| v.iter().position(|x| *x == ix)).unwrap_or(ix);
         // Jump to it: scroll the history so the commit sits in the middle of the list.
-        self.commit_scroll.scroll_to_item(ix, gpui_kit::ScrollStrategy::Center);
+        self.commit_scroll.scroll_to_item(row, gpui_kit::ScrollStrategy::Center);
         let Some(r) = self.repo_mut() else { return };
         r.sel_commit = Some(sha);
         let p = r.path.clone();
@@ -841,6 +1018,13 @@ impl GitTabs {
         );
     }
 
+    /// Fetches a submodule (if need be) and checks out the commit the repo records for it.
+    pub fn update_submodule(&mut self, rel: String, cx: &mut Context<Self>) {
+        let Some(path) = self.active_path() else { return };
+        let ok = crate::i18n::tr("已更新 {rel}", &[("rel", rel.clone())], &[]);
+        self.op(&path, crate::i18n::t("更新 submodule"), Some(ok), move |r| ops::submodule_update(r, &rel), cx);
+    }
+
     pub fn open_worktree(&mut self, path: String, cx: &mut Context<Self>) {
         self.add_repos(vec![PathBuf::from(path)], None, cx);
     }
@@ -848,13 +1032,27 @@ impl GitTabs {
     pub fn remove_worktree(&mut self, wt: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
         self.confirm(crate::i18n::t("移除 worktree？"), crate::i18n::tr("移除 `{wt}`。分支本身會保留。有未提交的修改時 git 會拒絕。", &[("wt", (wt).to_string())], &[]), crate::i18n::t("移除"), true, cx, move |this, _, cx| {
-            this.simple_op(&path, "worktree-remove", wt.clone(), crate::i18n::t("移除 worktree"), None, cx);
+            let (arg, gone) = (wt.clone(), wt.clone());
+            this.op_with(&path, crate::i18n::t("移除 worktree"), false, None, move |r| ops::simple(r, "worktree-remove", &arg), move |this, res, cx| {
+                // Its folder is gone, so a tab that showed it has nothing left to show.
+                if res.is_ok()
+                    && let Some(i) = this.repos.iter().position(|r| crate::format::same_path(&r.path.display().to_string(), &gone))
+                {
+                    this.close_repo(i, cx);
+                }
+            }, cx);
         });
     }
 
     pub fn set_hist_tab(&mut self, t: HistTab, cx: &mut Context<Self>) {
         self.hist_tab = t;
         self.save_prefs();
+        // The file list is only read once its tab is looked at.
+        if t == HistTab::Tree
+            && let Some(p) = self.active_path()
+        {
+            self.load_tree(&p, cx);
+        }
         cx.notify();
     }
 

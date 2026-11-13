@@ -20,7 +20,8 @@ use crate::views::{SplitKind, diffpane::PaneMode, on_split, splitter};
 
 const ROW: f32 = 24.;
 const LANE: f32 = 12.;
-const PAD: f32 = 10.;
+/// Left of the first lane; wide enough for the dot of a commit that is not pushed yet.
+const PAD: f32 = 17.;
 const TAIL: f32 = 8.;
 /// The text stops moving right after this many lanes.
 const MAX_LANES: usize = 16;
@@ -36,7 +37,7 @@ fn initials(name: &str) -> String {
 
 /// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
 /// joins or leaves the commit turns into its row with a rounded corner, and a merge has a hollow dot.
-fn graph_cell(row: GraphRow, width: f32, bg: Hsla) -> impl IntoElement {
+fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool, ahead: Option<Hsla>) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, _, window, _| {
@@ -77,14 +78,16 @@ fn graph_cell(row: GraphRow, width: f32, bg: Hsla) -> impl IntoElement {
                     window.paint_path(path, lane_color(s.color));
                 }
             }
-            let c = pt(lane_x(row.col), mid);
-            let dot = |d: f32, color: Hsla| fill(Bounds::centered_at(c, size(px(d), px(d))), color).corner_radii(px(d / 2.));
-            if row.merge {
-                window.paint_quad(dot(11., lane_color(row.color)));
-                window.paint_quad(dot(7., bg));
-            } else {
-                window.paint_quad(dot(10., bg));
-                window.paint_quad(dot(8., lane_color(row.color)));
+            // A commit no remote has yet: a small dot in front of the graph, as in Fork.
+            if let Some(color) = ahead {
+                window.paint_quad(fill(Bounds::centered_at(pt(5., mid), size(px(6.), px(6.))), color).corner_radii(px(3.)));
+            }
+            // A merge's dot is a button of its own (it folds the merge), drawn over this cell.
+            if dot {
+                let c = pt(lane_x(row.col), mid);
+                let disc = |d: f32, color: Hsla| fill(Bounds::centered_at(c, size(px(d), px(d))), color).corner_radii(px(d / 2.));
+                window.paint_quad(disc(10., bg));
+                window.paint_quad(disc(8., lane_color(row.color)));
             }
         },
     )
@@ -112,6 +115,12 @@ impl GitTabs {
         let branch = r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_else(|| "HEAD".into());
         let subject = r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone()).unwrap_or_default();
         let (a, b, c, d, e, f, g) = (sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string(), sha.to_string());
+        let (w1, w2, w3) = (sha.to_string(), sha.to_string(), sha.to_string());
+        // A commit can be rewritten when it is the checked-out branch's own and not a merge.
+        let ix = r.commits.iter().position(|c| c.sha == sha);
+        let row = ix.and_then(|i| r.graph.as_ref().and_then(|g| g.get(i)));
+        let own = r.summary.as_ref().is_some_and(|s| s.branch.is_some()) && row.is_some_and(|g| !g.off_head && !g.merge);
+        let has_parent = ix.is_some_and(|i| !r.commits[i].parents.is_empty());
         vec![
             MenuItem::new(crate::i18n::t("Checkout 這個 commit…"), move |t, _, cx| t.checkout_commit(a.clone(), cx)),
             MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
@@ -119,6 +128,10 @@ impl GitTabs {
             MenuItem::new("Revert…", move |t, _, cx| t.revert(d.clone(), cx)),
             MenuItem::new(crate::i18n::tr("Reset {branch} 到這裡…", &[("branch", (branch).to_string())], &[]), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
             MenuItem::new(crate::i18n::t("加 Tag…"), move |t, w, cx| t.create_tag(f.clone(), w, cx)),
+            MenuItem::sep(),
+            MenuItem::new(crate::i18n::t("改訊息…"), move |t, w, cx| t.reword_commit(w1.clone(), w, cx)).disabled(!own),
+            MenuItem::new(crate::i18n::t("併入上一個 commit…"), move |t, _, cx| t.squash_commit(w2.clone(), cx)).disabled(!own || !has_parent),
+            MenuItem::new(crate::i18n::t("丟掉這個 commit…"), move |t, _, cx| t.drop_commit(w3.clone(), cx)).danger().disabled(!own),
             MenuItem::sep(),
             MenuItem::new(crate::i18n::t("複製 SHA"), {
                 let s = g.clone();
@@ -140,7 +153,11 @@ impl GitTabs {
         let sel_commit = r.sel_commit.clone();
         let detail = r.detail.clone();
         let nothing = commits.is_empty() && !log_loading;
-        let count = commits.len();
+        // The rows on screen: every commit, or what is left while a merge is folded.
+        let shown = r.shown.clone();
+        let collapsed = Arc::new(r.collapsed.clone());
+        let unpushed = r.unpushed.clone();
+        let count = shown.as_ref().map_or(commits.len(), |v| v.len());
 
         // ---- list geometry
         let list_w = f32::from(self.window_size.width) - self.sizes.side_bar - 5.;
@@ -148,6 +165,7 @@ impl GitTabs {
         let owner = cx.entity().downgrade();
         let list = uniform_list("commits", count, {
             let (commits, graph, sel, owner, path) = (commits.clone(), graph.clone(), sel_commit.clone(), owner.clone(), path.clone());
+            let (shown, collapsed, unpushed) = (shown.clone(), collapsed.clone(), unpushed.clone());
             move |range, window, cx| {
                 // Near the end of what is loaded: fetch the next page.
                 if !log_done && !log_loading && range.end + 30 >= commits.len() {
@@ -158,13 +176,16 @@ impl GitTabs {
                 }
                 range
                     .map(|ix| {
-                        let c = &commits[ix];
+                        let at = shown.as_ref().map_or(ix, |v| v[ix]);
+                        let Some(c) = commits.get(at) else { return div().into_any_element() };
+                        // Not on any remote yet: marked with a dot (white on the selected row, to stay visible).
+                        let ahead = unpushed.get(at).copied().unwrap_or(false).then(|| if sel.as_deref() == Some(c.sha.as_str()) { gpui_kit::white() } else { p.accent });
                         let on = sel.as_deref() == Some(c.sha.as_str());
                         let (sha, sha2) = (c.sha.clone(), c.sha.clone());
                         let (o1, o2) = (owner.clone(), owner.clone());
                         let lane = graph.as_ref().and_then(|g| g.get(ix));
-                        // Merges and commits HEAD does not reach are greyed, as in Fork.
-                        let dim = !on && lane.is_some_and(|g| g.merge || g.off_head);
+                        // Commits HEAD does not reach are greyed, as in Fork. (A merge is not: only its dot differs.)
+                        let dim = !on && lane.is_some_and(|g| g.off_head);
                         div()
                             .id(SharedString::from(format!("c-{}", c.sha)))
                             .flex()
@@ -195,7 +216,43 @@ impl GitTabs {
                                 });
                             })
                             .child(match lane {
-                                Some(g) => graph_cell(g.clone(), cell_width(g), if on { p.accent } else { p.panel }).into_any_element(),
+                                // A merge: its dot folds away what the merge brought in, and shows it again.
+                                Some(g) if c.parents.len() > 1 => {
+                                    let (bg, color, folded) = (if on { p.accent } else { p.panel }, lane_color(g.color), collapsed.contains(&c.sha));
+                                    let (o5, s5) = (owner.clone(), c.sha.clone());
+                                    div()
+                                        .relative()
+                                        .flex_none()
+                                        .w(px(cell_width(g)))
+                                        .h(px(ROW))
+                                        .child(graph_cell(g.clone(), cell_width(g), bg, false, ahead))
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!("fold-{}", c.sha)))
+                                                .absolute()
+                                                .left(px(PAD + g.col as f32 * LANE - 7.))
+                                                .top(px(ROW / 2. - 7.))
+                                                .size(px(14.))
+                                                .rounded(px(7.))
+                                                .border_1()
+                                                .border_color(color)
+                                                .bg(if folded { color } else { bg })
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .cursor_pointer()
+                                                .tooltip_text(if folded { crate::i18n::t("展開這次 merge 帶進來的 commit") } else { crate::i18n::t("收合這次 merge 帶進來的 commit") })
+                                                .on_click(move |_, _, cx| {
+                                                    // Not also a click on the row, which would select the commit.
+                                                    cx.stop_propagation();
+                                                    let s = s5.clone();
+                                                    let _ = o5.update(cx, |this, cx| this.toggle_merge(s, cx));
+                                                })
+                                                .child(icon(if folded { Ico::ChevronRight } else { Ico::ChevronDown }, 10., if folded { gpui_kit::white() } else { color })),
+                                        )
+                                        .into_any_element()
+                                }
+                                Some(g) => graph_cell(g.clone(), cell_width(g), if on { p.accent } else { p.panel }, true, ahead).into_any_element(),
                                 None => div().w(px(PAD + TAIL)).flex_none().text_color(p.accent).text_size(px(10.)).text_center().child("●").into_any_element(),
                             })
                             .child(
@@ -319,10 +376,12 @@ impl GitTabs {
             .border_b_1()
             .border_color(p.border)
             .child(self.hist_tab_button("tab-commit", "Commit", None, tab == HistTab::Commit, HistTab::Commit, cx))
-            .child(self.hist_tab_button("tab-changes", "Changes", files_n, tab == HistTab::Changes, HistTab::Changes, cx));
+            .child(self.hist_tab_button("tab-changes", "Changes", files_n, tab == HistTab::Changes, HistTab::Changes, cx))
+            .child(self.hist_tab_button("tab-tree", "File Tree", None, tab == HistTab::Tree, HistTab::Tree, cx));
         let body: AnyElement = match detail {
             None => empty(&p, "", crate::i18n::t("選一個 commit"), None),
             Some(d) if tab == HistTab::Commit => self.render_commit_tab(d, cx),
+            Some(d) if tab == HistTab::Tree => self.render_tree_tab(d, cx),
             Some(d) => self.render_changes_tab(d, cx),
         };
         let _ = nothing;
@@ -332,8 +391,31 @@ impl GitTabs {
             None
         };
         let hist_top = self.sizes.hist_top;
+        // What is not committed yet sits above the newest commit, as in Fork; a click goes there.
+        let pending = self.repo().and_then(|r| r.summary.as_ref()).map_or(0, |s| s.changes);
+        let pending_row = (pending > 0 && graph.is_some()).then(|| {
+            div()
+                .id("uncommitted")
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(6.))
+                .h(px(ROW))
+                .pl(px(PAD - 6.))
+                .pr(px(10.))
+                .cursor_pointer()
+                .border_b_1()
+                .border_color(p.border)
+                .text_color(p.muted)
+                .hover(move |s| s.bg(p.hover))
+                .on_click(cx.listener(|this, _, _, cx| this.set_view(View::Changes, cx)))
+                .child(icon(Ico::FilePenLine, 14., p.warn))
+                .child(crate::i18n::t("未提交的修改"))
+                .child(div().px(px(6.)).rounded(px(8.)).bg(p.warn_bg).text_size(px(11.5)).text_color(p.warn).child(pending.to_string()))
+        });
         on_split(div().id("hist").flex().flex_col().flex_1().min_h_0(), SplitKind::HistTop, cx)
             .child(cbar)
+            .children(pending_row)
             .child(
                 div()
                     .id("commit-list")
@@ -382,6 +464,9 @@ impl GitTabs {
         let (s1, s2, s3, s4, s5, s6) = (sha.clone(), sha.clone(), sha.clone(), sha.clone(), sha.clone(), sha.clone());
         let kv = |k: &'static str, v: AnyElement| div().flex().gap(px(10.)).items_center().child(div().w(px(72.)).flex_none().child(k)).child(v);
         let act = |id: &'static str, label: &'static str| btn(&p, id, Bk::Normal, true, label);
+        // The stash this "commit" is, if it is one, and the repo it belongs to.
+        let stash_ix = self.repo().and_then(|r| r.refs.as_ref()).and_then(|x| x.stashes.iter().find(|s| s.sha == d.sha)).map(|s| s.index as usize);
+        let repo_path = self.repo().map(|r| r.path.clone()).unwrap_or_default();
         div()
             .id("commit-tab")
             .flex()
@@ -449,21 +534,38 @@ impl GitTabs {
             )
             .child(div().mt(px(6.)).text_size(px(15.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child(subject))
             .when(!body.is_empty(), |c| c.child(div().font_family("Cascadia Mono").text_size(px(12.5)).text_color(p.muted).child(body)))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(6.))
-                    .child(act("a-cp", "Cherry-pick").on_click(cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx))))
-                    .child(act("a-rv", "Revert").on_click(cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx))))
-                    .child(act("a-co", "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s4.clone(), cx))))
-                    .child(act("a-br", crate::i18n::t("開分支")).on_click(cx.listener({
-                        let s = sha.clone();
-                        move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
-                    })))
-                    .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx))))
-                    .child(act("a-rs", crate::i18n::t("Reset 到這裡…")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx)))),
-            )
+            .child(match stash_ix {
+                // A stash: what can be done with it, instead of what can be done with a commit.
+                Some(ix) => {
+                    let (pa, pb) = (repo_path.clone(), repo_path.clone());
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(6.))
+                        .child(act("s-ap", crate::i18n::t("套用")).on_click(cx.listener(move |this, _, _, cx| {
+                            this.simple_op(&pa, "stash-apply", ix.to_string(), crate::i18n::t("套用 stash"), Some(crate::i18n::t("已套用 stash").into()), cx)
+                        })))
+                        .child(act("s-pop", "Pop").on_click(cx.listener(move |this, _, _, cx| {
+                            this.simple_op(&pb, "stash-pop", ix.to_string(), "Pop stash", Some(crate::i18n::t("已套用並刪除 stash").into()), cx)
+                        })))
+                        .child(act("s-dr", crate::i18n::t("刪除")).on_click(cx.listener(move |this, _, _, cx| this.stash_drop(ix, cx))))
+                }
+                None => {
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(6.))
+                        .child(act("a-cp", "Cherry-pick").on_click(cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx))))
+                        .child(act("a-rv", "Revert").on_click(cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx))))
+                        .child(act("a-co", "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s4.clone(), cx))))
+                        .child(act("a-br", crate::i18n::t("開分支")).on_click(cx.listener({
+                            let s = sha.clone();
+                            move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
+                        })))
+                        .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx))))
+                        .child(act("a-rs", crate::i18n::t("Reset 到這裡…")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx))))
+                }
+            })
             .child(
                 div()
                     .border_t_1()
@@ -494,6 +596,115 @@ impl GitTabs {
                     }))
                     .when(d.files.is_empty(), |c| c.child(div().px(px(12.)).py(px(6.)).child(sub(&p, crate::i18n::t("沒有檔案變更"))))),
             )
+            .into_any_element()
+    }
+
+    /// The File Tree tab: every file of the commit, and the picked file as it was then.
+    fn render_tree_tab(&mut self, d: gitcore::ops::CommitDetail, cx: &mut Context<Self>) -> AnyElement {
+        let p = self.pal;
+        let Some(r) = self.repo() else { return div().into_any_element() };
+        let (rows, sel, shown) = (r.tree_rows.clone(), r.tree_sel.clone(), r.tree_file.clone());
+        let listed = r.tree_of == d.sha;
+        let open = Arc::new(r.tree_open.clone());
+        let hf = self.sizes.hist_files;
+        let owner = cx.entity().downgrade();
+        let tree = uniform_list("ftree", if listed { rows.len() } else { 0 }, {
+            let (rows, sel, open, owner) = (rows.clone(), sel.clone(), open.clone(), owner.clone());
+            move |range, _, _| {
+                range
+                    .map(|ix| {
+                        let row = &rows[ix];
+                        let on = !row.dir && sel.as_deref() == Some(row.path.as_str());
+                        let unfolded = row.dir && open.contains(&row.path);
+                        let (o, path, is_dir) = (owner.clone(), row.path.clone(), row.dir);
+                        div()
+                            .id(SharedString::from(format!("ft-{}", row.path)))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .h(px(24.))
+                            .mx(px(6.))
+                            .pl(px(8. + row.depth as f32 * 14.))
+                            .pr(px(8.))
+                            .rounded(px(5.))
+                            .whitespace_nowrap()
+                            .cursor_pointer()
+                            .bg(if on { p.accent_bg } else { Hsla::transparent_black() })
+                            .text_color(if on { p.accent_tx } else { p.text })
+                            .hover(move |s| s.bg(if on { p.accent_bg } else { p.hover }))
+                            .on_click(move |_, _, cx| {
+                                let path = path.clone();
+                                let _ = o.update(cx, |this, cx| if is_dir { this.toggle_tree_dir(path, cx) } else { this.pick_tree_file(path, cx) });
+                            })
+                            .child(if row.dir {
+                                icon(if unfolded { Ico::ChevronDown } else { Ico::ChevronRight }, 12., p.muted).into_any_element()
+                            } else {
+                                div().w(px(12.)).flex_none().into_any_element()
+                            })
+                            .child(if row.dir { icon(if unfolded { Ico::FolderOpen } else { Ico::Folder }, 14., p.warn) } else { icon(Ico::File, 14., p.muted) })
+                            .child(div().overflow_hidden().text_ellipsis().child(row.name.clone()))
+                            .into_any_element()
+                    })
+                    .collect()
+            }
+        })
+        .size_full();
+        let right: AnyElement = match (&sel, shown) {
+            (None, Some(FileShown::Note(why))) => empty(&p, "", &why, None),
+            (None, _) => empty(&p, "", crate::i18n::t("選一個檔案"), None),
+            (Some(file), Some(FileShown::Lines(lines))) => {
+                // Room for the widest line number.
+                let gutter = 22. + lines.len().max(1).to_string().len() as f32 * 7.5;
+                let body = uniform_list(SharedString::from(format!("fc-{}-{file}", d.sha)), lines.len(), {
+                    let lines = lines.clone();
+                    move |range, _, _| {
+                        range
+                            .map(|ix| {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .h(px(19.))
+                                    .font_family("Cascadia Mono")
+                                    .text_size(px(12.5))
+                                    .whitespace_nowrap()
+                                    .child(div().flex().flex_none().justify_end().w(px(gutter)).pr(px(12.)).text_color(p.faint).child((ix + 1).to_string()))
+                                    .child(div().text_color(p.text).child(lines[ix].clone()))
+                                    .into_any_element()
+                            })
+                            .collect()
+                    }
+                })
+                .size_full();
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .gap(px(8.))
+                            .h(px(34.))
+                            .px(px(12.))
+                            .border_b_1()
+                            .border_color(p.border)
+                            .child(icon(Ico::File, 14., p.muted))
+                            .child(div().overflow_hidden().text_ellipsis().whitespace_nowrap().child(file.clone()))
+                            .child(sub(&p, crate::i18n::tr("{} 行", &[], &[lines.len().to_string()]))),
+                    )
+                    .child(div().flex_1().min_h_0().overflow_hidden().py(px(4.)).child(body))
+                    .into_any_element()
+            }
+            (Some(_), Some(FileShown::Note(why))) => empty(&p, "", &why, None),
+            (Some(_), _) => empty(&p, "", crate::i18n::t("載入中…"), None),
+        };
+        on_split(div().id("trtab").flex().flex_1().min_h_0(), SplitKind::HistFiles, cx)
+            .child(div().id("hist-ftree").flex_none().w(px(hf)).h_full().py(px(6.)).child(tree))
+            .child(splitter(&p, "split-ft", SplitKind::HistFiles, true))
+            .child(right)
             .into_any_element()
     }
 

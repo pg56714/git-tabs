@@ -82,7 +82,11 @@ impl GitTabs {
                             }
                         }))
                     })
-                    .child(div().w(px(14.)).flex_none().text_color(p.ok).child(if it.checked { "✓" } else { it.icon }))
+                    .child(div().w(px(16.)).flex_none().flex().items_center().text_color(p.ok).child(match (it.checked, it.icon) {
+                        (true, _) => "✓".into_any_element(),
+                        (false, Some(i)) => icon(i, 14., p.muted).into_any_element(),
+                        (false, None) => div().into_any_element(),
+                    }))
                     .child(div().flex_1().overflow_hidden().text_ellipsis().child(it.label.clone()))
                     .when(!it.hint.is_empty(), |d| d.child(div().flex_none().text_size(px(11.5)).text_color(p.faint).child(it.hint.clone())))
                     .into_any_element()
@@ -219,7 +223,7 @@ impl GitTabs {
                                     .items_center()
                                     .gap(px(6.))
                                     .cursor_pointer()
-                                    .child(if f.checked { "☑" } else { "☐" })
+                                    .child(check_box(&p, f.checked))
                                     .child(f.spec.label.clone())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(Modal::Prompt(m)) = &mut this.modal
