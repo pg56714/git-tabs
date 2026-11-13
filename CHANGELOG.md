@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.0 (2026-11-13)
+
+### Features
+
+- **ui:** toolbar icons; unpushed dot between graph and text ([283fb2f](https://github.com/pg56714/git-tabs/commit/283fb2f2321109b740ffe7fe868dc24b578be873))
+- rewrite older commits, file tree, fold merges, manage remotes, sidebar filter and more ([db78990](https://github.com/pg56714/git-tabs/commit/db789901fd4fceb8f551149097248aa1f47ad15b))
+- **ui:** one label per branch, sidebar icons, new worktree, no Auto identity ([9de547c](https://github.com/pg56714/git-tabs/commit/9de547cd8044f072bd78b14778387443c196a1b9))
+- **history:** draw the graph the way Fork does; vector icons on ref labels ([6f6b6f0](https://github.com/pg56714/git-tabs/commit/6f6b6f0aebc88994af39b8286e7e0df76e0a50e3))
+- **ui:** Fork-style branches and history ([c16a7f3](https://github.com/pg56714/git-tabs/commit/c16a7f3ccbd816e762b4f70aae5d7414bf157d52))
+- **identity:** remove the default identity; repos without a match are chosen by hand ([ead5254](https://github.com/pg56714/git-tabs/commit/ead5254cfe557143e59355c38b334be44bbceab5))
+
+### Fixes
+
+- **ui:** only a row with an unpushed dot makes room for it, as in Fork ([db5cace](https://github.com/pg56714/git-tabs/commit/db5cace477d35c8f3bf3cfa597ea8653df1d6d0d))
+
 ## v0.3.0 (2026-11-11)
 
 ### Features
