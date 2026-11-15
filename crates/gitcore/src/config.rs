@@ -86,3 +86,30 @@ pub fn save(dir: &Path, cfg: &AppConfig) -> Result<(), String> {
     std::fs::write(&tmp, s).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, file(dir)).map_err(|e| e.to_string())
 }
+
+/// Saves the settings but keeps `managed` as the file has it: only the identity code changes
+/// that list. A copy loaded when the app started is stale once identities are applied, and
+/// writing it back made the next apply leave the earlier lines in the global gitconfig.
+pub fn save_settings(dir: &Path, cfg: &AppConfig) -> Result<(), String> {
+    let mut cfg = cfg.clone();
+    cfg.managed = load(dir).managed;
+    save(dir, &cfg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saving_settings_keeps_the_managed_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let ours = vec![Managed { key: "includeIf.gitdir/i:D:/work/.path".into(), value: "C:/cfg/identities/a.gitconfig".into() }];
+        save(dir.path(), &AppConfig { managed: ours.clone(), ..Default::default() }).unwrap();
+        // what the app loaded before the identities were applied
+        let stale = AppConfig { theme: "dark".into(), ..Default::default() };
+        save_settings(dir.path(), &stale).unwrap();
+        let now = load(dir.path());
+        assert_eq!(now.theme, "dark");
+        assert!(now.managed == ours, "managed was overwritten");
+    }
+}

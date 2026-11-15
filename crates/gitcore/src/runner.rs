@@ -95,7 +95,7 @@ pub fn command(program: &str) -> Command {
     c
 }
 
-fn quote(a: &str) -> String {
+pub(crate) fn quote(a: &str) -> String {
     if a.is_empty() || a.contains(|c: char| c.is_whitespace() || c == '"') { format!("\"{}\"", a.replace('"', "\\\"")) } else { a.to_string() }
 }
 

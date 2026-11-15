@@ -2,6 +2,8 @@
 //!
 //! Rules become `includeIf` entries in the global gitconfig, each pointing at a small
 //! config file this app writes, so plain `git` in a terminal picks the same identity.
+//! Every include that points into this app's `identities` folder counts as ours, listed in
+//! `managed` or not, so lines an older version left behind are cleaned up too.
 
 use crate::config::{Identity, Managed};
 use crate::runner::{command, run};
@@ -10,6 +12,103 @@ use std::path::{Path, PathBuf};
 
 fn slash(p: &str) -> String {
     p.replace('\\', "/")
+}
+
+/// The home folder git expands `~/` to in config paths.
+fn home() -> PathBuf {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+}
+
+/// A path the way Windows compares paths: either slash, any case, no doubled or trailing slash.
+fn path_key(p: &str) -> String {
+    let mut out = String::with_capacity(p.len());
+    for c in p.trim().chars().flat_map(char::to_lowercase) {
+        let c = if c == '\\' { '/' } else { c };
+        if !(c == '/' && out.ends_with('/')) {
+            out.push(c);
+        }
+    }
+    out.trim_end_matches('/').to_string()
+}
+
+/// Whether a path from a gitconfig points at something inside `dir`, file still there or not.
+fn points_into(value: &str, dir: &Path, home: &Path) -> bool {
+    let d = path_key(&dir.display().to_string());
+    !d.is_empty() && path_key(&expand(value, home)).strip_prefix(&d).is_some_and(|rest| rest.len() > 1 && rest.starts_with('/'))
+}
+
+/// A config key the way git prints it: section and variable lower case, the subsection as is.
+fn canon(key: &str) -> String {
+    match (key.find('.'), key.rfind('.')) {
+        (Some(a), Some(b)) if a < b => format!("{}{}{}", key[..a].to_ascii_lowercase(), &key[a..b], key[b..].to_ascii_lowercase()),
+        _ => key.to_ascii_lowercase(),
+    }
+}
+
+/// Every `include.path` and `includeIf.<condition>.path` line in the global gitconfig, copies
+/// included, with the key as git prints it.
+fn global_includes() -> Result<Vec<Managed>, String> {
+    let o = run(None, &["config", "--global", "--null", "--get-regexp", r"^include(if\..*)?\.path$"], None, false);
+    match o.code {
+        0 => {}
+        // nothing matched, or there is no global gitconfig at all
+        1 => return Ok(vec![]),
+        _ => return Err(o.message()),
+    }
+    let entries = o.stdout.split('\0').filter(|e| !e.is_empty());
+    Ok(entries
+        .map(|e| {
+            let (key, value) = e.split_once('\n').unwrap_or((e, ""));
+            Managed { key: key.to_string(), value: value.to_string() }
+        })
+        .collect())
+}
+
+/// `git config --global --unset-all` for one exact value. Ok(false) when git found nothing to
+/// unset (exit 5: the line sits in a file `--global` reads but does not write); like
+/// `unset_local`, that one stays out of the command log.
+fn unset_global(key: &str, value: &str) -> Result<bool, String> {
+    let t = std::time::Instant::now();
+    let args = ["config", "--global", "--fixed-value", "--unset-all", key, value];
+    let o = run(None, &args, None, false);
+    if o.code == 5 {
+        return Ok(false);
+    }
+    let cmd = std::iter::once("git").chain(args).map(crate::runner::quote).collect::<Vec<_>>().join(" ");
+    crate::runner::record("", cmd, t.elapsed().as_millis() as u64, o.ok(), &o.message());
+    if o.ok() { Ok(true) } else { Err(o.message()) }
+}
+
+/// Takes each distinct key/value out of the global gitconfig once; `--unset-all` removes its
+/// copies with it. Returns the lines that are gone, copies included.
+fn remove(lines: &[Managed]) -> Result<Vec<Managed>, String> {
+    let mut tried: Vec<&Managed> = Vec::new();
+    let mut gone = Vec::new();
+    for m in lines {
+        if tried.contains(&m) {
+            continue;
+        }
+        tried.push(m);
+        if unset_global(&m.key, &m.value)? {
+            gone.extend(lines.iter().filter(|l| *l == m).cloned());
+        }
+    }
+    Ok(gone)
+}
+
+/// Takes the unconditional `include.path` lines that point into our identities folder out of
+/// the global gitconfig, and out of `managed`. Versions before the default identity was removed
+/// wrote one, and the copies piled up when `managed` lost track of them. Nothing writes them
+/// any more, yet while one is there every repo without its own setting gets that identity's key
+/// and email, and a line whose file is gone still clutters the file. The user's own includes
+/// stay. Returns the lines removed from the gitconfig, copies included.
+pub fn tidy(cfg_dir: &Path, managed: &mut Vec<Managed>) -> Result<Vec<Managed>, String> {
+    let dir = cfg_dir.join("identities");
+    let home = home();
+    let stale = |m: &Managed| canon(&m.key) == "include.path" && points_into(&m.value, &dir, &home);
+    managed.retain(|m| !stale(m));
+    let lines: Vec<Managed> = global_includes()?.into_iter().filter(|m| stale(m)).collect();
+    remove(&lines)
 }
 
 pub fn ssh_command(key: &str) -> String {
@@ -52,19 +151,20 @@ pub fn conditions(t: &str, v: &str) -> Vec<String> {
 }
 
 /// Rewrites this app's part of the global gitconfig. Returns what was added.
+///
+/// Our part is what `old` lists plus every include that points into our identities folder,
+/// listed or not: `managed` has lost lines before, and older versions wrote an unconditional
+/// `include.path` for a default identity. Each key/value is written once, however many rules
+/// ask for it.
 pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Managed>, String> {
-    for m in old {
-        let _ = run(None, &["config", "--global", "--fixed-value", "--unset-all", &m.key, &m.value], None, true);
-    }
     let dir = cfg_dir.join("identities");
+    let home = home();
+    let old: Vec<Managed> = old.iter().map(|m| Managed { key: canon(&m.key), value: m.value.clone() }).collect();
+    let ours: Vec<Managed> = global_includes()?.into_iter().filter(|m| old.contains(m) || points_into(&m.value, &dir, &home)).collect();
+    remove(&ours)?;
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut added = Vec::new();
-    let mut add = |key: String, value: String| -> Result<(), String> {
-        git_cfg(&["config", "--global", "--add", &key, &value])?;
-        added.push(Managed { key, value });
-        Ok(())
-    };
+    let mut added: Vec<Managed> = Vec::new();
     let mut files = Vec::new();
     for id in ids {
         let f = identity_file(cfg_dir, &id.id);
@@ -86,7 +186,12 @@ pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Ma
     for (id, f) in &files {
         for r in &id.rules {
             for c in conditions(&r.t, &r.v) {
-                add(format!("includeIf.{c}.path"), f.clone())?;
+                let m = Managed { key: format!("includeIf.{c}.path"), value: f.clone() };
+                // Two rules can come to the same condition; git needs the line once.
+                if !added.contains(&m) {
+                    git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
+                    added.push(m);
+                }
             }
         }
     }
@@ -315,5 +420,39 @@ mod tests {
         assert_eq!(c[0], "hasconfig:remote.*.url:git@github.com:acme/**");
         assert_eq!(c[1], "hasconfig:remote.*.url:https://github.com/acme/**");
         assert!(conditions("remote", " ").is_empty());
+    }
+
+    #[test]
+    fn paths_into_our_folder_ignore_slashes_and_case() {
+        let dir = Path::new("C:\\Users\\Sam\\AppData\\Roaming\\app.git-tabs.desktop\\identities");
+        let home = Path::new("C:\\Users\\Sam");
+        for ours in [
+            "C:/Users/Sam/AppData/Roaming/app.git-tabs.desktop/identities/id18e6.gitconfig",
+            "C:\\Users\\Sam\\AppData\\Roaming\\app.git-tabs.desktop\\identities\\id18e6.gitconfig",
+            "c:/users/sam/appdata/roaming/APP.GIT-TABS.DESKTOP/Identities/gone.gitconfig",
+            "C://Users/Sam/AppData//Roaming/app.git-tabs.desktop/identities/x.gitconfig",
+            "~/AppData/Roaming/app.git-tabs.desktop/identities/x.gitconfig",
+            "\"C:/Users/Sam/AppData/Roaming/app.git-tabs.desktop/identities/x.gitconfig\"",
+        ] {
+            assert!(points_into(ours, dir, home), "{ours}");
+        }
+        for theirs in [
+            "~/.gitconfig-work",
+            "C:/Users/Sam/AppData/Roaming/app.git-tabs.desktop/identities-old/x.gitconfig",
+            "C:/Users/Sam/AppData/Roaming/app.git-tabs.desktop/identities",
+            "C:/Users/Sam/AppData/Roaming/app.git-tabs.desktop/identities/",
+            "D:/elsewhere/identities/x.gitconfig",
+            "",
+        ] {
+            assert!(!points_into(theirs, dir, home), "{theirs}");
+        }
+    }
+
+    #[test]
+    fn keys_compare_the_way_git_prints_them() {
+        assert_eq!(canon("include.path"), "include.path");
+        assert_eq!(canon("Include.Path"), "include.path");
+        assert_eq!(canon("includeIf.hasconfig:remote.*.url:git@github.com:Acme/**.path"), "includeif.hasconfig:remote.*.url:git@github.com:Acme/**.path");
+        assert_eq!(canon("includeIf.gitdir/i:D:/Work/.PATH"), "includeif.gitdir/i:D:/Work/.path");
     }
 }

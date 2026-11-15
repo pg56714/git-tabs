@@ -216,6 +216,114 @@ fn identities_write_include_if_and_pin() {
     assert!(!after.contains("include"), "{after}");
 }
 
+/// Puts the shared global gitconfig back when a test ends, also when it fails, so a fixture
+/// never leaks into the other tests.
+struct RestoreGlobal(PathBuf, String);
+
+impl Drop for RestoreGlobal {
+    fn drop(&mut self) {
+        let _ = std::fs::write(&self.0, &self.1);
+    }
+}
+
+fn keep_global() -> RestoreGlobal {
+    let g = isolate().join("gitconfig");
+    let before = std::fs::read_to_string(&g).unwrap();
+    RestoreGlobal(g, before)
+}
+
+/// Every value of `key` in the shared global gitconfig.
+fn global_all(key: &str) -> Vec<String> {
+    let o = Command::new("git").args(["config", "--global", "--get-all", key]).output().unwrap();
+    String::from_utf8_lossy(&o.stdout).lines().map(String::from).collect()
+}
+
+/// How many include / includeIf lines in the global gitconfig point into the app's identities folder.
+fn lines_into_identities(cfg_dir: &Path) -> usize {
+    let o = Command::new("git").args(["config", "--global", "--get-regexp", r"^include(if\..*)?\.path$"]).output().unwrap();
+    let dir = format!("{}/", cfg_dir.join("identities").display().to_string().replace('\\', "/").to_lowercase());
+    String::from_utf8_lossy(&o.stdout).lines().filter(|l| l.split_once(' ').is_some_and(|(_, v)| v.replace('\\', "/").to_lowercase().starts_with(&dir))).count()
+}
+
+/// The user's own includes, which must survive every clean-up.
+const MINE: &str = "~/.gitconfig-git-tabs-test-mine";
+const MINE_IF: &str = "includeIf.gitdir/i:D:/git-tabs-test-mine/.path";
+
+/// What versions with a default identity could leave behind: three copies of the default
+/// identity's include (one spelt with backslashes in upper case), one whose file is gone, and the
+/// user's own includes in between, among them a neighbour folder whose name starts the same.
+/// Returns (the default identity's include, the neighbour).
+fn leave_old_includes(cfg_dir: &Path) -> (String, String) {
+    let ids = cfg_dir.join("identities");
+    std::fs::create_dir_all(&ids).unwrap();
+    std::fs::write(ids.join("idpersonal.gitconfig"), "[user]\n\temail = personal@example.com\n").unwrap();
+    let base = cfg_dir.display().to_string().replace('\\', "/");
+    let ours = format!("{base}/identities/idpersonal.gitconfig");
+    let shouty = ours.to_uppercase().replace('/', "\\");
+    let gone = format!("{base}/identities/idgone.gitconfig");
+    let neighbour = format!("{base}/identities-old/x.gitconfig");
+    for v in [ours.as_str(), MINE, ours.as_str(), shouty.as_str(), gone.as_str(), neighbour.as_str()] {
+        git(cfg_dir, &["config", "--global", "--add", "include.path", v]);
+    }
+    git(cfg_dir, &["config", "--global", MINE_IF, "~/git-tabs-test-mine.gitconfig"]);
+    (ours, neighbour)
+}
+
+#[test]
+fn tidy_takes_out_the_old_default_identity_includes_only() {
+    use gitcore::config::{AppConfig, Managed};
+    let _s = serial();
+    let (d, ctx) = repo();
+    let _g = keep_global();
+    let (ours, neighbour) = leave_old_includes(&ctx.config_dir);
+    // `managed` as an older version could leave it: the default include and one rule.
+    let rule = Managed { key: "includeIf.gitdir/i:D:/x/.path".into(), value: ours.clone() };
+    let cfg = AppConfig { managed: vec![Managed { key: "include.path".into(), value: ours.clone() }, rule.clone()], ..Default::default() };
+    gitcore::config::save(&ctx.config_dir, &cfg).unwrap();
+    // The bug: the include wins in every repo that has no email of its own.
+    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "personal@example.com");
+
+    let removed = call(&ctx, "identities_tidy", json!({}));
+    assert_eq!(removed.as_array().unwrap().len(), 4, "three copies of the default include and the one whose file is gone: {removed}");
+    assert_eq!(lines_into_identities(&ctx.config_dir), 0);
+    assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour], "the user's own includes stay, in order");
+    assert_eq!(global_all(MINE_IF), vec!["~/git-tabs-test-mine.gitconfig"]);
+    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "test@example.com");
+    assert!(gitcore::config::load(&ctx.config_dir).managed == vec![rule], "only the include.path entry leaves managed");
+    // Nothing is left for the next start, so it has nothing to report.
+    assert_eq!(call(&ctx, "identities_tidy", json!({})).as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn apply_cleans_up_lines_it_lost_track_of_and_writes_each_once() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    let _g = keep_global();
+    let (_, neighbour) = leave_old_includes(&ctx.config_dir);
+    git(d.path(), &["remote", "add", "origin", "git@github.com:sam/x.git"]);
+    // The same rule twice, which the settings screen allows.
+    let ids = json!([{"id": "p", "name": "個人", "user": "Sam", "email": "sam@me.com", "key": "C:\\k\\id_p",
+        "rules": [{"t": "remote", "v": "github.com/sam/*"}, {"t": "remote", "v": "github.com/sam/*"}, {"t": "dir", "v": "D:\\work"}]}]);
+    for round in 0..3 {
+        call(&ctx, "identities_apply", json!({"identities": ids}));
+        assert_eq!(global_all("includeIf.hasconfig:remote.*.url:git@github.com:sam/**.path").len(), 1, "round {round}");
+        assert_eq!(global_all("includeIf.gitdir/i:D:/work/.path").len(), 1, "round {round}");
+        assert_eq!(lines_into_identities(&ctx.config_dir), 4, "round {round}: three remote conditions and one folder, no include.path");
+        assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour.clone()], "round {round}");
+        assert_eq!(global_all(MINE_IF).len(), 1, "round {round}");
+        assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@me.com", "round {round}");
+        let mut cfg = gitcore::config::load(&ctx.config_dir);
+        assert_eq!(cfg.managed.len(), 4, "round {round}: managed has no copies either");
+        // What the settings screen used to do: save its stale copy over `managed`.
+        cfg.managed.clear();
+        gitcore::config::save(&ctx.config_dir, &cfg).unwrap();
+    }
+    call(&ctx, "identities_apply", json!({"identities": []}));
+    assert_eq!(lines_into_identities(&ctx.config_dir), 0);
+    assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour]);
+    assert_eq!(global_all(MINE_IF).len(), 1);
+}
+
 #[test]
 fn detects_keys_ssh_hosts_and_includes() {
     let _s = serial();

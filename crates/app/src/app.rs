@@ -281,6 +281,7 @@ impl GitTabs {
             cx.notify();
         });
         this.offer_detected_identities(cx);
+        this.tidy_global_includes(cx);
         for i in 0..this.repos.len() {
             let p = this.repos[i].path.clone();
             if i == this.active {
@@ -309,6 +310,30 @@ impl GitTabs {
                     cx.notify();
                 }
             }
+        });
+    }
+
+    /// Versions with a default identity wrote an unconditional include.path for it into the
+    /// global gitconfig, which gave every repo that identity's key and email. Nothing writes it
+    /// now; take out any that are left, and say so when there were some.
+    fn tidy_global_includes(&mut self, cx: &mut Context<Self>) {
+        let ctx = self.ctx.clone();
+        self.work(cx, move || gitcore::dispatch(&ctx, "identities_tidy", serde_json::json!({})), |this, res, cx| match res {
+            Ok(v) => {
+                let lines: Vec<&str> = v.as_array().into_iter().flatten().filter_map(|m| m["value"].as_str()).collect();
+                if !lines.is_empty() {
+                    let mut paths: Vec<&str> = Vec::new();
+                    for l in &lines {
+                        if !paths.contains(l) {
+                            paths.push(l);
+                        }
+                    }
+                    this.pull_log();
+                    this.toast(crate::i18n::tr("已從全域 git 設定移除 {} 行舊版留下的 include.path", &[], &[lines.len().to_string()]), ToastKind::Info, Some(paths.join("\n")), cx);
+                    cx.notify();
+                }
+            }
+            Err(e) => crate::debug::log("identity", || format!("tidy: {e}")),
         });
     }
 
@@ -396,7 +421,8 @@ impl GitTabs {
             .map(|r| RepoEntry { path: r.path.display().to_string(), pin: old.iter().find(|e| Path::new(&e.path) == r.path).and_then(|e| e.pin.clone()) })
             .collect();
         self.cfg.active = self.active;
-        if let Err(e) = config::save(&self.ctx.config_dir, &self.cfg) {
+        // `managed` stays as gitcore last wrote it: this copy is from when the app started.
+        if let Err(e) = config::save_settings(&self.ctx.config_dir, &self.cfg) {
             eprintln!("git-tabs: could not save the settings: {e}");
         }
     }

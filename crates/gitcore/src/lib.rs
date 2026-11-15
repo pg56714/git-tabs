@@ -77,22 +77,34 @@ pub fn dispatch(ctx: &Ctx, cmd: &str, a: Value) -> Result<Value, String> {
         "config_get" => ok(config::load(&ctx.config_dir)),
         "config_save" => {
             let _g = ctx.lock.lock().unwrap();
-            let mut cfg: AppConfig = arg(&a["config"])?;
-            // The list of lines we wrote into the global gitconfig is ours to keep.
-            cfg.managed = config::load(&ctx.config_dir).managed;
+            let cfg: AppConfig = arg(&a["config"])?;
             runner::set_git_exe(&cfg.git_path);
-            config::save(&ctx.config_dir, &cfg)?;
+            // The list of lines we wrote into the global gitconfig is ours to keep.
+            config::save_settings(&ctx.config_dir, &cfg)?;
             ok(true)
         }
         "identities_apply" => {
             let _g = ctx.lock.lock().unwrap();
-            let mut cfg = config::load(&ctx.config_dir);
             let ids: Vec<Identity> = arg(&a["identities"])?;
-            let added = identity::apply(&ctx.config_dir, &ids, &cfg.managed)?;
+            let added = identity::apply(&ctx.config_dir, &ids, &config::load(&ctx.config_dir).managed)?;
+            // Loaded again after git ran: the app saves its settings without this lock.
+            let mut cfg = config::load(&ctx.config_dir);
             cfg.identities = ids;
             cfg.managed = added;
             config::save(&ctx.config_dir, &cfg)?;
             ok(cfg.managed.len())
+        }
+        // At start: lines older versions left in the global gitconfig. Returns those removed.
+        "identities_tidy" => {
+            let _g = ctx.lock.lock().unwrap();
+            let mut managed = config::load(&ctx.config_dir).managed;
+            let removed = identity::tidy(&ctx.config_dir, &mut managed)?;
+            let mut cfg = config::load(&ctx.config_dir);
+            if cfg.managed != managed {
+                cfg.managed = managed;
+                config::save(&ctx.config_dir, &cfg)?;
+            }
+            ok(removed)
         }
         "identity_pin" => {
             let repo = repo_path(&a)?;
