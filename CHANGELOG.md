@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.1 (2026-11-15)
+
+### Fixes
+
+- **identity:** refuse to save an empty rule ([990bda1](https://github.com/pg56714/git-tabs/commit/990bda1bc52d7d1459ba284504b295e2561a6e10))
+- **identity:** clean up include lines left in the global gitconfig ([8be95ff](https://github.com/pg56714/git-tabs/commit/8be95fff07b29c652dfd7c5ce9ef95b387bde4d5))
+
 ## v0.4.0 (2026-11-13)
 
 ### Features
