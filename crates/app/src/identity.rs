@@ -87,6 +87,12 @@ pub fn match_identity<'a>(ids: &'a [Identity], repo_path: &str, remote_url: Opti
     hit
 }
 
+/// Index of the first rule with nothing filled in. Such a rule matches no repo and writes nothing
+/// to the gitconfig, so saving it would only look like a rule.
+pub fn empty_rule(id: &Identity) -> Option<usize> {
+    id.rules.iter().position(|r| r.v.trim().is_empty())
+}
+
 /// Rule that would match this remote's owner, e.g. github.com/acme/*. None for a local-path remote.
 pub fn rule_for_url(remote_url: &str) -> Option<String> {
     let t = remote_url.trim();
@@ -253,6 +259,14 @@ mod tests {
         assert_eq!(match_identity(&ids, "d:\\work\\proj", None).unwrap().name, "B");
         assert_eq!(match_identity(&ids, "d:\\work\\proj", Some("git@github.com:acme/app.git")).unwrap().name, "B", "later identity wins");
         assert!(match_identity(&ids, "C:\\x", Some("git@github.com:other/app.git")).is_none());
+    }
+
+    #[test]
+    fn empty_rules_are_found() {
+        assert_eq!(empty_rule(&id("A", &[("remote", "github.com/acme/*"), ("dir", "  ")])), Some(1));
+        assert_eq!(empty_rule(&id("B", &[("remote", "")])), Some(0), "the placeholder a new identity starts with");
+        assert_eq!(empty_rule(&id("C", &[("remote", "github.com/acme/*")])), None);
+        assert_eq!(empty_rule(&id("D", &[])), None, "an identity without rules is pinned by hand");
     }
 
     #[test]

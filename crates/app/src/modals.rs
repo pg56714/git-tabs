@@ -10,7 +10,7 @@ use gpui_kit::{AppContext as _, Context, PathPromptOptions, Window};
 use serde_json::json;
 
 use crate::app::GitTabs;
-use crate::identity::{from_found, new_identity, rule_for_url};
+use crate::identity::{empty_rule, from_found, new_identity, rule_for_url};
 use crate::model::*;
 
 fn input(window: &mut Window, cx: &mut Context<GitTabs>, value: &str, placeholder: &str) -> gpui_kit::Entity<InputState> {
@@ -401,6 +401,13 @@ impl GitTabs {
             }
             if !id.email.is_empty() && !(id.email.contains('@') && id.email.split('@').nth(1).is_some_and(|d| d.contains('.')) && !id.email.contains(char::is_whitespace)) {
                 m.err = Some(crate::i18n::tr("「{}」的 email 格式不對", &[], &[(id.name).to_string()]));
+                cx.notify();
+                return;
+            }
+            // An empty rule writes nothing to the gitconfig: it would only look like a rule.
+            if let Some(j) = empty_rule(&id) {
+                m.tab = SettingsTab::Ids;
+                m.err = Some(crate::i18n::tr("「{name}」的第 {n} 條規則是空的：填上 remote 網址或資料夾，不需要就按 × 刪掉", &[("name", id.name.clone()), ("n", (j + 1).to_string())], &[]));
                 cx.notify();
                 return;
             }
