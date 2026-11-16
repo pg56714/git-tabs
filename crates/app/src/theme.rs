@@ -90,6 +90,8 @@ pub fn lane_color(i: usize) -> Hsla {
 /// Puts the palette into GPUI Kit's theme.
 pub fn apply(dark: bool, window: Option<&mut Window>, cx: &mut App) {
     Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, window, cx);
+    // Always drawn: the default shows a bar only while scrolling, so the one under a wide diff was never seen.
+    Theme::set_scrollbar_mode(gpui_kit::component::scroll::ScrollbarMode::Always, cx);
     let p = Pal::new(dark);
     let t = Theme::global_mut(cx);
     t.font_family = SharedString::from("Segoe UI");
