@@ -142,6 +142,9 @@ impl GitTabs {
                             .child(crate::i18n::t("並排"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.side_by_side = true;
+                                // Two columns leave each half the width; long lines would be cut with no
+                                // way to scroll them on a mouse, so wrapping starts on (the button turns it off).
+                                this.wrap = true;
                                 this.apply_diff_view(cx);
                                 this.save_prefs();
                                 cx.notify();

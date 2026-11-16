@@ -143,7 +143,7 @@ impl Cache {
             None => {}
         }
         let f = self.file(&key);
-        let miss = f.with_extension("none");
+        let miss = f.with_extension("miss2");
         if f.is_file() {
             map.insert(key, State::Have(f.clone()));
             return Some(f);
