@@ -313,12 +313,12 @@ fn apply_cleans_up_lines_it_lost_track_of_and_writes_each_once() {
         call(&ctx, "identities_apply", json!({"identities": ids}));
         assert_eq!(global_all("includeIf.hasconfig:remote.*.url:git@github.com:sam/**.path").len(), 1, "round {round}");
         assert_eq!(global_all("includeIf.gitdir/i:D:/work/.path").len(), 1, "round {round}");
-        assert_eq!(lines_into_identities(&ctx.config_dir), 4, "round {round}: three remote conditions and one folder, no include.path");
+        assert_eq!(lines_into_identities(&ctx.config_dir), 5, "round {round}: four remote conditions and one folder, no include.path");
         assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour.clone()], "round {round}");
         assert_eq!(global_all(MINE_IF).len(), 1, "round {round}");
         assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@me.com", "round {round}");
         let mut cfg = gitcore::config::load(&ctx.config_dir);
-        assert_eq!(cfg.managed.len(), 4, "round {round}: managed has no copies either");
+        assert_eq!(cfg.managed.len(), 5, "round {round}: managed has no copies either");
         // What the settings screen used to do: save its stale copy over `managed`.
         cfg.managed.clear();
         gitcore::config::save(&ctx.config_dir, &cfg).unwrap();

@@ -146,6 +146,8 @@ pub fn conditions(t: &str, v: &str) -> Vec<String> {
     vec![
         format!("hasconfig:remote.*.url:git@{host}:{rest}"),
         format!("hasconfig:remote.*.url:https://{host}/{rest}"),
+        // A user name in the URL (https://alice@host/...) is part of what git compares.
+        format!("hasconfig:remote.*.url:https://*@{host}/{rest}"),
         format!("hasconfig:remote.*.url:ssh://git@{host}/{rest}"),
     ]
 }

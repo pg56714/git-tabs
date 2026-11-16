@@ -26,10 +26,11 @@ pub fn norm_url(u: &str) -> String {
     s
 }
 
-/// Case-insensitive glob where `*` matches anything.
-fn glob(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.to_lowercase().chars().collect();
-    let t: Vec<char> = text.to_lowercase().chars().collect();
+/// Glob where `*` matches anything; `ci` ignores case.
+fn glob(pattern: &str, text: &str, ci: bool) -> bool {
+    let fold = |s: &str| if ci { s.to_lowercase() } else { s.to_string() };
+    let p: Vec<char> = fold(pattern).chars().collect();
+    let t: Vec<char> = fold(text).chars().collect();
     let (mut pi, mut ti, mut star, mut mark) = (0usize, 0usize, None::<usize>, 0usize);
     while ti < t.len() {
         if pi < p.len() && p[pi] == '*' {
@@ -75,7 +76,8 @@ pub fn match_identity<'a>(ids: &'a [Identity], repo_path: &str, remote_url: Opti
             }
             if r.t == "remote" && !url.is_empty() {
                 let pat = norm_url(v);
-                if glob(&pat, &url) || glob(&pat, url.trim_end_matches(".git")) {
+                // git compares the URL with includeIf case-sensitively; so does this.
+                if glob(&pat, &url, false) || glob(&pat, url.trim_end_matches(".git"), false) {
                     hit = Some(id);
                 }
             }
