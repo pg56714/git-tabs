@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.5.0 (2026-11-16)
+
+### Features
+
+- **history:** use the GitHub CLI's logins to find author pictures in private repos ([e678496](https://github.com/pg56714/git-tabs/commit/e6784966001de739815fdeaa1354062528194a8b))
+- **history:** fall back to GitHub's account for a commit when Gravatar has no picture ([de83568](https://github.com/pg56714/git-tabs/commit/de835684a6e14157b1daed0356ca35c588fd03dd))
+- **history:** author pictures from GitHub/Gravatar; AUTHOR and COMMITTER blocks side by side ([8375bcf](https://github.com/pg56714/git-tabs/commit/8375bcfe3cda687eeb189dd7adbfc6bd4ea8e437))
+- self-update, author avatars, wider date column; keep tabs of unplugged drives ([edca35d](https://github.com/pg56714/git-tabs/commit/edca35defb97a636047ff7d23043278d492fa0f4))
+
+### Fixes
+
+- **ui:** always show scrollbars so a wide diff can be scrolled sideways ([5b9d0c6](https://github.com/pg56714/git-tabs/commit/5b9d0c67f590a72a0e46f9c25d3746d381559c73))
+- **ui:** wrap lines when switching to side-by-side; old avatar misses no longer block lookups ([b13c3d5](https://github.com/pg56714/git-tabs/commit/b13c3d5392227eaca1975eeb8995a5b13ef2658a))
+- **ui:** start a fresh diff view per file in side-by-side mode ([dcf1662](https://github.com/pg56714/git-tabs/commit/dcf16620faf728d43869c32af410d759483a3dcc))
+- **identity:** match remote URLs the way git's includeIf does ([457c97f](https://github.com/pg56714/git-tabs/commit/457c97f5513ca941b84f1fe61e9797350e1b687e))
+- **gitcore:** rebase side labels, force-push safety, stale line ops, cmd injection, CRLF, # lines ([e05b9da](https://github.com/pg56714/git-tabs/commit/e05b9da6ef681e106930981329177774231e761c))
+
 ## v0.4.1 (2026-11-15)
 
 ### Fixes
