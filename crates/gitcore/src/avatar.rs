@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 /// How long "there is no picture" is believed before asking again.
@@ -72,7 +72,9 @@ pub fn url(email: &str) -> Option<String> {
 /// "owner/repo" of a github.com remote URL.
 pub fn github_slug(remote: &str) -> Option<String> {
     let r = remote.trim();
-    let rest = r.split_once("github.com").map(|x| x.1)?.trim_start_matches([':', '/']);
+    // github.com, or an ssh alias for it such as "github-work-emu".
+    let at = r.find("github")?;
+    let rest = r[at..].split_once([':', '/'])?.1.trim_start_matches([':', '/']);
     let mut it = rest.trim_end_matches('/').trim_end_matches(".git").split('/');
     match (it.next(), it.next()) {
         (Some(o), Some(n)) if !o.is_empty() && !n.is_empty() => Some(format!("{o}/{n}")),
@@ -87,11 +89,18 @@ enum State {
 }
 
 /// Fetches `url` into the file; true when a picture arrived.
-pub type Fetch = Arc<dyn Fn(&str, &Path) -> bool + Send + Sync>;
+pub type Fetch = Arc<dyn Fn(&str, &Path, Option<&str>) -> bool + Send + Sync>;
+
+/// (account, token) of every account the GitHub CLI is logged in to on github.com.
+pub type Accounts = Arc<dyn Fn() -> Vec<(String, String)> + Send + Sync>;
 
 pub struct Cache {
     dir: PathBuf,
     fetch: Fetch,
+    accounts: Accounts,
+    known: OnceLock<Vec<(String, String)>>,
+    /// Which account could read which repo, so the next lookup starts there.
+    served_by: Mutex<HashMap<String, String>>,
     map: Mutex<HashMap<String, State>>,
     busy: AtomicUsize,
     changed: AtomicBool,
@@ -100,11 +109,17 @@ pub struct Cache {
 
 impl Cache {
     pub fn new(config_dir: &Path) -> Arc<Self> {
-        Self::with_fetch(config_dir, Arc::new(curl_fetch), std::env::var("GIT_TABS_NO_AVATARS").is_ok_and(|v| v == "1"))
+        let no_gh = std::env::var("GIT_TABS_NO_GH").is_ok_and(|v| v == "1");
+        let accounts: Accounts = if no_gh { Arc::new(Vec::new) } else { Arc::new(gh_accounts) };
+        Self::with_parts(config_dir, Arc::new(curl_fetch), accounts, std::env::var("GIT_TABS_NO_AVATARS").is_ok_and(|v| v == "1"))
     }
 
     pub fn with_fetch(config_dir: &Path, fetch: Fetch, off: bool) -> Arc<Self> {
-        Arc::new(Self { dir: config_dir.join("avatars"), fetch, map: Mutex::new(HashMap::new()), busy: AtomicUsize::new(0), changed: AtomicBool::new(false), off })
+        Self::with_parts(config_dir, fetch, Arc::new(Vec::new), off)
+    }
+
+    pub fn with_parts(config_dir: &Path, fetch: Fetch, accounts: Accounts, off: bool) -> Arc<Self> {
+        Arc::new(Self { dir: config_dir.join("avatars"), fetch, accounts, known: OnceLock::new(), served_by: Mutex::new(HashMap::new()), map: Mutex::new(HashMap::new()), busy: AtomicUsize::new(0), changed: AtomicBool::new(false), off })
     }
 
     fn file(&self, key: &str) -> PathBuf {
@@ -145,19 +160,14 @@ impl Cache {
         map.insert(key.clone(), State::Loading);
         self.busy.fetch_add(1, Ordering::SeqCst);
         let me = self.clone();
-        let hint = hint.map(|(s, c)| format!("https://api.github.com/repos/{s}/commits/{c}"));
+        let hint = hint.map(|(s, c)| (s.to_string(), format!("https://api.github.com/repos/{s}/commits/{c}")));
         std::thread::spawn(move || {
             let _ = std::fs::create_dir_all(&me.dir);
             let tmp = f.with_extension("part");
             let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
-            let mut got = (me.fetch)(&url, &tmp) && ok(&tmp);
-            if !got && let Some(api) = hint {
-                let json = f.with_extension("json");
-                if (me.fetch)(&api, &json) {
-                    let pic = std::fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()).and_then(|v| v["author"]["avatar_url"].as_str().map(|u| format!("{u}{}s=64", if u.contains('?') { "&" } else { "?" })));
-                    got = pic.is_some_and(|u| (me.fetch)(&u, &tmp) && ok(&tmp));
-                }
-                let _ = std::fs::remove_file(&json);
+            let mut got = (me.fetch)(&url, &tmp, None) && ok(&tmp);
+            if !got && let Some((slug, api)) = hint {
+                got = me.from_github(&slug, &api, &f, &tmp);
             }
             let got = got && std::fs::rename(&tmp, &f).is_ok();
             let _ = std::fs::remove_file(&tmp);
@@ -175,22 +185,97 @@ impl Cache {
         None
     }
 
+    /// GitHub's answer for a commit: the account behind its author, and that account's picture.
+    /// Tries the accounts the GitHub CLI knows (the one that read this repo last time first),
+    /// since a private repo only answers to an account that can see it, and then no login.
+    fn from_github(&self, slug: &str, api: &str, f: &Path, tmp: &Path) -> bool {
+        let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
+        let json = f.with_extension("json");
+        let known = self.known.get_or_init(|| (self.accounts)());
+        let first = self.served_by.lock().ok().and_then(|m| m.get(slug).cloned());
+        let mut order: Vec<&(String, String)> = known.iter().collect();
+        order.sort_by_key(|(name, _)| Some(name) != first.as_ref());
+        let mut tries: Vec<Option<&(String, String)>> = order.into_iter().map(Some).collect();
+        tries.push(None);
+        for who in tries {
+            if !(self.fetch)(api, &json, who.map(|w| w.1.as_str())) {
+                continue;
+            }
+            let pic = std::fs::read_to_string(&json)
+                .ok()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                .and_then(|v| v["author"]["avatar_url"].as_str().map(|u| format!("{u}{}s=64", if u.contains('?') { "&" } else { "?" })));
+            let _ = std::fs::remove_file(&json);
+            // The commit was readable; if its author has no account there is nothing more to find.
+            if let (Some(w), Ok(mut m)) = (who, self.served_by.lock()) {
+                m.insert(slug.to_string(), w.0.clone());
+            }
+            return pic.is_some_and(|u| (self.fetch)(&u, tmp, None) && ok(tmp));
+        }
+        let _ = std::fs::remove_file(&json);
+        false
+    }
+
     /// Whether a picture has arrived since the last call.
     pub fn take_changed(&self) -> bool {
         self.changed.swap(false, Ordering::SeqCst)
     }
 }
 
-fn curl_fetch(url: &str, to: &Path) -> bool {
+fn curl_fetch(url: &str, to: &Path, token: Option<&str>) -> bool {
     let mut c = std::process::Command::new("curl");
-    c.args(["-fsSL", "--max-time", "15", "--max-filesize", "2000000", "-H", "User-Agent: git-tabs", "-o"]).arg(to).arg(url);
+    c.args(["-fsSL", "--max-time", "15", "--max-filesize", "2000000", "-H", "User-Agent: git-tabs"]);
+    // The token goes in a header file, not on the command line, where other programs could read it.
+    let header = token.and_then(|t| {
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let p = std::env::temp_dir().join(format!("git-tabs-h-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
+        std::fs::write(&p, format!("Authorization: Bearer {t}\n")).ok().map(|_| p)
+    });
+    if let Some(h) = &header {
+        c.arg("-H").arg(format!("@{}", h.display()));
+    }
+    c.arg("-o").arg(to).arg(url);
     c.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         c.creation_flags(0x0800_0000);
     }
-    c.status().is_ok_and(|s| s.success())
+    let ok = c.status().is_ok_and(|s| s.success());
+    if let Some(h) = header {
+        let _ = std::fs::remove_file(h);
+    }
+    ok
+}
+
+fn gh(args: &[&str]) -> Option<String> {
+    let mut c = std::process::Command::new("gh");
+    c.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
+    }
+    let o = c.output().ok().filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// The account names in `gh auth status` output ("Logged in to github.com account NAME (keyring)").
+fn account_names(status: &str) -> Vec<String> {
+    status
+        .lines()
+        .filter_map(|l| l.split_once("Logged in to github.com account ").map(|x| x.1))
+        .filter_map(|r| r.split_whitespace().next().map(String::from))
+        .collect()
+}
+
+fn gh_accounts() -> Vec<(String, String)> {
+    let Some(status) = gh(&["auth", "status", "--hostname", "github.com"]) else { return vec![] };
+    account_names(&status)
+        .into_iter()
+        .filter_map(|n| gh(&["auth", "token", "--hostname", "github.com", "--user", &n]).map(|t| (n, t.trim().to_string())))
+        .filter(|(_, t)| !t.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
@@ -207,10 +292,16 @@ mod tests {
     }
 
     #[test]
+    fn account_names_come_out_of_gh_status() {
+        let s = "github.com\n  ✓ Logged in to github.com account Sam-Hong_adataemu (keyring)\n  - Active account: true\n  ✓ Logged in to github.com account pg56714 (keyring)\n";
+        assert_eq!(account_names(s), ["Sam-Hong_adataemu", "pg56714"]);
+    }
+
+    #[test]
     fn github_slugs() {
         assert_eq!(github_slug("git@github.com:pg56714/git-tabs.git").unwrap(), "pg56714/git-tabs");
         assert_eq!(github_slug("https://alice@github.com/Org/repo").unwrap(), "Org/repo");
-        assert_eq!(github_slug("git@github-work-emu:TRUSTA/x.git"), None);
+        assert_eq!(github_slug("git@github-work-emu:TRUSTA-SW-FAE/x.git").unwrap(), "TRUSTA-SW-FAE/x");
         assert!(github_slug("https://gitlab.com/a/b").is_none());
     }
 
@@ -238,7 +329,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let calls = Arc::new(AtomicUsize::new(0));
         let n = calls.clone();
-        let fetch: Fetch = Arc::new(move |url, to| {
+        let fetch: Fetch = Arc::new(move |url, to, _| {
             n.fetch_add(1, Ordering::SeqCst);
             if url.contains("/u/7") {
                 std::fs::write(to, vec![1u8; 500]).is_ok()
@@ -264,7 +355,7 @@ mod tests {
         assert!(c3.get("someone@example.com", None).is_none());
         assert_eq!(calls.load(Ordering::SeqCst), after);
         // Gravatar has nothing, GitHub knows the account behind the commit.
-        let api: Fetch = Arc::new(|url, to| {
+        let api: Fetch = Arc::new(|url, to, _| {
             if url.contains("gravatar") {
                 false
             } else if url.contains("api.github.com/repos/o/r/commits/abc") {
@@ -284,8 +375,37 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(c4.get("me@gmail.com", Some(("o/r", "abc"))).is_some());
+        // A private repo: only one of the CLI's accounts can read it, and it is asked first next time.
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let log = seen.clone();
+        let private: Fetch = Arc::new(move |url, to, token| {
+            if url.contains("gravatar") {
+                false
+            } else if url.contains("api.github.com/repos/o/priv/commits/") {
+                log.lock().unwrap().push(token.unwrap_or("none").to_string());
+                token == Some("tok-b") && std::fs::write(to, r#"{"author":{"avatar_url":"https://avatars.githubusercontent.com/u/5"}}"#).is_ok()
+            } else if url.starts_with("https://avatars.githubusercontent.com/u/5?s=64") {
+                std::fs::write(to, vec![3u8; 500]).is_ok()
+            } else {
+                false
+            }
+        });
+        let accounts: Accounts = Arc::new(|| vec![("a".into(), "tok-a".into()), ("b".into(), "tok-b".into())]);
+        let c5 = Cache::with_parts(tempfile::tempdir().unwrap().path(), private, accounts, false);
+        for email in ["w@corp.com", "v@corp.com"] {
+            let sha = if email.starts_with('w') { "1" } else { "2" };
+            assert!(c5.get(email, Some(("o/priv", sha))).is_none());
+            for _ in 0..300 {
+                if c5.get(email, Some(("o/priv", sha))).is_some() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(c5.get(email, Some(("o/priv", sha))).is_some());
+        }
+        assert_eq!(*seen.lock().unwrap(), ["tok-a", "tok-b", "tok-b"], "the account that worked goes first next time");
         // Switched off: never fetches.
-        let off = Cache::with_fetch(tempfile::tempdir().unwrap().path(), Arc::new(|_, _| panic!("no network")), true);
+        let off = Cache::with_fetch(tempfile::tempdir().unwrap().path(), Arc::new(|_, _, _| panic!("no network")), true);
         assert!(off.get("7+x@users.noreply.github.com", None).is_none());
     }
 }
