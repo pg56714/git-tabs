@@ -142,9 +142,41 @@ pub struct GitTabs {
     pub update: Option<gitcore::update::Release>,
     pub updating: bool,
     _subs: Vec<Subscription>,
+    diff_subs: Vec<Subscription>,
 }
 
 impl GitTabs {
+    /// Follows a diff view: redraws with it, and keeps the line selection made in it.
+    fn watch_diff(diff: &gpui_kit::Entity<DiffState>, cx: &mut Context<Self>) -> Vec<Subscription> {
+        let mut subs = Vec::new();
+        subs.push(cx.observe(diff, |_, _, cx| cx.notify()));
+        subs.push(cx.subscribe(diff, |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
+            use gpui_kit::component::diff::DiffEvent;
+            match ev {
+                DiffEvent::SelectionChanged(Some(r)) | DiffEvent::SelectionEnded(r) => this.stored_sel = Some(r.clone()),
+                DiffEvent::SelectionChanged(None) => {
+                    // Pressing the selection bar itself must not lose the pick.
+                    if this.bar_press.is_none_or(|t| t.elapsed() > Duration::from_millis(800)) {
+                        this.stored_sel = None;
+                    }
+                }
+                _ => {}
+            }
+            cx.notify();
+        }));
+        subs
+    }
+
+    /// A new diff view in place of the old one. The component keeps list measurements from the
+    /// file before it, and in side-by-side mode a later file could come out half drawn; a fresh
+    /// one starts clean.
+    pub fn fresh_diff(&mut self, cx: &mut Context<Self>) {
+        let mode = if self.side_by_side { DiffMode::Split } else { DiffMode::Unified };
+        let diff = cx.new(|cx| DiffState::new([], cx).with_mode(mode));
+        self.diff_subs = Self::watch_diff(&diff, cx);
+        self.diff = diff;
+    }
+
     pub fn new(ctx: Arc<Ctx>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         window.set_window_title("git-tabs");
         gitcore::update::tidy();
@@ -169,21 +201,7 @@ impl GitTabs {
                 cx.notify();
             }
         }));
-        subs.push(cx.observe(&diff, |_, _, cx| cx.notify()));
-        subs.push(cx.subscribe(&diff, |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
-            use gpui_kit::component::diff::DiffEvent;
-            match ev {
-                DiffEvent::SelectionChanged(Some(r)) | DiffEvent::SelectionEnded(r) => this.stored_sel = Some(r.clone()),
-                DiffEvent::SelectionChanged(None) => {
-                    // Pressing the selection bar itself must not lose the pick.
-                    if this.bar_press.is_none_or(|t| t.elapsed() > Duration::from_millis(800)) {
-                        this.stored_sel = None;
-                    }
-                }
-                _ => {}
-            }
-            cx.notify();
-        }));
+        let diff_subs = Self::watch_diff(&diff, cx);
         subs.push(cx.subscribe(&subject, |this, _, ev: &InputEvent, cx| {
             if matches!(ev, InputEvent::Change) {
                 this.commit_err.clear();
@@ -275,6 +293,7 @@ impl GitTabs {
             update: None,
             updating: false,
             _subs: subs,
+            diff_subs,
         };
         this.apply_diff_view(cx);
         this.nav_focus.focus(window, cx);
@@ -1108,6 +1127,9 @@ impl GitTabs {
         }
         self.cur_hunk = 0;
         self.stored_sel = None;
+        if self.side_by_side {
+            self.fresh_diff(cx);
+        }
         self.diff.update(cx, |s, cx| {
             s.set_files(files, cx);
             s.set_selected_lines(None, cx);
