@@ -56,11 +56,46 @@ pub fn editor_main(args: &[String]) -> Option<i32> {
     } else {
         match std::env::var(MSG).ok().filter(|m| !m.is_empty()) {
             Some(prepared) => std::fs::copy(prepared, file).is_ok(),
-            None => true,
+            // Squash: git's own message, minus the comment lines it adds itself.
+            None => std::fs::read_to_string(file).ok().is_some_and(|m| std::fs::write(file, strip_git_comments(&m)).is_ok()),
         }
     };
     // A failing editor makes git give the rebase up before it changed anything.
     Some(if done { 0 } else { 1 })
+}
+
+/// The message git prepares for a squash, without the comment lines git put there. The default
+/// cleanup would also take out every `#` line of the user's own (an issue number, say), so the
+/// rebase runs with `commit.cleanup=verbatim` and this removes only git's lines.
+fn strip_git_comments(msg: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    let mut after_ours = false;
+    for l in msg.lines() {
+        // The blank line git leaves under each of its headings goes with it.
+        if std::mem::take(&mut after_ours) && l.trim().is_empty() {
+            continue;
+        }
+        // Everything after this line is the template of the commit editor.
+        if l.starts_with("# Please enter the commit message for your changes.") {
+            break;
+        }
+        let ours = l.starts_with("# This is a combination of ")
+            || (l.starts_with("# This is the ") && l.ends_with(" commit message:"))
+            || (l.starts_with("# This is the commit message #") && l.ends_with(':'))
+            || (l.starts_with("# The commit message #") && l.ends_with(" will be skipped:"));
+        if ours {
+            after_ours = true;
+        } else {
+            out.push(l);
+        }
+    }
+    while out.last().is_some_and(|l| l.trim().is_empty()) {
+        out.pop();
+    }
+    while out.first().is_some_and(|l| l.trim().is_empty()) {
+        out.remove(0);
+    }
+    out.join("\n") + "\n"
 }
 
 /// How git is told to run `exe`: one shell word, with forward slashes also on Windows.
@@ -91,7 +126,7 @@ pub fn rewrite(repo: &Path, exe: &Path, sha: &str, how: &Rewrite) -> Result<Stri
     };
     // Everything from `first` up is replayed, onto what lies below it; the very first commit has nothing below.
     let base = parent_of(&first);
-    let mut args = vec!["-c", "rebase.autoStash=true", "rebase", "-i", "--rebase-merges"];
+    let mut args = vec!["-c", "rebase.autoStash=true", "-c", "rebase.autoSquash=false", "-c", "commit.cleanup=verbatim", "rebase", "-i", "--no-autosquash", "--rebase-merges"];
     args.push(base.as_deref().unwrap_or("--root"));
     let (todo_editor, msg_editor) = (editor(exe, "--rebase-todo"), editor(exe, "--commit-msg"));
     let msg_file = prepared.as_ref().map(|f| f.display().to_string()).unwrap_or_default();
@@ -131,6 +166,12 @@ mod tests {
         let todo = "label onto\npick 1111111 one\nlabel side\nreset onto\nmerge -C 2222222 side # Merge branch 'side'\n";
         assert!(edit_todo(todo, "2222222aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "reword").is_none());
         assert!(edit_todo(todo, "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "drop").unwrap().contains("drop 1111111 one"));
+    }
+
+    #[test]
+    fn git_comment_lines_go_but_the_users_stay() {
+        let m = "# This is a combination of 2 commits.\n# This is the 1st commit message:\n\nfix #12\n\n# not git's\n\n# This is the commit message #2:\n\nsecond\n\n# Please enter the commit message for your changes. Lines starting\n# with '#' will be kept.\n";
+        assert_eq!(strip_git_comments(m), "fix #12\n\n# not git's\n\nsecond\n");
     }
 
     #[test]

@@ -1318,15 +1318,7 @@ pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {
 
 /// Short fingerprint of a diff, so "已看" can be cleared when the file changes again.
 pub fn diff_hash(d: &FileDiff) -> String {
-    let mut h: u32 = 2166136261;
-    for hk in &d.hunks {
-        for l in &hk.lines {
-            for b in std::iter::once(l.t as u8).chain(l.text.bytes()).chain(std::iter::once(10)) {
-                h = (h ^ b as u32).wrapping_mul(16777619);
-            }
-        }
-    }
-    format!("{h:x}")
+    d.fingerprint()
 }
 
 #[derive(Clone, Copy)]

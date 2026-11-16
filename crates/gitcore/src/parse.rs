@@ -95,6 +95,10 @@ pub struct DiffLine {
     /// Followed by "\ No newline at end of file".
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub no_eol: bool,
+    /// The line ended in CRLF in the file; `text` has the `\r` taken off. A patch built from
+    /// this line has to put it back or `git apply` no longer finds the line.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cr: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -115,6 +119,22 @@ pub struct FileDiff {
     pub new_file: bool,
     pub deleted: bool,
     pub hunks: Vec<Hunk>,
+}
+
+impl FileDiff {
+    /// Short fingerprint of the lines, so a caller can tell the diff it showed apart from the
+    /// one git gives a moment later.
+    pub fn fingerprint(&self) -> String {
+        let mut h: u32 = 2166136261;
+        for hk in &self.hunks {
+            for l in &hk.lines {
+                for b in std::iter::once(l.t as u8).chain(l.text.bytes()).chain(std::iter::once(if l.cr { 13 } else { 10 })) {
+                    h = (h ^ b as u32).wrapping_mul(16777619);
+                }
+            }
+        }
+        format!("{h:x}")
+    }
 }
 
 fn parse_range(s: &str) -> (u32, u32) {
@@ -139,8 +159,8 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
     let mut files: Vec<FileDiff> = Vec::new();
     let mut cur: Option<FileDiff> = None;
     let mut in_hunk = false;
-    for line in out.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
+    for raw in out.split('\n') {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
         if line.starts_with("diff --git ") {
             if let Some(f) = cur.take() {
                 files.push(f);
@@ -180,7 +200,8 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
         let h = f.hunks.last_mut().unwrap();
         match line.as_bytes().first() {
             Some(b'+') | Some(b'-') | Some(b' ') => {
-                h.lines.push(DiffLine { t: line.as_bytes()[0] as char, text: line[1..].to_string(), no_eol: false });
+                // A CRLF file's lines end in `\r` inside the diff; keep track of it on the side.
+                h.lines.push(DiffLine { t: line.as_bytes()[0] as char, text: line[1..].to_string(), no_eol: false, cr: raw.ends_with('\r') });
             }
             Some(b'\\') => {
                 if let Some(l) = h.lines.last_mut() {
@@ -193,7 +214,7 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
                 let used_old = h.lines.iter().filter(|l| l.t != '+').count() as u32;
                 let used_new = h.lines.iter().filter(|l| l.t != '-').count() as u32;
                 if used_old < h.old_lines || used_new < h.new_lines {
-                    h.lines.push(DiffLine { t: ' ', text: String::new(), no_eol: false });
+                    h.lines.push(DiffLine { t: ' ', text: String::new(), no_eol: false, cr: false });
                 }
             }
             _ => in_hunk = false,

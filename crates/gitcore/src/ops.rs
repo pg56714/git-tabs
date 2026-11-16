@@ -143,10 +143,16 @@ pub fn diff_file(repo: &Path, path: &str, staged: bool, untracked: bool) -> Resu
     Ok(one(parse::parse_diff(&read(repo, &args)?), path))
 }
 
+pub const CONFLICT_HEADER: &str = "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@";
+/// While rebasing, git's "ours" (HEAD) is the branch being rebuilt onto, and "theirs" is the
+/// commit being replayed, which is the user's own work.
+pub const CONFLICT_HEADER_REBASE: &str = "@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@";
+
 /// A conflicted file as one block: our side (HEAD) as removed lines, theirs as added lines,
 /// so the conflict regions stand out. git's own `--cc` diff is hard to read.
 pub fn conflict_view(repo: &Path, path: &str) -> FileDiff {
     let mut d = FileDiff { path: path.into(), ..Default::default() };
+    let rebasing = summary(repo).is_ok_and(|s| s.state == Some("rebase"));
     let Ok(text) = std::fs::read_to_string(repo.join(path)) else {
         d.binary = true;
         return d;
@@ -172,11 +178,11 @@ pub fn conflict_view(repo: &Path, path: &str) -> FileDiff {
         } else {
             (match side { Side::Ours => '-', Side::Theirs => '+', _ => ' ' }, side)
         };
-        lines.push(parse::DiffLine { t, text: l.to_string(), no_eol: false });
+        lines.push(parse::DiffLine { t, text: l.to_string(), no_eol: false, cr: false });
         side = next;
     }
     let n = lines.len() as u32;
-    d.hunks.push(parse::Hunk { header: "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@".into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines });
+    d.hunks.push(parse::Hunk { header: if rebasing { CONFLICT_HEADER_REBASE } else { CONFLICT_HEADER }.into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines });
     d
 }
 
@@ -193,7 +199,7 @@ fn new_file_diff(full: &Path, path: &str) -> FileDiff {
         return d;
     }
     let no_eol = !text.ends_with('\n');
-    let mut lines: Vec<parse::DiffLine> = text.lines().map(|l| parse::DiffLine { t: '+', text: l.to_string(), no_eol: false }).collect();
+    let mut lines: Vec<parse::DiffLine> = text.lines().map(|l| parse::DiffLine { t: '+', text: l.to_string(), no_eol: false, cr: false }).collect();
     if let Some(l) = lines.last_mut() {
         l.no_eol = no_eol;
     }
@@ -233,14 +239,14 @@ fn changed_files(repo: &Path, a: &str, b: Option<&str>) -> Result<Vec<ChangedFil
 // ---------- staging ----------
 
 pub fn stage(repo: &Path, paths: &[String]) -> Result<(), String> {
-    let mut args = vec!["add", "-A", "--"];
+    let mut args = vec!["--literal-pathspecs", "add", "-A", "--"];
     args.extend(paths.iter().map(String::as_str));
     write(repo, &args).map(|_| ())
 }
 
 pub fn unstage(repo: &Path, paths: &[String]) -> Result<(), String> {
     let has_head = read(repo, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok();
-    let mut args = if has_head { vec!["restore", "--staged", "--"] } else { vec!["rm", "--cached", "-r", "-q", "--"] };
+    let mut args = if has_head { vec!["--literal-pathspecs", "restore", "--staged", "--"] } else { vec!["--literal-pathspecs", "rm", "--cached", "-r", "-q", "--"] };
     args.extend(paths.iter().map(String::as_str));
     write(repo, &args).map(|_| ())
 }
@@ -250,12 +256,12 @@ pub fn discard(repo: &Path, paths: &[String]) -> Result<(), String> {
     let st = status(repo)?;
     let (untracked, tracked): (Vec<&String>, Vec<&String>) = paths.iter().partition(|p| st.iter().any(|s| s.untracked && &s.path == *p));
     if !tracked.is_empty() {
-        let mut args = vec!["restore", "--worktree", "--"];
+        let mut args = vec!["--literal-pathspecs", "restore", "--worktree", "--"];
         args.extend(tracked.iter().map(|s| s.as_str()));
         write(repo, &args)?;
     }
     if !untracked.is_empty() {
-        let mut args = vec!["clean", "-f", "-q", "--"];
+        let mut args = vec!["--literal-pathspecs", "clean", "-f", "-q", "--"];
         args.extend(untracked.iter().map(|s| s.as_str()));
         write(repo, &args)?;
     }
@@ -271,12 +277,28 @@ pub enum LineAction {
 }
 
 /// Stages, unstages or discards only the selected (hunk, line) pairs of one file.
-pub fn apply_lines(repo: &Path, path: &str, action: LineAction, lines: &[(usize, usize)]) -> Result<(), String> {
+/// `shown` is the fingerprint of the diff the pairs were picked from. The pairs are positions in
+/// that diff, so when git's diff of the file has changed since (an earlier click was applied, the
+/// file was edited), nothing is touched.
+pub fn apply_lines(repo: &Path, path: &str, action: LineAction, lines: &[(usize, usize)], shown: &str) -> Result<(), String> {
+    let stale = || "畫面上的 diff 已經不是檔案現在的內容，請重新整理後再操作".to_string();
     let untracked = status(repo)?.iter().any(|s| s.untracked && s.path == path);
-    if untracked && action == LineAction::Stage {
-        write(repo, &["add", "-N", "--", path])?;
+    if untracked {
+        if action == LineAction::Discard {
+            return Err("未追蹤的檔案不能只捨棄幾行，請捨棄整個檔案".into());
+        }
+        // The view of an untracked file is the whole file as added lines.
+        if diff_file(repo, path, false, true)?.fingerprint() != shown {
+            return Err(stale());
+        }
+        if action == LineAction::Stage {
+            write(repo, &["--literal-pathspecs", "add", "-N", "--", path])?;
+        }
     }
     let mut diff = diff_file(repo, path, action == LineAction::Unstage, false)?;
+    if !untracked && diff.fingerprint() != shown {
+        return Err(stale());
+    }
     // A partial patch edits the file in place; a "new file"/"deleted" header would make
     // git apply want the whole file created or removed.
     diff.new_file = false;
@@ -325,7 +347,10 @@ pub fn push(repo: &Path, force: bool) -> Result<String, String> {
     let has_upstream = read(repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
     let mut args: Vec<String> = vec!["push".into()];
     if force {
-        args.push("--force-with-lease".into());
+        // A bare lease compares with the remote-tracking ref, which the background fetch keeps
+        // current; --force-if-includes also wants that remote tip to be something this branch
+        // has already taken in (it is in the local reflog).
+        args.extend(["--force-with-lease".into(), "--force-if-includes".into()]);
     }
     if !has_upstream {
         let remotes = read(repo, &["remote"])?;
@@ -609,8 +634,13 @@ pub fn simple(repo: &Path, op: &str, arg: &str) -> Result<String, String> {
         "reset-hard" => write(repo, &["reset", "--hard", arg]),
         "abort" => abort_or_continue(repo, "--abort"),
         "continue" => abort_or_continue(repo, "--continue"),
-        "use-ours" => write(repo, &["checkout", "--ours", "--", arg]).and_then(|_| write(repo, &["add", "--", arg])),
-        "use-theirs" => write(repo, &["checkout", "--theirs", "--", arg]).and_then(|_| write(repo, &["add", "--", arg])),
+        // While rebasing, "ours" is the upstream and "theirs" the commit being replayed (the user's own).
+        "use-ours" | "use-theirs" => {
+            let mine = op == "use-ours";
+            let rebasing = summary(repo)?.state == Some("rebase");
+            let side = if mine != rebasing { "--ours" } else { "--theirs" };
+            write(repo, &["checkout", side, "--", arg]).and_then(|_| write(repo, &["add", "--", arg]))
+        }
         "mark-resolved" => write(repo, &["add", "--", arg]),
         "stash-apply" => write(repo, &["stash", "apply", &format!("stash@{{{arg}}}")]),
         "stash-pop" => write(repo, &["stash", "pop", &format!("stash@{{{arg}}}")]),

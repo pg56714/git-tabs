@@ -64,6 +64,9 @@ fn hunk_body(h: &Hunk, hi: usize, selected: &HashSet<(usize, usize)>, mode: Mode
         }
         s.push(t);
         s.push_str(&l.text);
+        if l.cr {
+            s.push('\r');
+        }
         s.push('\n');
         if l.no_eol {
             s.push_str("\\ No newline at end of file\n");

@@ -85,4 +85,21 @@ fn reword_squash_and_drop_older_commits() {
     assert_eq!(subjects(d), before);
     assert!(!d.join(".git/rebase-merge").exists(), "no rebase left open");
     assert_eq!(git(d, &["rev-parse", "HEAD"]).trim(), merge);
+
+    // Lines that start with `#` are the user's text, not git's comments: a reword keeps them,
+    // and so does a squash, which still drops the comments git adds itself.
+    let h = tempfile::tempdir().unwrap();
+    let h = h.path();
+    git(h, &["init", "-q", "-b", "main"]);
+    commit(h, "a.txt", "base");
+    let issue = commit(h, "b.txt", "#123 fix login");
+    rewrite(h, exe, &issue, &Rewrite::Reword("#124 fix login\n\n# kept too".into())).unwrap();
+    assert_eq!(subjects(h)[0], "#124 fix login");
+    assert!(git(h, &["log", "-1", "--format=%B"]).contains("# kept too"));
+    commit(h, "c.txt", "#200 second");
+    let second = git(h, &["rev-parse", "HEAD"]).trim().to_string();
+    rewrite(h, exe, &second, &Rewrite::Squash).unwrap();
+    let body = git(h, &["log", "-1", "--format=%B"]);
+    assert!(body.contains("#124 fix login") && body.contains("#200 second") && body.contains("# kept too"), "{body}");
+    assert!(!body.contains("This is a combination") && !body.contains("Please enter"), "{body}");
 }

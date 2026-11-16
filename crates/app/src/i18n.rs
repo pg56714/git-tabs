@@ -35,7 +35,7 @@ fn table() -> &'static HashMap<&'static str, &'static str> {
 
 /// The text in the current language.
 /// The conflict view's pseudo-hunk header, written in Chinese by gitcore.
-pub const CONFLICT_HEADER: &str = "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@";
+pub use gitcore::ops::{CONFLICT_HEADER, CONFLICT_HEADER_REBASE};
 
 pub fn t(s: &'static str) -> &'static str {
     if is_en() { table().get(s).copied().unwrap_or(s) } else { s }
@@ -355,6 +355,7 @@ Use the identity button in the toolbar to assign it an identity."),
     ("指定給… ▾", "Assign to… ▾"),
     ("新身分 {}", "New identity {}"),
     ("@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@", "@@ Conflict: red is mine (HEAD), green is theirs @@"),
+    ("@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@", "@@ Conflict (rebasing): red is theirs (upstream), green is mine (the commit being replayed) @@"),
     ("✓ 開著的 repo 都有對應的身分", "✓ Every open repo has an identity"),
     ("跟系統", "System"),
     ("淺色", "Light"),

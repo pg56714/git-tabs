@@ -269,7 +269,7 @@ impl GitTabs {
         } else {
             LineAction::Stage
         };
-        self.apply_lines(sel.path, action, pairs, cx);
+        self.apply_lines(sel.path, action, pairs, fd.fingerprint(), cx);
         true
     }
 
@@ -277,10 +277,11 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let (Some(sel), Some(fd)) = (r.sel.clone(), r.diff.as_ref()) else { return };
         let pairs = crate::diffmap::hunk_pairs(fd, hunk);
-        self.apply_lines(sel.path, action, pairs, cx);
+        let shown = fd.fingerprint();
+        self.apply_lines(sel.path, action, pairs, shown, cx);
     }
 
-    pub fn apply_lines(&mut self, file: String, action: LineAction, pairs: Vec<(usize, usize)>, cx: &mut Context<Self>) {
+    pub fn apply_lines(&mut self, file: String, action: LineAction, pairs: Vec<(usize, usize)>, shown: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
         if pairs.is_empty() {
             return;
@@ -292,8 +293,8 @@ impl GitTabs {
                 LineAction::Unstage => crate::i18n::t("取消 Stage 選取的行"),
                 LineAction::Discard => crate::i18n::t("捨棄選取的行"),
             };
-            let (p, f, pr) = (path.clone(), file.clone(), pairs.clone());
-            this.quick(&p, label, |_| {}, move |repo| ops::apply_lines(repo, &f, action, &pr).map(|_| String::new()), cx);
+            let (p, f, pr, sh) = (path.clone(), file.clone(), pairs.clone(), shown.clone());
+            this.quick(&p, label, |_| {}, move |repo| ops::apply_lines(repo, &f, action, &pr, &sh).map(|_| String::new()), cx);
             this.stored_sel = None;
             this.diff.update(cx, |d, cx| d.set_selected_lines(None, cx));
         };

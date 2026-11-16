@@ -209,7 +209,7 @@ mod tests {
         let pairs = selected_pairs(&fd, (DiffSide::Modified, 25), (DiffSide::Modified, 25));
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].0, 1, "line 25 is in the second hunk");
-        gitcore::ops::apply_lines(&dir, "a.txt", gitcore::ops::LineAction::Stage, &pairs).unwrap();
+        gitcore::ops::apply_lines(&dir, "a.txt", gitcore::ops::LineAction::Stage, &pairs, &fd.fingerprint()).unwrap();
 
         let cached = git(&dir, &["diff", "--cached", "-U0"]);
         assert!(cached.contains("+line 25 CHANGED"), "{cached}");
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn the_conflict_view_parses_even_though_its_header_counts_do_not_add_up() {
         use gitcore::parse::{DiffLine, FileDiff, Hunk};
-        let line = |t: char, x: &str| DiffLine { t, text: x.into(), no_eol: false };
+        let line = |t: char, x: &str| DiffLine { t, text: x.into(), no_eol: false, cr: false };
         let lines = vec![line(' ', "<<<<<<< HEAD"), line('-', "mine"), line(' ', "======="), line('+', "theirs"), line(' ', ">>>>>>> x")];
         let n = lines.len() as u32;
         let d = FileDiff { path: "a.txt".into(), hunks: vec![Hunk { header: "@@ conflict @@".into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines }], ..Default::default() };

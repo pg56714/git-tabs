@@ -160,15 +160,15 @@ pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Ma
     let dir = cfg_dir.join("identities");
     let home = home();
     let old: Vec<Managed> = old.iter().map(|m| Managed { key: canon(&m.key), value: m.value.clone() }).collect();
-    let ours: Vec<Managed> = global_includes()?.into_iter().filter(|m| old.contains(m) || points_into(&m.value, &dir, &home)).collect();
-    remove(&ours)?;
-    let _ = std::fs::remove_dir_all(&dir);
+    let present = global_includes()?;
+    let ours: Vec<Managed> = present.iter().filter(|m| old.contains(m) || points_into(&m.value, &dir, &home)).cloned().collect();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut added: Vec<Managed> = Vec::new();
     let mut files = Vec::new();
     for id in ids {
         let f = identity_file(cfg_dir, &id.id);
         let fs = f.display().to_string();
+        // Starts empty, so a setting the identity no longer has does not stay behind.
+        std::fs::write(&f, "").map_err(|e| e.to_string())?;
         if !id.user.trim().is_empty() {
             git_cfg(&["config", "-f", &fs, "user.name", id.user.trim()])?;
         }
@@ -178,20 +178,44 @@ pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Ma
         if !id.key.trim().is_empty() {
             git_cfg(&["config", "-f", &fs, "core.sshCommand", &ssh_command(&id.key)])?;
         }
-        if !f.exists() {
-            std::fs::write(&f, "").map_err(|e| e.to_string())?;
-        }
         files.push((id, slash(&fs)));
     }
+    let mut added: Vec<Managed> = Vec::new();
     for (id, f) in &files {
         for r in &id.rules {
             for c in conditions(&r.t, &r.v) {
                 let m = Managed { key: format!("includeIf.{c}.path"), value: f.clone() };
                 // Two rules can come to the same condition; git needs the line once.
                 if !added.contains(&m) {
-                    git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
                     added.push(m);
                 }
+            }
+        }
+    }
+    // New lines go in first and the old ones come out after, so a failure half way leaves every
+    // repo with an identity (the old one, or both) instead of none. A line that is already there
+    // once stays; one that is there twice is taken out and written again.
+    let canonical = |m: &Managed| Managed { key: canon(&m.key), value: m.value.clone() };
+    let copies = |m: &Managed| present.iter().filter(|p| **p == canonical(m)).count();
+    let (keep, write): (Vec<&Managed>, Vec<&Managed>) = added.iter().partition(|m| copies(m) == 1);
+    let keep: Vec<Managed> = keep.into_iter().map(canonical).collect();
+    for m in &write {
+        if copies(m) == 0 {
+            git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
+        }
+    }
+    let stale: Vec<Managed> = ours.iter().filter(|m| !keep.contains(m)).cloned().collect();
+    let dupes: Vec<Managed> = write.iter().filter(|m| copies(m) > 1).map(|m| (*m).clone()).collect();
+    remove(&stale)?;
+    for m in &dupes {
+        git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
+    }
+    // Files of identities that are gone.
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        let wanted: Vec<PathBuf> = ids.iter().map(|i| identity_file(cfg_dir, &i.id)).collect();
+        for e in rd.flatten() {
+            if !wanted.contains(&e.path()) {
+                let _ = std::fs::remove_file(e.path());
             }
         }
     }

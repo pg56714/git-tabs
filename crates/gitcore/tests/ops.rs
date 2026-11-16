@@ -49,6 +49,11 @@ fn call(ctx: &Ctx, cmd: &str, a: Value) -> Value {
     dispatch(ctx, cmd, a).unwrap_or_else(|e| panic!("{cmd}: {e}"))
 }
 
+/// The fingerprint of the diff the user would be looking at.
+fn fp(d: &tempfile::TempDir, path: &str, staged: bool, untracked: bool) -> String {
+    gitcore::ops::diff_file(d.path(), path, staged, untracked).unwrap().fingerprint()
+}
+
 fn r(d: &tempfile::TempDir) -> String {
     d.path().display().to_string()
 }
@@ -97,12 +102,12 @@ fn stage_and_unstage_single_lines() {
         .map(|(i, _)| (0, i))
         .collect();
     assert_eq!(lines.len(), 2);
-    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "stage", "lines": lines}));
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "stage", "lines": lines, "diff_hash": fp(&d, "a.txt", false, false)}));
     assert_eq!(git(d.path(), &["show", ":a.txt"]), "one\nTWO\nthree\nfour\nfive\n");
     // Unstage it again from the staged diff.
     let staged = call(&ctx, "diff_file", json!({"repo": r(&d), "path": "a.txt", "staged": true}));
     let all: Vec<(usize, usize)> = (0..staged["hunks"][0]["lines"].as_array().unwrap().len()).map(|i| (0, i)).collect();
-    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "unstage", "lines": all}));
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "unstage", "lines": all, "diff_hash": fp(&d, "a.txt", true, false)}));
     assert_eq!(git(d.path(), &["show", ":a.txt"]), "one\ntwo\nthree\nfour\nfive\n");
     // Discard only the "six" line from the worktree.
     let diff = call(&ctx, "diff_file", json!({"repo": r(&d), "path": "a.txt"}));
@@ -113,7 +118,7 @@ fn stage_and_unstage_single_lines() {
         .enumerate()
         .flat_map(|(hi, h)| h["lines"].as_array().unwrap().iter().enumerate().filter(|(_, l)| l["text"] == "six").map(move |(li, _)| (hi, li)).collect::<Vec<_>>())
         .collect();
-    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "discard", "lines": six}));
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "discard", "lines": six, "diff_hash": fp(&d, "a.txt", false, false)}));
     assert_eq!(std::fs::read_to_string(d.path().join("a.txt")).unwrap(), "one\nTWO\nthree\nfour\nFIVE\n");
 }
 
@@ -122,7 +127,7 @@ fn stage_lines_of_untracked_file() {
     let _s = serial();
     let (d, ctx) = repo();
     std::fs::write(d.path().join("n.txt"), "x\ny\n").unwrap();
-    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "n.txt", "action": "stage", "lines": [[0, 0]]}));
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "n.txt", "action": "stage", "lines": [[0, 0]], "diff_hash": fp(&d, "n.txt", false, true)}));
     assert_eq!(git(d.path(), &["show", ":n.txt"]), "x\n");
 }
 
@@ -448,4 +453,109 @@ fn files_of_a_commit_and_what_they_held() {
     assert_eq!(file_at(d.path(), "HEAD~1", "a.txt").unwrap(), FileText::Text("one\ntwo\nthree\nfour\nfive\n".into()), "as it was then, not as it is now");
     assert_eq!(file_at(d.path(), "HEAD", "src/blob.bin").unwrap(), FileText::Binary);
     assert!(file_at(d.path(), "HEAD", "no/such/file").is_err());
+}
+
+#[test]
+fn lines_picked_from_an_older_diff_are_refused() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    std::fs::write(d.path().join("a.txt"), "ONE\ntwo\nthree\nfour\nFIVE\n").unwrap();
+    let shown = fp(&d, "a.txt", false, false);
+    // Some of it gets staged; the picture the user still has is of the old diff.
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "stage", "lines": [[0, 0], [0, 1]], "diff_hash": shown}));
+    let err = dispatch(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "discard", "lines": [[0, 1], [0, 2]], "diff_hash": shown})).unwrap_err();
+    assert!(err.contains("重新整理"), "{err}");
+    assert_eq!(std::fs::read_to_string(d.path().join("a.txt")).unwrap(), "ONE\ntwo\nthree\nfour\nFIVE\n", "nothing was thrown away");
+    // No fingerprint at all is no fingerprint.
+    assert!(dispatch(&ctx, "apply_lines", json!({"repo": r(&d), "path": "a.txt", "action": "discard", "lines": [[0, 0]]})).is_err());
+}
+
+#[test]
+fn discarding_lines_of_an_untracked_file_says_no() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    std::fs::write(d.path().join("n.txt"), "x\ny\n").unwrap();
+    let err = dispatch(&ctx, "apply_lines", json!({"repo": r(&d), "path": "n.txt", "action": "discard", "lines": [[0, 0]], "diff_hash": fp(&d, "n.txt", false, true)})).unwrap_err();
+    assert!(err.contains("未追蹤"), "{err}");
+    assert!(d.path().join("n.txt").exists());
+}
+
+#[test]
+fn lines_of_a_crlf_file_can_be_staged_and_discarded() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    git(d.path(), &["config", "core.autocrlf", "false"]);
+    std::fs::write(d.path().join("w.txt"), "a\r\nb\r\nc\r\n").unwrap();
+    git(d.path(), &["add", "w.txt"]);
+    git(d.path(), &["commit", "-qm", "crlf"]);
+    std::fs::write(d.path().join("w.txt"), "a\r\nB\r\nc\r\nd\r\n").unwrap();
+    let diff = call(&ctx, "diff_file", json!({"repo": r(&d), "path": "w.txt"}));
+    let pick = |texts: &[&str]| -> Vec<(usize, usize)> {
+        diff["hunks"][0]["lines"].as_array().unwrap().iter().enumerate().filter(|(_, l)| l["t"] != " " && texts.contains(&l["text"].as_str().unwrap())).map(|(i, _)| (0, i)).collect()
+    };
+    let b = pick(&["b", "B"]);
+    assert_eq!(b.len(), 2);
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "w.txt", "action": "stage", "lines": b, "diff_hash": fp(&d, "w.txt", false, false)}));
+    assert_eq!(git(d.path(), &["show", ":w.txt"]), "a\r\nB\r\nc\r\n");
+    // And "d" thrown away from the worktree.
+    let diff = call(&ctx, "diff_file", json!({"repo": r(&d), "path": "w.txt"}));
+    let dd: Vec<(usize, usize)> = diff["hunks"][0]["lines"].as_array().unwrap().iter().enumerate().filter(|(_, l)| l["text"] == "d").map(|(i, _)| (0, i)).collect();
+    call(&ctx, "apply_lines", json!({"repo": r(&d), "path": "w.txt", "action": "discard", "lines": dd, "diff_hash": fp(&d, "w.txt", false, false)}));
+    assert_eq!(std::fs::read(d.path().join("w.txt")).unwrap(), b"a\r\nB\r\nc\r\n");
+}
+
+/// While rebasing, git's "ours" is the upstream and "theirs" is the user's own commit.
+#[test]
+fn mine_and_theirs_swap_while_rebasing() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    git(d.path(), &["switch", "-q", "-c", "feature"]);
+    std::fs::write(d.path().join("a.txt"), "feature\n").unwrap();
+    git(d.path(), &["commit", "-qam", "feature"]);
+    git(d.path(), &["switch", "-q", "main"]);
+    std::fs::write(d.path().join("a.txt"), "upstream\n").unwrap();
+    git(d.path(), &["commit", "-qam", "upstream"]);
+    let conflict = |op: &str| {
+        git(d.path(), &["switch", "-q", "feature"]);
+        let o = Command::new("git").args(["rebase", "main"]).current_dir(d.path()).output().unwrap();
+        assert!(!o.status.success());
+        let view = call(&ctx, "diff_file", json!({"repo": r(&d), "path": "a.txt", "conflicted": true}));
+        assert!(view["hunks"][0]["header"].as_str().unwrap().contains("rebase"), "{view}");
+        call(&ctx, "op", json!({"repo": r(&d), "op": op, "arg": "a.txt"}));
+        let got = std::fs::read_to_string(d.path().join("a.txt")).unwrap();
+        git(d.path(), &["rebase", "--abort"]);
+        got
+    };
+    assert_eq!(conflict("use-ours"), "feature\n", "\"mine\" is the commit being replayed");
+    assert_eq!(conflict("use-theirs"), "upstream\n");
+    // A plain merge keeps the usual meaning.
+    git(d.path(), &["switch", "-q", "feature"]);
+    assert!(dispatch(&ctx, "op", json!({"repo": r(&d), "op": "merge", "arg": "main"})).is_err());
+    call(&ctx, "op", json!({"repo": r(&d), "op": "use-ours", "arg": "a.txt"}));
+    assert_eq!(std::fs::read_to_string(d.path().join("a.txt")).unwrap(), "feature\n");
+}
+
+/// A colleague's commit that the background fetch already brought in must still stop a force push.
+#[test]
+fn force_push_refuses_a_commit_it_never_took_in() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "-q", "--bare", "-b", "main"]);
+    git(d.path(), &["remote", "add", "origin", &remote.path().display().to_string()]);
+    git(d.path(), &["push", "-q", "-u", "origin", "main"]);
+    let other = tempfile::tempdir().unwrap();
+    git(other.path(), &["clone", "-q", &remote.path().display().to_string(), "."]);
+    std::fs::write(other.path().join("c.txt"), "colleague\n").unwrap();
+    git(other.path(), &["add", "."]);
+    git(other.path(), &["commit", "-qm", "colleague"]);
+    git(other.path(), &["push", "-q"]);
+    // What the app's 10-minute fetch does.
+    call(&ctx, "fetch", json!({"repo": r(&d)}));
+    git(d.path(), &["commit", "-q", "--amend", "-m", "rewritten"]);
+    assert!(dispatch(&ctx, "push", json!({"repo": r(&d), "force": true})).is_err(), "the colleague's commit would be lost");
+    assert!(git(remote.path(), &["log", "--format=%s", "main"]).contains("colleague"));
+    // Taken in first, the same force push goes through.
+    git(d.path(), &["pull", "-q", "--rebase"]);
+    call(&ctx, "push", json!({"repo": r(&d), "force": true}));
 }

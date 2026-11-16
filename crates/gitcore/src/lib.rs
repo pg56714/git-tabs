@@ -156,7 +156,7 @@ pub fn dispatch(ctx: &Ctx, cmd: &str, a: Value) -> Result<Value, String> {
         "apply_lines" => {
             let action: ops::LineAction = arg(&a["action"])?;
             let lines: Vec<(usize, usize)> = arg(&a["lines"])?;
-            ok(ops::apply_lines(&repo_path(&a)?, s(&a, "path"), action, &lines)?)
+            ok(ops::apply_lines(&repo_path(&a)?, s(&a, "path"), action, &lines, s(&a, "diff_hash"))?)
         }
         "commit" => ok(ops::commit(&repo_path(&a)?, s(&a, "message"), b(&a, "amend"))?),
         "fetch" => ok(ops::fetch(&repo_path(&a)?)?),
@@ -222,6 +222,7 @@ fn open_terminal(p: &Path) -> Result<Value, String> {
 }
 
 /// Whether a program is on PATH.
+#[cfg(not(windows))]
 fn has(program: &str) -> bool {
     let finder = if cfg!(windows) { "where" } else { "which" };
     let mut c = std::process::Command::new(finder);
@@ -234,14 +235,42 @@ fn has(program: &str) -> bool {
     c.status().map(|s| s.success()).unwrap_or(false)
 }
 
+/// The command that opens `file` in the VS Code behind `code_cmd` (its `bin/code.cmd`). The
+/// file name never goes through `cmd /c`, where `&`, `|`, `^` and `%VAR%` in it would run as
+/// commands. VS Code's own `Code.exe`, next to `bin`, takes the path as one plain argument; when
+/// it is not there the .cmd is run directly, and std escapes the arguments of a batch file itself.
+#[cfg(windows)]
+fn code_command(code_cmd: &Path, file: &str) -> std::process::Command {
+    let exe = code_cmd.parent().and_then(Path::parent).map(|root| root.join("Code.exe")).filter(|e| e.is_file());
+    let mut c = std::process::Command::new(exe.as_deref().unwrap_or(code_cmd));
+    c.arg(file);
+    use std::os::windows::process::CommandExt;
+    c.creation_flags(0x0800_0000);
+    c
+}
+
+/// The `code.cmd` that PATH finds.
+#[cfg(windows)]
+fn find_code_cmd() -> Option<PathBuf> {
+    let mut c = std::process::Command::new("where");
+    c.arg("code.cmd").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
+    use std::os::windows::process::CommandExt;
+    c.creation_flags(0x0800_0000);
+    let out = c.output().ok().filter(|o| o.status.success())?;
+    String::from_utf8_lossy(&out.stdout).lines().map(|l| PathBuf::from(l.trim())).find(|p| p.is_file())
+}
+
 /// Opens a file in VS Code when it is installed, else with the system's default app.
 fn open_file(p: &Path) -> Result<Value, String> {
     let d = p.display().to_string();
+    #[cfg(windows)]
+    if let Some(code) = find_code_cmd() {
+        if code_command(&code, &d).spawn().is_ok() {
+            return ok(true);
+        }
+    }
+    #[cfg(not(windows))]
     if has("code") {
-        // On Windows `code` is a .cmd script, so it has to go through cmd.
-        #[cfg(windows)]
-        return spawn("cmd", &["/c", "code", &d], None).and_then(|_| ok(true));
-        #[cfg(not(windows))]
         return spawn("code", &[&d], None).and_then(|_| ok(true));
     }
     #[cfg(windows)]
@@ -251,4 +280,37 @@ fn open_file(p: &Path) -> Result<Value, String> {
     #[cfg(all(unix, not(target_os = "macos")))]
     spawn("xdg-open", &[&d], None)?;
     ok(true)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    /// A file called `x&echo pwned.txt` must reach the editor as one argument and run nothing.
+    #[test]
+    fn a_file_name_with_shell_characters_is_one_argument() {
+        let d = tempfile::tempdir().unwrap();
+        let bin = d.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let out = d.path().join("got.txt");
+        // Stands in for VS Code's code.cmd: records its first argument.
+        std::fs::write(bin.join("code.cmd"), format!("@echo off\r\n>\"{}\" echo \"%~1\"\r\n", out.display())).unwrap();
+        for name in ["x&echo pwned.txt", "y^z.txt", "a b&&c.txt"] {
+            let file = d.path().join(name).display().to_string();
+            let status = code_command(&bin.join("code.cmd"), &file).status().unwrap();
+            assert!(status.success());
+            assert_eq!(std::fs::read_to_string(&out).unwrap().trim_end(), format!("\"{file}\""));
+            let _ = std::fs::remove_file(&out);
+        }
+    }
+
+    /// With VS Code's own exe present that is what runs, not cmd.
+    #[test]
+    fn code_exe_is_preferred_to_the_batch_file() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("bin")).unwrap();
+        std::fs::write(d.path().join("Code.exe"), "").unwrap();
+        let c = code_command(&d.path().join("bin").join("code.cmd"), "x&y");
+        assert_eq!(Path::new(c.get_program()), d.path().join("Code.exe"));
+    }
 }
