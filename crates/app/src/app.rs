@@ -75,6 +75,7 @@ pub struct Gate {
 
 pub struct GitTabs {
     pub ctx: Arc<Ctx>,
+    pub avatars: Arc<gitcore::avatar::Cache>,
     pub cfg: AppConfig,
     pub repos: Vec<RepoState>,
     pub active: usize,
@@ -208,6 +209,7 @@ impl GitTabs {
         }));
         let seen = load_seen(&ctx.config_dir);
         let mut this = Self {
+            avatars: gitcore::avatar::Cache::new(&ctx.config_dir),
             ctx,
             cfg,
             repos,
@@ -581,6 +583,9 @@ impl GitTabs {
 
     fn tick(&mut self, cx: &mut Context<Self>) {
         self.ticks += 1;
+        if self.avatars.take_changed() {
+            cx.notify();
+        }
         // Once at start (after the window is up), then every 6 hours.
         if self.ticks == 2 || self.ticks % (12 * 60 * 6) == 0 {
             self.check_update(cx);

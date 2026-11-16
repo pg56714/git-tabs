@@ -6,7 +6,7 @@ use gitcore::parse::Commit;
 use gpui_kit::component::input::Input;
 use gpui_kit::{
     AnyElement, Bounds, Context, Hsla, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, PathBuilder, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, canvas, div, fill, point, prelude::FluentBuilder as _, px, size, uniform_list,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, canvas, div, fill, point, prelude::FluentBuilder as _, px, size, uniform_list,
 };
 
 use crate::app::*;
@@ -36,21 +36,23 @@ fn initials(name: &str) -> String {
 
 /// A round badge with the author's initials, in a colour that stays the same for the same name
 /// (Fork shows the author's picture, or such a badge when there is none).
-fn avatar(name: &str, size: f32) -> gpui_kit::Div {
+fn avatar(name: &str, email: &str, size: f32, pics: &Arc<gitcore::avatar::Cache>) -> AnyElement {
     const COLORS: [u32; 8] = [0xe0775f, 0xd89a3c, 0x5aa469, 0x3f9fb0, 0x5b84d6, 0x8a6fd1, 0xc4639f, 0x7d8b99];
     let h = name.trim().to_lowercase().bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
-    div()
-        .size(px(size))
-        .flex_none()
-        .rounded(px(size / 2.))
-        .bg(gpui_kit::rgb(COLORS[(h % 8) as usize]))
-        .text_color(gpui_kit::white())
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_size(px((size * 0.42).round()))
-        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-        .child(initials(name))
+    let badge = div().size(px(size)).flex_none().rounded(px(size / 2.)).overflow_hidden();
+    match pics.get(email) {
+        Some(file) => badge.child(gpui_kit::img(file).size_full().object_fit(gpui_kit::ObjectFit::Cover)).into_any_element(),
+        None => badge
+            .bg(gpui_kit::rgb(COLORS[(h % 8) as usize]))
+            .text_color(gpui_kit::white())
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(px((size * 0.42).round()))
+            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+            .child(initials(name))
+            .into_any_element(),
+    }
 }
 
 /// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
@@ -177,6 +179,7 @@ impl GitTabs {
         let list_w = f32::from(self.window_size.width) - self.sizes.side_bar - 5.;
         let (show_author, show_date) = (list_w >= 760., list_w >= 560.);
         let owner = cx.entity().downgrade();
+        let pics = self.avatars.clone();
         let list = uniform_list("commits", count, {
             let (commits, graph, sel, owner, path) = (commits.clone(), graph.clone(), sel_commit.clone(), owner.clone(), path.clone());
             let (shown, collapsed, unpushed) = (shown.clone(), collapsed.clone(), unpushed.clone());
@@ -347,7 +350,7 @@ impl GitTabs {
                                         .items_center()
                                         .gap(px(6.))
                                         .overflow_hidden()
-                                        .child(avatar(&c.author, 18.))
+                                        .child(avatar(&c.author, &c.email, 18., &pics))
                                         .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())),
                                 )
                             })
@@ -507,18 +510,31 @@ impl GitTabs {
             .px(px(18.))
             .py(px(14.))
             .gap(px(10.))
-            .child(
+            .child({
+                // AUTHOR and COMMITTER side by side as in Fork; one block when they are the same.
+                let same = d.author == d.committer && d.email == d.committer_email && d.time == d.commit_time;
+                let person = |label: &'static str, name: &str, email: &str, time: i64| {
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap(px(12.))
+                        .items_center()
+                        .child(avatar(name, email, 40., &self.avatars))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .child(div().text_size(px(10.5)).text_color(p.faint).child(label))
+                                .child(div().flex().gap_2().child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.to_string())).child(sub(&p, email.to_string())))
+                                .child(sub(&p, date_time(time))),
+                        )
+                };
                 div()
                     .flex()
-                    .gap(px(12.))
-                    .items_center()
-                    .child(avatar(&d.author, 40.))
-                    .child(
-                        div()
-                            .child(div().flex().gap_1().child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(d.author.clone())).child(sub(&p, d.email.clone())))
-                            .child(sub(&p, format!("{}{}", date_time(d.time), if d.committer != d.author { crate::i18n::tr(" · commit 者 {}", &[], &[(d.committer).to_string()]) } else { String::new() }))),
-                    ),
-            )
+                    .gap(px(18.))
+                    .child(person("AUTHOR", &d.author, &d.email, d.time))
+                    .when(!same, |r| r.child(person("COMMITTER", &d.committer, &d.committer_email, d.commit_time)))
+            })
             .child(
                 div()
                     .flex()

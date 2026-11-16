@@ -406,6 +406,7 @@ pub struct CommitDetail {
     pub email: String,
     pub time: i64,
     pub committer: String,
+    pub committer_email: String,
     pub commit_time: i64,
     pub refs: Vec<parse::RefLabel>,
     pub message: String,
@@ -413,9 +414,9 @@ pub struct CommitDetail {
 }
 
 pub fn commit_detail(repo: &Path, sha: &str) -> Result<CommitDetail, String> {
-    let out = read(repo, &["show", "-s", "--decorate=full", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ct%x1f%D%x1f%B", sha])?;
-    let f: Vec<&str> = out.splitn(9, '\x1f').collect();
-    if f.len() < 9 {
+    let out = read(repo, &["show", "-s", "--decorate=full", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%D%x1f%B", sha])?;
+    let f: Vec<&str> = out.splitn(10, '\x1f').collect();
+    if f.len() < 10 {
         return Err("讀不到這個 commit".into());
     }
     let parents: Vec<String> = f[1].split(' ').filter(|s| !s.is_empty()).map(String::from).collect();
@@ -428,9 +429,10 @@ pub fn commit_detail(repo: &Path, sha: &str) -> Result<CommitDetail, String> {
         email: f[3].into(),
         time: f[4].parse().unwrap_or(0),
         committer: f[5].into(),
-        commit_time: f[6].parse().unwrap_or(0),
-        refs: parse::parse_decorations(f[7]),
-        message: f[8].trim_end().into(),
+        committer_email: f[6].into(),
+        commit_time: f[7].parse().unwrap_or(0),
+        refs: parse::parse_decorations(f[8]),
+        message: f[9].trim_end().into(),
         files,
     })
 }

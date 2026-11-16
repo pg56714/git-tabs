@@ -1,6 +1,7 @@
 //! Everything git-tabs does, behind one `dispatch(cmd, args)` entry point that both the
 //! Tauri app and the browser dev server call.
 
+pub mod avatar;
 pub mod config;
 pub mod identity;
 pub mod ops;
