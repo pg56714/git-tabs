@@ -36,11 +36,11 @@ fn initials(name: &str) -> String {
 
 /// A round badge with the author's initials, in a colour that stays the same for the same name
 /// (Fork shows the author's picture, or such a badge when there is none).
-fn avatar(name: &str, email: &str, size: f32, pics: &Arc<gitcore::avatar::Cache>) -> AnyElement {
+fn avatar(name: &str, email: &str, hint: Option<(&str, &str)>, size: f32, pics: &Arc<gitcore::avatar::Cache>) -> AnyElement {
     const COLORS: [u32; 8] = [0xe0775f, 0xd89a3c, 0x5aa469, 0x3f9fb0, 0x5b84d6, 0x8a6fd1, 0xc4639f, 0x7d8b99];
     let h = name.trim().to_lowercase().bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
     let badge = div().size(px(size)).flex_none().rounded(px(size / 2.)).overflow_hidden();
-    match pics.get(email) {
+    match pics.get(email, hint) {
         Some(file) => badge.child(gpui_kit::img(file).size_full().object_fit(gpui_kit::ObjectFit::Cover)).into_any_element(),
         None => badge
             .bg(gpui_kit::rgb(COLORS[(h % 8) as usize]))
@@ -180,6 +180,7 @@ impl GitTabs {
         let (show_author, show_date) = (list_w >= 760., list_w >= 560.);
         let owner = cx.entity().downgrade();
         let pics = self.avatars.clone();
+        let slug = self.repo().and_then(|r| r.summary.as_ref()).and_then(|s| s.remote_url.as_deref()).and_then(gitcore::avatar::github_slug);
         let list = uniform_list("commits", count, {
             let (commits, graph, sel, owner, path) = (commits.clone(), graph.clone(), sel_commit.clone(), owner.clone(), path.clone());
             let (shown, collapsed, unpushed) = (shown.clone(), collapsed.clone(), unpushed.clone());
@@ -350,7 +351,7 @@ impl GitTabs {
                                         .items_center()
                                         .gap(px(6.))
                                         .overflow_hidden()
-                                        .child(avatar(&c.author, &c.email, 18., &pics))
+                                        .child(avatar(&c.author, &c.email, slug.as_deref().map(|s| (s, c.sha.as_str())), 18., &pics))
                                         .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())),
                                 )
                             })
@@ -513,14 +514,15 @@ impl GitTabs {
             .child({
                 // AUTHOR and COMMITTER side by side as in Fork; one block when they are the same.
                 let same = d.author == d.committer && d.email == d.committer_email && d.time == d.commit_time;
-                let person = |label: &'static str, name: &str, email: &str, time: i64| {
+                let slug = self.repo().and_then(|r| r.summary.as_ref()).and_then(|s| s.remote_url.as_deref()).and_then(gitcore::avatar::github_slug);
+                let person = |label: &'static str, name: &str, email: &str, time: i64, hint: Option<(&str, &str)>| {
                     div()
                         .flex()
                         .flex_1()
                         .min_w_0()
                         .gap(px(12.))
                         .items_center()
-                        .child(avatar(name, email, 40., &self.avatars))
+                        .child(avatar(name, email, hint, 40., &self.avatars))
                         .child(
                             div()
                                 .min_w_0()
@@ -532,8 +534,8 @@ impl GitTabs {
                 div()
                     .flex()
                     .gap(px(18.))
-                    .child(person("AUTHOR", &d.author, &d.email, d.time))
-                    .when(!same, |r| r.child(person("COMMITTER", &d.committer, &d.committer_email, d.commit_time)))
+                    .child(person("AUTHOR", &d.author, &d.email, d.time, slug.as_deref().map(|s| (s, d.sha.as_str()))))
+                    .when(!same, |r| r.child(person("COMMITTER", &d.committer, &d.committer_email, d.commit_time, None)))
             })
             .child(
                 div()

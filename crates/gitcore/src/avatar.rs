@@ -69,6 +69,17 @@ pub fn url(email: &str) -> Option<String> {
     Some(format!("https://www.gravatar.com/avatar/{}?s=64&d=404", md5_hex(e.as_bytes())))
 }
 
+/// "owner/repo" of a github.com remote URL.
+pub fn github_slug(remote: &str) -> Option<String> {
+    let r = remote.trim();
+    let rest = r.split_once("github.com").map(|x| x.1)?.trim_start_matches([':', '/']);
+    let mut it = rest.trim_end_matches('/').trim_end_matches(".git").split('/');
+    match (it.next(), it.next()) {
+        (Some(o), Some(n)) if !o.is_empty() && !n.is_empty() => Some(format!("{o}/{n}")),
+        _ => None,
+    }
+}
+
 enum State {
     Loading,
     Have(PathBuf),
@@ -102,7 +113,10 @@ impl Cache {
 
     /// The picture file for this email, when there is one. The first call for an address starts
     /// the download and returns None; `take_changed` says when something new has arrived.
-    pub fn get(self: &Arc<Self>, email: &str) -> Option<PathBuf> {
+    ///
+    /// `hint` is (owner/repo, sha) of a commit by this address on GitHub: when Gravatar has no
+    /// picture, GitHub's own answer for that commit (the account behind the address) is used.
+    pub fn get(self: &Arc<Self>, email: &str, hint: Option<(&str, &str)>) -> Option<PathBuf> {
         let key = email.trim().to_lowercase();
         if self.off || key.is_empty() {
             return None;
@@ -131,10 +145,21 @@ impl Cache {
         map.insert(key.clone(), State::Loading);
         self.busy.fetch_add(1, Ordering::SeqCst);
         let me = self.clone();
+        let hint = hint.map(|(s, c)| format!("https://api.github.com/repos/{s}/commits/{c}"));
         std::thread::spawn(move || {
             let _ = std::fs::create_dir_all(&me.dir);
             let tmp = f.with_extension("part");
-            let got = (me.fetch)(&url, &tmp) && std::fs::metadata(&tmp).is_ok_and(|m| m.len() > 100) && std::fs::rename(&tmp, &f).is_ok();
+            let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
+            let mut got = (me.fetch)(&url, &tmp) && ok(&tmp);
+            if !got && let Some(api) = hint {
+                let json = f.with_extension("json");
+                if (me.fetch)(&api, &json) {
+                    let pic = std::fs::read_to_string(&json).ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()).and_then(|v| v["author"]["avatar_url"].as_str().map(|u| format!("{u}{}s=64", if u.contains('?') { "&" } else { "?" })));
+                    got = pic.is_some_and(|u| (me.fetch)(&u, &tmp) && ok(&tmp));
+                }
+                let _ = std::fs::remove_file(&json);
+            }
+            let got = got && std::fs::rename(&tmp, &f).is_ok();
             let _ = std::fs::remove_file(&tmp);
             if !got {
                 let _ = std::fs::write(&miss, b"");
@@ -182,6 +207,14 @@ mod tests {
     }
 
     #[test]
+    fn github_slugs() {
+        assert_eq!(github_slug("git@github.com:pg56714/git-tabs.git").unwrap(), "pg56714/git-tabs");
+        assert_eq!(github_slug("https://alice@github.com/Org/repo").unwrap(), "Org/repo");
+        assert_eq!(github_slug("git@github-work-emu:TRUSTA/x.git"), None);
+        assert!(github_slug("https://gitlab.com/a/b").is_none());
+    }
+
+    #[test]
     fn where_each_address_gets_its_picture() {
         assert_eq!(url("293473+sandersn@users.noreply.github.com").unwrap(), "https://avatars.githubusercontent.com/u/293473?s=64");
         assert_eq!(url("sandersn@users.noreply.github.com").unwrap(), "https://github.com/sandersn.png?size=64");
@@ -192,7 +225,7 @@ mod tests {
 
     fn wait(c: &Arc<Cache>, email: &str) -> Option<PathBuf> {
         for _ in 0..200 {
-            if let Some(p) = c.get(email) {
+            if let Some(p) = c.get(email, None) {
                 return Some(p);
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -214,24 +247,45 @@ mod tests {
             }
         });
         let c = Cache::with_fetch(d.path(), fetch.clone(), false);
-        assert!(c.get("7+x@users.noreply.github.com").is_none(), "first call only starts the download");
+        assert!(c.get("7+x@users.noreply.github.com", None).is_none(), "first call only starts the download");
         let p = wait(&c, "7+x@users.noreply.github.com").expect("arrives");
         assert!(p.is_file());
         assert!(c.take_changed());
         assert!(!c.take_changed());
         // A new cache (the app restarted) reads the file, no download.
         let c2 = Cache::with_fetch(d.path(), fetch.clone(), false);
-        assert!(c2.get("7+x@users.noreply.github.com").is_some());
+        assert!(c2.get("7+x@users.noreply.github.com", None).is_some());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         // No picture: asked once, remembered across restarts.
         assert!(wait(&c2, "someone@example.com").is_none());
         let after = calls.load(Ordering::SeqCst);
         assert_eq!(after, 2);
         let c3 = Cache::with_fetch(d.path(), fetch, false);
-        assert!(c3.get("someone@example.com").is_none());
+        assert!(c3.get("someone@example.com", None).is_none());
         assert_eq!(calls.load(Ordering::SeqCst), after);
+        // Gravatar has nothing, GitHub knows the account behind the commit.
+        let api: Fetch = Arc::new(|url, to| {
+            if url.contains("gravatar") {
+                false
+            } else if url.contains("api.github.com/repos/o/r/commits/abc") {
+                std::fs::write(to, r#"{"author":{"login":"x","avatar_url":"https://avatars.githubusercontent.com/u/9?v=4"}}"#).is_ok()
+            } else if url.starts_with("https://avatars.githubusercontent.com/u/9?v=4&s=64") {
+                std::fs::write(to, vec![2u8; 500]).is_ok()
+            } else {
+                false
+            }
+        });
+        let c4 = Cache::with_fetch(tempfile::tempdir().unwrap().path(), api, false);
+        assert!(c4.get("me@gmail.com", Some(("o/r", "abc"))).is_none());
+        for _ in 0..200 {
+            if c4.get("me@gmail.com", Some(("o/r", "abc"))).is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(c4.get("me@gmail.com", Some(("o/r", "abc"))).is_some());
         // Switched off: never fetches.
         let off = Cache::with_fetch(tempfile::tempdir().unwrap().path(), Arc::new(|_, _| panic!("no network")), true);
-        assert!(off.get("7+x@users.noreply.github.com").is_none());
+        assert!(off.get("7+x@users.noreply.github.com", None).is_none());
     }
 }
