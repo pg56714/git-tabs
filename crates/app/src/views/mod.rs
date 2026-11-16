@@ -229,6 +229,7 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
             }
         }))
         .child(this.render_tabs(window, cx))
+        .children(this.render_update_bar(cx))
         .when(has_repo, |d| d.child(this.render_toolbar(window, cx)))
         .child(body)
         .child(this.render_log_bar(cx))

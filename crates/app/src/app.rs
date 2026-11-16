@@ -138,12 +138,15 @@ pub struct GitTabs {
     watcher: Option<Debouncer<RecommendedWatcher>>,
     search_timer: Task<()>,
     ticks: u64,
+    pub update: Option<gitcore::update::Release>,
+    pub updating: bool,
     _subs: Vec<Subscription>,
 }
 
 impl GitTabs {
     pub fn new(ctx: Arc<Ctx>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         window.set_window_title("git-tabs");
+        gitcore::update::tidy();
         let cfg = config::load(&ctx.config_dir);
         let repos: Vec<RepoState> =
             cfg.repos.iter().filter(|r| Path::new(&r.path).is_dir()).map(|r| RepoState::new(PathBuf::from(&r.path))).collect();
@@ -267,6 +270,8 @@ impl GitTabs {
             watcher: None,
             search_timer: Task::ready(()),
             ticks: 0,
+            update: None,
+            updating: false,
             _subs: subs,
         };
         this.apply_diff_view(cx);
@@ -420,6 +425,11 @@ impl GitTabs {
             .iter()
             .map(|r| RepoEntry { path: r.path.display().to_string(), pin: old.iter().find(|e| Path::new(&e.path) == r.path).and_then(|e| e.pin.clone()) })
             .collect();
+        // A repo whose folder is not there right now (a drive that is unplugged) has no tab, but
+        // keeps its place in the settings, so it is back when the drive is.
+        let open: Vec<String> = self.cfg.repos.iter().map(|e| e.path.clone()).collect();
+        let missing: Vec<RepoEntry> = old.into_iter().filter(|e| !Path::new(&e.path).is_dir() && !open.contains(&e.path)).collect();
+        self.cfg.repos.extend(missing);
         self.cfg.active = self.active;
         // `managed` stays as gitcore last wrote it: this copy is from when the app started.
         if let Err(e) = config::save_settings(&self.ctx.config_dir, &self.cfg) {
@@ -571,6 +581,10 @@ impl GitTabs {
 
     fn tick(&mut self, cx: &mut Context<Self>) {
         self.ticks += 1;
+        // Once at start (after the window is up), then every 6 hours.
+        if self.ticks == 2 || self.ticks % (12 * 60 * 6) == 0 {
+            self.check_update(cx);
+        }
         if self.ticks % 6 == 0 {
             if let Some(r) = self.repo()
                 && r.busy.is_none()

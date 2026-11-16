@@ -8,6 +8,7 @@ pub mod parse;
 pub mod patch;
 pub mod rewrite;
 pub mod runner;
+pub mod update;
 
 use config::{AppConfig, Identity};
 use serde::Deserialize;
@@ -184,6 +185,16 @@ fn spawn(program: &str, args: &[&str], dir: Option<&Path>) -> Result<(), String>
         c.creation_flags(0x0800_0000);
     }
     c.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Opens a web page in the default browser.
+pub fn open_url(url: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    return spawn("explorer", &[url], None);
+    #[cfg(target_os = "macos")]
+    return spawn("open", &[url], None);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    return spawn("xdg-open", &[url], None);
 }
 
 fn open_folder(p: &Path) -> Result<Value, String> {

@@ -34,6 +34,25 @@ fn initials(name: &str) -> String {
     name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase()
 }
 
+/// A round badge with the author's initials, in a colour that stays the same for the same name
+/// (Fork shows the author's picture, or such a badge when there is none).
+fn avatar(name: &str, size: f32) -> gpui_kit::Div {
+    const COLORS: [u32; 8] = [0xe0775f, 0xd89a3c, 0x5aa469, 0x3f9fb0, 0x5b84d6, 0x8a6fd1, 0xc4639f, 0x7d8b99];
+    let h = name.trim().to_lowercase().bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
+    div()
+        .size(px(size))
+        .flex_none()
+        .rounded(px(size / 2.))
+        .bg(gpui_kit::rgb(COLORS[(h % 8) as usize]))
+        .text_color(gpui_kit::white())
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px((size * 0.42).round()))
+        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+        .child(initials(name))
+}
+
 /// One row's slice of the graph, drawn the way Fork does: lanes run straight down, a lane that
 /// joins or leaves the commit turns into its row with a rounded corner, and a merge has a hollow dot.
 fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool) -> impl IntoElement {
@@ -156,7 +175,7 @@ impl GitTabs {
 
         // ---- list geometry
         let list_w = f32::from(self.window_size.width) - self.sizes.side_bar - 5.;
-        let (show_author, show_date) = (list_w >= 720., list_w >= 520.);
+        let (show_author, show_date) = (list_w >= 760., list_w >= 560.);
         let owner = cx.entity().downgrade();
         let list = uniform_list("commits", count, {
             let (commits, graph, sel, owner, path) = (commits.clone(), graph.clone(), sel_commit.clone(), owner.clone(), path.clone());
@@ -319,9 +338,21 @@ impl GitTabs {
                                             .child(div().min_w_0().overflow_hidden().text_ellipsis().child(rest.to_string()))
                                     }),
                             )
-                            .when(show_author, |d| d.child(div().w(px(110.)).flex_none().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())))
+                            .when(show_author, |d| {
+                                d.child(
+                                    div()
+                                        .w(px(150.))
+                                        .flex_none()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .overflow_hidden()
+                                        .child(avatar(&c.author, 18.))
+                                        .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(c.author.clone())),
+                                )
+                            })
                             .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).font_family("Cascadia Mono").child(short(&c.sha)))
-                            .when(show_date, |d| d.child(div().w(px(88.)).flex_none().overflow_hidden().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(ago(c.time))))
+                            .when(show_date, |d| d.child(div().w(px(120.)).flex_none().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(ago(c.time))))
                             .into_any_element()
                     })
                     .collect()
@@ -481,7 +512,7 @@ impl GitTabs {
                     .flex()
                     .gap(px(12.))
                     .items_center()
-                    .child(div().size(px(40.)).flex_none().rounded(px(6.)).bg(gpui_kit::rgb(0xf2a65a)).text_color(gpui_kit::white()).flex().items_center().justify_center().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(initials(&d.author)))
+                    .child(avatar(&d.author, 40.))
                     .child(
                         div()
                             .child(div().flex().gap_1().child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(d.author.clone())).child(sub(&p, d.email.clone())))

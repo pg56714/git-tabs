@@ -15,6 +15,7 @@ mod overlays;
 mod theme;
 mod tree;
 mod ui;
+mod updater;
 mod views;
 
 use gpui_kit::{AppContext as _, WindowOptions};
