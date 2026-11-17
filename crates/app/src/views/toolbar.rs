@@ -18,7 +18,7 @@ impl GitTabs {
         let remotes: Vec<_> = refs
             .map(|x| x.refs.remotes.iter().filter(|b| !local.iter().any(|l| Some(l.name.as_str()) == b.name.split_once('/').map(|(_, n)| n))).cloned().collect())
             .unwrap_or_default();
-        let mut items = vec![MenuItem::header(crate::i18n::t("本地分支"))];
+        let mut items = vec![MenuItem::header(crate::i18n::t("本地 branch"))];
         for b in &local {
             let hint = [if b.ahead > 0 { format!("↑{}", b.ahead) } else { String::new() }, if b.behind > 0 { format!("↓{}", b.behind) } else { String::new() }].join(" ").trim().to_string();
             let (p, n, cur) = (path.clone(), b.name.clone(), b.current);
@@ -29,14 +29,14 @@ impl GitTabs {
             }).checked(b.current).hint(hint));
         }
         if !remotes.is_empty() {
-            items.push(MenuItem::header(crate::i18n::t("遠端（切換會建立本地分支）")));
+            items.push(MenuItem::header(crate::i18n::t("Remote（切換會建立本地 branch）")));
             for b in remotes.iter().take(30) {
                 let (p, n) = (path.clone(), b.name.clone());
                 items.push(MenuItem::new(b.name.clone(), move |t, _, cx| t.switch_branch(&p, &n, cx)));
             }
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("新增分支…"), |t, w, cx| t.new_branch(None, w, cx)).icon(Ico::Plus));
+        items.push(MenuItem::new(crate::i18n::t("新增 branch…"), |t, w, cx| t.new_branch(None, w, cx)).icon(Ico::Plus));
         items
     }
 
@@ -44,7 +44,7 @@ impl GitTabs {
         let Some(r) = self.repo() else { return vec![] };
         let w = self.identity_of(r);
         // Only the identities: the one pinned to this repo is checked. Picking one keeps it for this repo.
-        let mut items = vec![MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個身分", &[], &[(r.name).to_string()]))];
+        let mut items = vec![MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個 identity", &[], &[(r.name).to_string()]))];
         for id in &self.cfg.identities {
             let key = id.id.clone();
             let checked = w.id.as_ref().is_some_and(|x| x.id == id.id);
@@ -54,7 +54,7 @@ impl GitTabs {
             );
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("管理身分…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon(Ico::Settings));
+        items.push(MenuItem::new(crate::i18n::t("管理 identity…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon(Ico::Settings));
         items
     }
 
@@ -101,7 +101,7 @@ impl GitTabs {
             .border_color(p.border)
             .child(
                 btn(&p, "branch", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::GitBranch, 14., p.muted)).child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(branch_label)).child(down()))
-                    .tooltip_text(crate::i18n::t("切換分支"))
+                    .tooltip_text(crate::i18n::t("切換 branch"))
                     .on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                         let items = this.branch_menu();
                         this.open_menu(ev.position(), items, false, cx);
@@ -156,31 +156,31 @@ impl GitTabs {
             )
             .child(sep(&p))
             .child(btn(&p, "stash", Bk::Normal, false, with_icon(Ico::Archive, "Stash")).on_click(cx.listener(|this, _, w, cx| this.stash_push(w, cx))))
-            .child(btn(&p, "newbranch", Bk::Normal, false, with_icon(Ico::GitBranchPlus, crate::i18n::t("開分支"))).on_click(cx.listener(|this, _, w, cx| this.new_branch(None, w, cx))))
+            .child(btn(&p, "newbranch", Bk::Normal, false, with_icon(Ico::GitBranchPlus, crate::i18n::t("Branch"))).on_click(cx.listener(|this, _, w, cx| this.new_branch(None, w, cx))))
             .when_some(busy, |d, b| d.child(div().ml(px(6.)).child(sub(&p, crate::i18n::tr("{b} 執行中…", &[("b", (b).to_string())], &[])))))
             .child(div().flex_1())
             .child(if have_ids {
                 // The identity's name; icon only on a narrow window.
                 let label: String = match &who.id {
                     Some(id) if wide => id.name.clone(),
-                    None if wide => crate::i18n::t("還沒選身分").into(),
+                    None if wide => crate::i18n::t("還沒選 identity").into(),
                     None => "?".into(),
                     _ => String::new(),
                 };
                 btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::User, 15., if who.id.is_some() { p.muted } else { p.warn })).child(div().text_color(if who.id.is_some() { p.text } else { p.warn }).child(label)).child(down()))
-                    .tooltip_text(crate::i18n::t("切換這個 repo 用的身分"))
+                    .tooltip_text(crate::i18n::t("切換這個 repo 用的 identity"))
                     .on_click(cx.listener(|this, ev: &ClickEvent, _, cx| {
                         let items = this.identity_menu();
                         this.open_menu(ev.position(), items, true, cx);
                     }))
             } else {
-                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::User, 15., p.muted)).when(wide, |d| d.child(crate::i18n::t(" 設定身分").trim_start())))
-                    .tooltip_text(crate::i18n::t("設定 SSH key 和身分"))
+                btn(&p, "identity", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::User, 15., p.muted)).when(wide, |d| d.child(crate::i18n::t(" 設定 identity").trim_start())))
+                    .tooltip_text(crate::i18n::t("設定 SSH key 和 identity"))
                     .on_click(cx.listener(|this, _, w, cx| this.open_settings(SettingsTab::Ids, None, w, cx)))
             })
             .child(
                 btn(&p, "palette", Bk::Normal, false, div().flex().items_center().gap_1().child(icon(Ico::Search, 15., p.muted)).when(wide, |d| d.child(kbd(&p, &format!("{} K", crate::ui::mod_name())))))
-                    .tooltip_text(crate::i18n::t("搜尋指令、repo、分支、commit"))
+                    .tooltip_text(crate::i18n::t("搜尋指令、repo、branch、commit"))
                     .on_click(cx.listener(|this, _, w, cx| this.open_palette(w, cx))),
             )
             .child(icon_btn(&p, "open-folder", Ico::FolderOpen).tooltip_text(crate::i18n::t("在檔案總管開啟")).on_click(cx.listener(move |this, _, _, cx| this.open_folder(q1.clone(), cx))))

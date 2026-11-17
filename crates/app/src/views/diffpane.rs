@@ -50,7 +50,7 @@ impl GitTabs {
         vec![
             MenuItem::new(crate::i18n::t("用編輯器開啟"), move |t, _, cx| t.open_file(&a, cx)).icon(Ico::SquarePen),
             MenuItem::new(crate::i18n::t("在檔案總管顯示資料夾"), move |t, _, cx| t.open_folder(full.clone(), cx)).icon(Ico::FolderOpen),
-            MenuItem::new(crate::i18n::t("這個檔案的歷史"), move |t, _, cx| t.file_history(b.clone(), cx)).icon(Ico::FileClock),
+            MenuItem::new(crate::i18n::t("這個檔案的 history"), move |t, _, cx| t.file_history(b.clone(), cx)).icon(Ico::FileClock),
             MenuItem::new(crate::i18n::t("Blame（逐行看是誰改的）"), move |t, _, cx| t.open_blame(c.clone(), rev.clone(), cx)).icon(Ico::ScrollText),
             MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("路徑"), cx)).icon(Ico::Copy),
         ]
@@ -100,7 +100,7 @@ impl GitTabs {
             .children(extra)
             .when(can_seen, |d| {
                 d.child(
-                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, div().flex().items_center().gap_1().child(check_box(&p, seen)).child(crate::i18n::t("已看")))
+                    btn(&p, "seen", if seen { Bk::On } else { Bk::Normal }, true, div().flex().items_center().gap_1().child(check_box(&p, seen)).child(crate::i18n::t("Reviewed")))
                         .tooltip_text(crate::i18n::t("看完勾起來，會跳到下一個沒看的檔案（Enter）"))
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_seen(true, cx))),
                 )
@@ -198,7 +198,7 @@ impl GitTabs {
                     d.child(btn(&p, "sel-stage", Bk::Primary, true, div().flex().gap_1().child(crate::i18n::t("Stage 選取的行")).child(kbd(&p, "S"))).on_click(cx.listener(|this, _, _, cx| {
                         this.apply_selection(false, cx);
                     })))
-                        .child(btn(&p, "sel-discard", Bk::Normal, true, crate::i18n::t("捨棄選取的行")).on_click(cx.listener(|this, _, _, cx| {
+                        .child(btn(&p, "sel-discard", Bk::Normal, true, crate::i18n::t("Discard 選取的行")).on_click(cx.listener(|this, _, _, cx| {
                             this.apply_selection(true, cx);
                         })))
                 })
@@ -238,7 +238,7 @@ impl GitTabs {
             .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().font_family("Cascadia Mono").child(header))
             .when(mode == PaneMode::Unstaged, |d| {
                 d.child(btn(&p, "hunk-stage", Bk::Normal, true, crate::i18n::t("Stage 這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Stage, cx))))
-                    .child(btn(&p, "hunk-discard", Bk::Normal, true, crate::i18n::t("捨棄這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Discard, cx))))
+                    .child(btn(&p, "hunk-discard", Bk::Normal, true, crate::i18n::t("Discard 這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Discard, cx))))
             })
             .when(mode == PaneMode::Staged, |d| d.child(btn(&p, "hunk-unstage", Bk::Normal, true, crate::i18n::t("取消 Stage 這段")).on_click(cx.listener(move |this, _, _, cx| this.apply_hunk(cur, LineAction::Unstage, cx)))));
         div()
@@ -271,7 +271,7 @@ impl GitTabs {
             .child(item("↑/↓", crate::i18n::t("上/下一個檔案")))
             .child(item("←/→", crate::i18n::t("上/下一段改動")))
             .when(with_stage, |d| d.child(item("S", "Stage")))
-            .child(item("Enter", crate::i18n::t("已看")))
+            .child(item("Enter", crate::i18n::t("Reviewed")))
             .when(with_stage, |d| d.child(crate::i18n::t("在差異裡點行號選取單行，拖曳或 Shift 選多行")))
             .child(div().flex_1())
             .when(self.side_by_side, |d| d.child(crate::i18n::t("並排")))

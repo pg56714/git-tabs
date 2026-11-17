@@ -450,7 +450,7 @@ impl GitTabs {
                         this.log_open = !this.log_open;
                         cx.notify();
                     }))
-                    .child(crate::i18n::tr("{} 指令紀錄", &[], &[(if open { "▾" } else { "▸" }).to_string()]))
+                    .child(crate::i18n::tr("{} command log", &[], &[(if open { "▾" } else { "▸" }).to_string()]))
                     .child(match last {
                         Some(l) => div()
                             .flex()

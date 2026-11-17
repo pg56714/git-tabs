@@ -17,10 +17,10 @@ use crate::model::*;
 pub fn branch_name_check(v: &str) -> Option<String> {
     let t = v.trim();
     if t.is_empty() {
-        return Some(crate::i18n::t("輸入分支名稱").into());
+        return Some(crate::i18n::t("輸入 branch 名稱").into());
     }
     let bad = t.chars().any(|c| c.is_whitespace() || "~^:?*[\\".contains(c)) || t.contains("..") || t.starts_with('-') || t.ends_with('/') || t.ends_with(".lock");
-    bad.then(|| crate::i18n::t("分支名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元").to_string())
+    bad.then(|| crate::i18n::t("Branch 名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元").to_string())
 }
 
 fn remote_name_check(v: &str) -> Option<String> {
@@ -86,7 +86,7 @@ impl GitTabs {
                     if r.summary.as_ref().is_some_and(|s| s.state.is_some()) && !conflicts.is_empty() {
                         let n = conflicts.len();
                         let was = r.view;
-                        this.toast(crate::i18n::tr("{label}有 {n} 個衝突要解決", &[("label", (label).to_string()), ("n", (n).to_string())], &[]), ToastKind::Info, None, cx);
+                        this.toast(crate::i18n::tr("{label}有 {n} 個 conflict 要解決", &[("label", (label).to_string()), ("n", (n).to_string())], &[]), ToastKind::Info, None, cx);
                         if was != View::Changes {
                             this.set_view(View::Changes, cx);
                         }
@@ -246,9 +246,9 @@ impl GitTabs {
         let untracked = paths.iter().filter(|p| r.status.iter().any(|s| &s.path == *p && s.untracked)).count();
         let what = if paths.len() == 1 { crate::i18n::tr("`{}` 的修改", &[], &[(paths[0]).to_string()]) } else { crate::i18n::tr("{} 個檔案的修改", &[], &[(paths.len()).to_string()]) };
         let extra = if untracked > 0 { crate::i18n::tr("\n其中 {untracked} 個是新檔案，會直接**刪除**。", &[("untracked", (untracked).to_string())], &[]) } else { String::new() };
-        self.confirm(crate::i18n::t("捨棄修改？"), crate::i18n::tr("{what}會被丟掉，**無法復原**。{extra}", &[("what", (what).to_string()), ("extra", (extra).to_string())], &[]), crate::i18n::t("捨棄"), true, cx, move |this, _, cx| {
+        self.confirm(crate::i18n::t("Discard 修改？"), crate::i18n::tr("{what}會被丟掉，**無法復原**。{extra}", &[("what", (what).to_string()), ("extra", (extra).to_string())], &[]), crate::i18n::t("Discard"), true, cx, move |this, _, cx| {
             let paths = paths.clone();
-            this.op(&repo, crate::i18n::t("捨棄"), Some(crate::i18n::t("已捨棄").into()), move |r| ops::discard(r, &paths).map(|_| String::new()), cx);
+            this.op(&repo, crate::i18n::t("Discard"), Some(crate::i18n::t("已 Discard").into()), move |r| ops::discard(r, &paths).map(|_| String::new()), cx);
         });
     }
 
@@ -291,7 +291,7 @@ impl GitTabs {
             let label = match action {
                 LineAction::Stage => crate::i18n::t("Stage 選取的行"),
                 LineAction::Unstage => crate::i18n::t("取消 Stage 選取的行"),
-                LineAction::Discard => crate::i18n::t("捨棄選取的行"),
+                LineAction::Discard => crate::i18n::t("Discard 選取的行"),
             };
             let (p, f, pr, sh) = (path.clone(), file.clone(), pairs.clone(), shown.clone());
             this.quick(&p, label, |_| {}, move |repo| ops::apply_lines(repo, &f, action, &pr, &sh).map(|_| String::new()), cx);
@@ -300,7 +300,7 @@ impl GitTabs {
         };
         if action == LineAction::Discard {
             let file = self.repo().and_then(|r| r.sel.as_ref().map(|s| s.path.clone())).unwrap_or_default();
-            self.confirm(crate::i18n::t("捨棄選取的行？"), crate::i18n::tr("`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。", &[("file", (file).to_string()), ("n", (n).to_string())], &[]), crate::i18n::t("捨棄"), true, cx, move |this, _, cx| run(this, cx));
+            self.confirm(crate::i18n::t("Discard 選取的行？"), crate::i18n::tr("`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。", &[("file", (file).to_string()), ("n", (n).to_string())], &[]), crate::i18n::t("Discard"), true, cx, move |this, _, cx| run(this, cx));
         } else {
             run(self, cx);
         }
@@ -316,9 +316,9 @@ impl GitTabs {
         let subject = self.subject.read(cx).value().trim().to_string();
         let desc = self.desc.read(cx).value().trim().to_string();
         let err = if conflicts > 0 {
-            crate::i18n::t("先解決衝突的檔案")
+            crate::i18n::t("先解決 conflict 的檔案")
         } else if staged == 0 && !self.amend {
-            crate::i18n::t("先 Stage 要提交的檔案")
+            crate::i18n::t("先 Stage 要 commit 的檔案")
         } else if subject.is_empty() {
             crate::i18n::t("輸入 commit 標題")
         } else {
@@ -371,13 +371,13 @@ impl GitTabs {
             };
             let (name, email) = (cfg_get("user.name"), cfg_get("user.email"));
             let who_txt = if name.is_empty() && email.is_empty() { crate::i18n::t("（git 沒有設定名稱和 email）").to_string() } else { format!("{name} <{email}>") };
-            let body = crate::i18n::tr("**{}**（{}）還沒選身分，會用 git 的全域設定提交：
+            let body = crate::i18n::tr("**{}**（{}）還沒選 identity，會用 git 的全域設定 commit：
 
 **{}**
 
-可以點工具列的身分按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
+可以點工具列的 identity 按鈕把它指定給某個 identity。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
             let go = std::rc::Rc::new(go);
-            self.confirm(crate::i18n::t("這個 repo 還沒選身分"), body, crate::i18n::t("照樣提交"), false, cx, move |this, _, cx| go(this, cx));
+            self.confirm(crate::i18n::t("這個 repo 還沒選 identity"), body, crate::i18n::t("照樣 commit"), false, cx, move |this, _, cx| go(this, cx));
         } else {
             go(self, cx);
         }
@@ -427,10 +427,10 @@ impl GitTabs {
                 {
                     let p = p.clone();
                     this.choose(
-                        crate::i18n::t("本地和遠端各有新的 commit"),
-                        crate::i18n::t("沒辦法直接快轉。要用哪種方式合併遠端的修改？"),
+                        crate::i18n::t("本地和 remote 各有新的 commit"),
+                        crate::i18n::t("沒辦法直接快轉。要用哪種方式 Merge remote 的修改？"),
                         vec![
-                            Choice { value: "rebase", label: crate::i18n::t("Rebase（把我的 commit 接在遠端後面）").into(), primary: true, danger: false },
+                            Choice { value: "rebase", label: crate::i18n::t("Rebase（把我的 commit 接在 remote 後面）").into(), primary: true, danger: false },
                             Choice { value: "merge", label: crate::i18n::t("Merge（多一個 merge commit）").into(), primary: false, danger: false },
                         ],
                         cx,
@@ -454,7 +454,7 @@ impl GitTabs {
         if force {
             self.confirm(
                 crate::i18n::t("強制 Push？"),
-                crate::i18n::tr("會用 `--force-with-lease` 覆蓋遠端的 **{branch}**。如果遠端有你還沒拿到的 commit，git 會拒絕，不會蓋掉別人的東西。", &[("branch", (branch).to_string())], &[]),
+                crate::i18n::tr("會用 `--force-with-lease` 覆蓋 remote 的 **{branch}**。如果 remote 有你還沒拿到的 commit，git 會拒絕，不會蓋掉別人的東西。", &[("branch", (branch).to_string())], &[]),
                 crate::i18n::t("強制 Push"),
                 true,
                 cx,
@@ -487,7 +487,7 @@ impl GitTabs {
                 Ok(v) => {
                     let mut it = v.split('\u{1f}');
                     let (b, a): (u32, u32) = (it.next().and_then(|x| x.parse().ok()).unwrap_or(0), it.next().and_then(|x| x.parse().ok()).unwrap_or(0));
-                    this.ok(crate::i18n::tr("{name} 已同步{}{}", &[("name", (name).to_string())], &[(if b > 0 { crate::i18n::tr("，拉下 {b}", &[("b", (b).to_string())], &[]) } else { String::new() }).to_string(), (if a > 0 { crate::i18n::tr("，推上 {a}", &[("a", (a).to_string())], &[]) } else { String::new() }).to_string()]), cx);
+                    this.ok(crate::i18n::tr("{name} 已 Sync{}{}", &[("name", (name).to_string())], &[(if b > 0 { crate::i18n::tr("，拉下 {b}", &[("b", (b).to_string())], &[]) } else { String::new() }).to_string(), (if a > 0 { crate::i18n::tr("，推上 {a}", &[("a", (a).to_string())], &[]) } else { String::new() }).to_string()]), cx);
                 }
                 Err(_) => {
                     this.toasts.pop();
@@ -522,7 +522,7 @@ impl GitTabs {
     pub fn switch_branch(&mut self, path: &Path, name: &str, cx: &mut Context<Self>) {
         let n = name.to_string();
         let ok = crate::i18n::tr("已切換到 {name}", &[("name", (name).to_string())], &[]);
-        self.op(path, crate::i18n::t("切換分支"), Some(ok), move |r| ops::switch(r, &n), cx);
+        self.op(path, crate::i18n::t("切換 branch"), Some(ok), move |r| ops::switch(r, &n), cx);
     }
 
     pub fn new_branch(&mut self, from: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
@@ -530,7 +530,7 @@ impl GitTabs {
         let path = r.path.clone();
         let from = from.or_else(|| r.summary.as_ref().and_then(|s| s.branch.clone())).unwrap_or_else(|| "HEAD".into());
         self.prompt(
-            crate::i18n::t("新增分支"),
+            crate::i18n::t("新增 branch"),
             vec![FieldSpec::text("name", crate::i18n::t("名稱")).placeholder("feat/my-change").check(branch_name_check), FieldSpec::text("from", crate::i18n::t("從")).value(from), FieldSpec::checkbox("checkout", crate::i18n::t("建好就切換過去"), true)],
             crate::i18n::t("建立"),
             window,
@@ -540,7 +540,7 @@ impl GitTabs {
                 let from = v["from"].trim().to_string();
                 let checkout = v.get("checkout").is_some_and(|x| x == "1");
                 let ok = crate::i18n::tr("已建立 {name}", &[("name", (name).to_string())], &[]);
-                this.op(&path, crate::i18n::t("建立分支"), Some(ok), move |r| ops::create_branch(r, &name, Some(&from).filter(|f| !f.is_empty()).map(|f| f.as_str()), checkout), cx);
+                this.op(&path, crate::i18n::t("建立 branch"), Some(ok), move |r| ops::create_branch(r, &name, Some(&from).filter(|f| !f.is_empty()).map(|f| f.as_str()), checkout), cx);
             },
         );
     }
@@ -560,7 +560,7 @@ impl GitTabs {
                 }
                 let ok = crate::i18n::tr("已改名為 {new}", &[("new", new.clone())], &[]);
                 let old = name.clone();
-                this.op(&path, crate::i18n::t("重新命名分支"), Some(ok), move |r| ops::rename_branch(r, &old, &new), cx);
+                this.op(&path, crate::i18n::t("重新命名 branch"), Some(ok), move |r| ops::rename_branch(r, &old, &new), cx);
             },
         );
     }
@@ -568,11 +568,11 @@ impl GitTabs {
     /// Deletes `origin/feat/x` on its remote, after asking.
     pub fn delete_remote_branch(&mut self, full: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
-        let body = crate::i18n::tr("從遠端刪除 **{full}**，其他人之後也拿不到它。本地的分支不受影響。", &[("full", full.clone())], &[]);
-        self.confirm(crate::i18n::t("刪除遠端分支？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
+        let body = crate::i18n::tr("從 remote 刪除 **{full}**，其他人之後也拿不到它。本地的 branch 不受影響。", &[("full", full.clone())], &[]);
+        self.confirm(crate::i18n::t("刪除 remote branch？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
             let f = full.clone();
-            let ok = crate::i18n::tr("已從遠端刪除 {full}", &[("full", full.clone())], &[]);
-            this.op(&path, crate::i18n::t("刪除遠端分支"), Some(ok), move |r| ops::delete_remote_branch(r, &f), cx);
+            let ok = crate::i18n::tr("已從 remote 刪除 {full}", &[("full", full.clone())], &[]);
+            this.op(&path, crate::i18n::t("刪除 remote branch"), Some(ok), move |r| ops::delete_remote_branch(r, &f), cx);
         });
     }
 
@@ -630,7 +630,7 @@ impl GitTabs {
 
     pub fn remove_remote(&mut self, name: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
-        let body = crate::i18n::tr("移除 **{name}** 和它在本地的遠端分支紀錄。遠端上的東西不會被刪。", &[("name", name.clone())], &[]);
+        let body = crate::i18n::tr("移除 **{name}** 和它在本地的 remote branch 紀錄。remote 上的東西不會被刪。", &[("name", name.clone())], &[]);
         self.confirm(crate::i18n::t("移除 remote？"), body, crate::i18n::t("移除"), true, cx, move |this, _, cx| {
             let n = name.clone();
             let ok = crate::i18n::tr("已移除 {name}", &[("name", name.clone())], &[]);
@@ -656,13 +656,13 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
         let upstream = r.refs.as_ref().and_then(|x| x.refs.branches.iter().find(|b| b.name == name)).and_then(|b| b.upstream.clone());
-        let body = crate::i18n::tr("刪除本地分支 **{name}**{}。", &[("name", (name).to_string())], &[(upstream.map(|u| crate::i18n::tr("（遠端的 {u} 不會被刪）", &[("u", (u).to_string())], &[])).unwrap_or_default()).to_string()]);
-        self.confirm(crate::i18n::t("刪除分支？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
+        let body = crate::i18n::tr("刪除本地 branch **{name}**{}。", &[("name", (name).to_string())], &[(upstream.map(|u| crate::i18n::tr("（remote 的 {u} 不會被刪）", &[("u", (u).to_string())], &[])).unwrap_or_default()).to_string()]);
+        self.confirm(crate::i18n::t("刪除 branch？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
             let (n1, p1, n2) = (name.clone(), path.clone(), name.clone());
             let p_op = p1.clone();
             this.op_with(
                 &p_op,
-                crate::i18n::t("刪除分支"),
+                crate::i18n::t("刪除 branch"),
                 true,
                 None,
                 move |r| ops::delete_branch(r, &n1, false),
@@ -673,9 +673,9 @@ impl GitTabs {
                     }
                     this.toasts.pop();
                     let (n3, p3) = (n2.clone(), p1.clone());
-                    this.confirm(crate::i18n::t("分支還沒合併"), crate::i18n::tr("**{n2}** 有還沒合併的 commit，強制刪除後只能從 Reflog 找回。", &[("n2", (n2).to_string())], &[]), crate::i18n::t("強制刪除"), true, cx, move |this, _, cx| {
+                    this.confirm(crate::i18n::t("Branch 還沒 Merge"), crate::i18n::tr("**{n2}** 有還沒 Merge 的 commit，強制刪除後只能從 Reflog 找回。", &[("n2", (n2).to_string())], &[]), crate::i18n::t("強制刪除"), true, cx, move |this, _, cx| {
                         let n4 = n3.clone();
-                        this.op(&p3, crate::i18n::t("刪除分支"), Some(crate::i18n::tr("已刪除 {n3}", &[("n3", (n3).to_string())], &[])), move |r| ops::delete_branch(r, &n4, true), cx);
+                        this.op(&p3, crate::i18n::t("刪除 branch"), Some(crate::i18n::tr("已刪除 {n3}", &[("n3", (n3).to_string())], &[])), move |r| ops::delete_branch(r, &n4, true), cx);
                     });
                 },
                 cx,
@@ -757,7 +757,7 @@ impl GitTabs {
         // local branch (made if it does not exist), as Fork's Checkout does.
         if let Some(c) = &commit {
             if c.refs.iter().any(|x| x.kind == "head") {
-                self.toast(crate::i18n::t("已經在這個分支上"), ToastKind::Info, None, cx);
+                self.toast(crate::i18n::t("已經在這個 branch 上"), ToastKind::Info, None, cx);
                 return;
             }
             let pick = c.refs.iter().find(|x| x.kind == "branch").or_else(|| c.refs.iter().find(|x| x.kind == "remote"));
@@ -768,7 +768,7 @@ impl GitTabs {
         }
         self.confirm(
             crate::i18n::t("Checkout 這個 commit？"),
-            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回分支或從這裡開新分支。", &[], &[(short(&sha)).to_string(), subject]),
+            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回 branch 或從這裡開新 branch。", &[], &[(short(&sha)).to_string(), subject]),
             "Checkout",
             false,
             cx,
@@ -792,7 +792,7 @@ impl GitTabs {
             cx,
             move |this, v, _, cx| {
                 let how = Rewrite::Reword(v["message"].trim().to_string());
-                this.rewrite_commit(&path, sha.clone(), how, crate::i18n::t("改 commit 訊息"), crate::i18n::t("已改寫訊息。這條分支 push 過的話，下次要強制 push"), cx);
+                this.rewrite_commit(&path, sha.clone(), how, crate::i18n::t("改 commit 訊息"), crate::i18n::t("已改寫訊息。這條 branch push 過的話，下次要強制 push"), cx);
             },
         );
     }
@@ -811,7 +811,7 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
         let subject = r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone()).unwrap_or_default();
-        let body = crate::i18n::tr("`{}`（{}）會從這條分支消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha), subject]);
+        let body = crate::i18n::tr("`{}`（{}）會從這條 branch 消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha), subject]);
         self.confirm(crate::i18n::t("丟掉這個 commit？"), body, crate::i18n::t("丟掉"), true, cx, move |this, _, cx| {
             this.rewrite_commit(&path, sha.clone(), Rewrite::Drop, crate::i18n::t("丟掉 commit"), crate::i18n::t("已丟掉那個 commit"), cx);
         });
@@ -873,7 +873,7 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let (path, state) = (r.path.clone(), r.summary.as_ref().and_then(|s| s.state).unwrap_or("").to_string());
         if what == "abort" {
-            self.confirm(&crate::i18n::tr("中止 {state}？", &[("state", (state).to_string())], &[]), crate::i18n::t("會回到開始之前的狀態，解到一半的衝突會被丟掉。").into(), crate::i18n::t("中止"), true, cx, move |this, _, cx| {
+            self.confirm(&crate::i18n::tr("中止 {state}？", &[("state", (state).to_string())], &[]), crate::i18n::t("會回到開始之前的狀態，解到一半的 conflict 會被丟掉。").into(), crate::i18n::t("中止"), true, cx, move |this, _, cx| {
                 this.simple_op(&path, "abort", String::new(), crate::i18n::t("中止"), Some(crate::i18n::tr("已中止 {state}", &[("state", (state).to_string())], &[])), cx);
             });
         } else {
@@ -906,7 +906,7 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let (path, name) = (r.path.clone(), r.name.clone());
         let Some(ident) = self.cfg.identities.iter().find(|x| x.id == id).cloned() else { return };
-        let label = crate::i18n::t("改用身分");
+        let label = crate::i18n::t("改用 identity");
         let ctx = self.ctx.clone();
         let msg = crate::i18n::tr("{name} 改用 {}", &[("name", (name).to_string())], &[(ident.name).to_string()]);
         let v = json!({ "repo": path.display().to_string(), "identity": ident });
@@ -975,7 +975,7 @@ impl GitTabs {
         }
         let Some(r) = self.repo_mut() else { return };
         let Some(ix) = r.commits.iter().position(|c| c.sha == sha) else {
-            self.toast(crate::i18n::t("這個 commit 不在目前載入的歷史裡"), ToastKind::Info, None, cx);
+            self.toast(crate::i18n::t("這個 commit 不在目前載入的 history 裡"), ToastKind::Info, None, cx);
             return;
         };
         // Folded away under a merge: unfold, so there is a row to jump to.
@@ -1002,8 +1002,8 @@ impl GitTabs {
         self.prompt(
             crate::i18n::t("新增 worktree"),
             vec![
-                FieldSpec::text("branch", crate::i18n::t("要放哪個分支")).placeholder("feat/my-change").check(branch_name_check),
-                FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr("留空就用 {}-<分支>", &[], &[base.clone()])),
+                FieldSpec::text("branch", crate::i18n::t("要放哪個 branch")).placeholder("feat/my-change").check(branch_name_check),
+                FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr("留空就用 {}-<branch>", &[], &[base.clone()])),
                 FieldSpec::checkbox("open", crate::i18n::t("建好就開成新分頁"), true),
             ],
             crate::i18n::t("建立"),
@@ -1048,7 +1048,7 @@ impl GitTabs {
 
     pub fn remove_worktree(&mut self, wt: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
-        self.confirm(crate::i18n::t("移除 worktree？"), crate::i18n::tr("移除 `{wt}`。分支本身會保留。有未提交的修改時 git 會拒絕。", &[("wt", (wt).to_string())], &[]), crate::i18n::t("移除"), true, cx, move |this, _, cx| {
+        self.confirm(crate::i18n::t("移除 worktree？"), crate::i18n::tr("移除 `{wt}`。branch 本身會保留。有 changes 時 git 會拒絕。", &[("wt", (wt).to_string())], &[]), crate::i18n::t("移除"), true, cx, move |this, _, cx| {
             let (arg, gone) = (wt.clone(), wt.clone());
             this.op_with(&path, crate::i18n::t("移除 worktree"), false, None, move |r| ops::simple(r, "worktree-remove", &arg), move |this, res, cx| {
                 // Its folder is gone, so a tab that showed it has nothing left to show.

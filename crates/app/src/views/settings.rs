@@ -56,7 +56,7 @@ impl GitTabs {
         let p = self.pal;
         let Some(Modal::Settings(m)) = &self.modal else { return div().into_any_element() };
         let tab = m.tab;
-        let tabs = seg(&p, &[("ids", crate::i18n::t("身分與 SSH key")), ("general", crate::i18n::t("一般"))], if tab == SettingsTab::Ids { "ids" } else { "general" }, |v| {
+        let tabs = seg(&p, &[("ids", crate::i18n::t("Identity 與 SSH key")), ("general", crate::i18n::t("一般"))], if tab == SettingsTab::Ids { "ids" } else { "general" }, |v| {
             let _ = v;
             Box::new(|_, _| {})
         });
@@ -86,7 +86,7 @@ impl GitTabs {
             .border_color(p.border_strong)
             .rounded(px(7.))
             .overflow_hidden()
-            .child(tab_btn("st-ids", crate::i18n::t("身分與 SSH key"), SettingsTab::Ids))
+            .child(tab_btn("st-ids", crate::i18n::t("Identity 與 SSH key"), SettingsTab::Ids))
             .child(div().w(px(1.)).bg(p.border_strong))
             .child(tab_btn("st-kg", crate::i18n::t("一般"), SettingsTab::General));
 
@@ -96,9 +96,9 @@ impl GitTabs {
             if let Some(n) = &m.notice {
                 body.push(self.info_line(0, n.clone()));
             }
-            body.push(sub(&p, crate::i18n::t("身分由你自己選：用工具列右上的身分按鈕，替每個 repo 選一個。選了就寫進那個 repo 自己的 git 設定，所以在終端機執行的 git 也會用同一個身分。")).into_any_element());
+            body.push(sub(&p, crate::i18n::t("Identity 由你自己選：用工具列右上的 identity 按鈕，替每個 repo 選一個。選了就寫進那個 repo 自己的 git 設定，所以在終端機執行的 git 也會用同一個 identity。")).into_any_element());
             if m.ids.is_empty() {
-                body.push(div().p(px(16.)).border_1().border_color(p.border).rounded(px(10.)).text_color(p.muted).text_center().child(crate::i18n::t("還沒有身分。按「＋ 新增身分」，填好 SSH key 和 email。")).into_any_element());
+                body.push(div().p(px(16.)).border_1().border_color(p.border).rounded(px(10.)).text_color(p.muted).text_center().child(crate::i18n::t("還沒有 identity。按「＋ 新增 identity」，填好 SSH key 和 email。")).into_any_element());
             }
             for (i, d) in m.ids.iter().enumerate() {
                 body.push(self.render_id_card(i, d, cx));
@@ -111,7 +111,7 @@ impl GitTabs {
                     .flex_wrap()
                     .items_center()
                     .gap(px(8.))
-                    .child(btn(&p, "id-add", Bk::Normal, false, crate::i18n::t("＋ 新增身分")).on_click(cx.listener(|this, _, w, cx| this.settings_add(w, cx))))
+                    .child(btn(&p, "id-add", Bk::Normal, false, crate::i18n::t("＋ 新增 identity")).on_click(cx.listener(|this, _, w, cx| this.settings_add(w, cx))))
                     .child(btn(&p, "id-scan", Bk::Normal, false, if scanning { crate::i18n::t("尋找中…") } else { crate::i18n::t("從這台電腦找") }).tooltip_text(crate::i18n::t("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf")).when(!scanning, |b| b.on_click(cx.listener(|this, _, _, cx| this.settings_scan(cx)))))
                     .into_any_element(),
             );
@@ -231,7 +231,7 @@ impl GitTabs {
                     div().text_size(px(11.5)).text_color(p.faint).child(crate::i18n::t("還沒驗證這把 key 對應哪個帳號"))
                 })
                 .child(div().flex_1())
-                .child(btn(&p, SharedString::from(format!("rm-{i}")), Bk::Ghost, true, icon(Ico::Trash, 14., p.muted)).tooltip_text(crate::i18n::t("刪除這個身分")).on_click(cx.listener(move |this, _, _, cx| this.settings_remove(i, cx))))
+                .child(btn(&p, SharedString::from(format!("rm-{i}")), Bk::Ghost, true, icon(Ico::Trash, 14., p.muted)).tooltip_text(crate::i18n::t("刪除這個 identity")).on_click(cx.listener(move |this, _, _, cx| this.settings_remove(i, cx))))
                 .into_any_element(),
         );
         rows.push(row(
@@ -294,10 +294,10 @@ impl GitTabs {
             }
             rows.push(div().flex().flex_col().gap(px(6.)).p(px(8.)).border_1().border_color(p.border).rounded(px(8.)).children(g).into_any_element());
         }
-        rows.push(row(crate::i18n::t("主機"), div().w(px(200.)).child(Input::new(&d.host)).into_any_element()));
+        rows.push(row(crate::i18n::t("Host"), div().w(px(200.)).child(Input::new(&d.host)).into_any_element()));
         rows.push(row("user.name", Input::new(&d.user).into_any_element()));
         rows.push(row("user.email", Input::new(&d.email).into_any_element()));
-        rows.push(sub(&p, crate::i18n::tr("目前用在：{}", &[], &[(if matched.is_empty() { crate::i18n::t("（沒有開著的 repo 選用這個身分）").to_string() } else { matched.join(crate::i18n::t("、")) }).to_string()])).into_any_element());
+        rows.push(sub(&p, crate::i18n::tr("目前用在：{}", &[], &[(if matched.is_empty() { crate::i18n::t("（沒有開著的 repo 選用這個 identity）").to_string() } else { matched.join(crate::i18n::t("、")) }).to_string()])).into_any_element());
         div().flex().flex_col().gap(px(8.)).p(px(12.)).border_1().border_color(p.border).rounded(px(10.)).children(rows).into_any_element()
     }
 
@@ -416,7 +416,7 @@ impl GitTabs {
             )
             .when(!ids.is_empty(), |d| {
                 d.child(self.labeled(
-                    crate::i18n::t("身分"),
+                    crate::i18n::t("Identity"),
                     btn(&p, "ar-pin", Bk::Normal, false, format!("{pin_label} ▾"))
                         .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
                             let mut items = vec![MenuItem::new(crate::i18n::t("之後再選"), |t, _, cx| {

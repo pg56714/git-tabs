@@ -199,7 +199,7 @@ impl GitTabs {
     pub fn open_settings(&mut self, tab: SettingsTab, detected: Option<Vec<Identity>>, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let ids = detected.unwrap_or_else(|| self.cfg.identities.clone());
-        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱和 email 後按「儲存」才會生效；不需要的按垃圾桶刪掉。", &[], &[(ids.len()).to_string()]));
+        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個 identity（~/.ssh 的 key 和現有的 git 設定）。確認名稱和 email 後按「儲存」才會生效；不需要的按垃圾桶刪掉。", &[], &[(ids.len()).to_string()]));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
         let clone = input(window, cx, &self.cfg.clone_dir.clone(), crate::i18n::t("可留空"));
@@ -256,7 +256,7 @@ impl GitTabs {
                     let ids = from_found(&found, &existing);
                     let n = ids.len();
                     this.pending_ids = ids;
-                    this.toast(if n > 0 { crate::i18n::tr("找到 {n} 個新的身分，確認後按儲存", &[("n", (n).to_string())], &[]) } else { crate::i18n::t("沒有找到新的 SSH key 或身分設定").into() }, ToastKind::Info, None, cx);
+                    this.toast(if n > 0 { crate::i18n::tr("找到 {n} 個新的 identity，確認後按儲存", &[("n", (n).to_string())], &[]) } else { crate::i18n::t("沒有找到新的 SSH key 或 identity 設定").into() }, ToastKind::Info, None, cx);
                 }
                 Err(_) => this.toast(crate::i18n::t("讀不到這台電腦的設定"), ToastKind::Err, None, cx),
             }
@@ -383,7 +383,7 @@ impl GitTabs {
             id.email = d.email.read(cx).value().trim().to_string();
             id.rules.clear();
             if id.name.is_empty() {
-                m.err = Some(crate::i18n::t("每個身分都要有名稱").into());
+                m.err = Some(crate::i18n::t("每個 identity 都要有名稱").into());
                 cx.notify();
                 return;
             }

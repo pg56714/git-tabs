@@ -1,4 +1,4 @@
-//! The "未提交的修改" view (ChangesView.vue): file lists, review progress, commit box, diff.
+//! The "Changes" view (ChangesView.vue): file lists, review progress, commit box, diff.
 
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::{
@@ -62,7 +62,7 @@ impl GitTabs {
                 .border_b_1()
                 .border_color(p.border)
                 .child(div().font_weight(gpui_kit::FontWeight::BOLD).child(crate::i18n::tr("正在 {state_name}", &[("state_name", (state_name).to_string())], &[])))
-                .child(if conflicts > 0 { crate::i18n::tr("還有 {conflicts} 個衝突的檔案。解決後按「繼續」。", &[("conflicts", (conflicts).to_string())], &[]) } else { crate::i18n::t("衝突都解決了，按「繼續」完成。").to_string() })
+                .child(if conflicts > 0 { crate::i18n::tr("還有 {conflicts} 個 conflict 的檔案。解決後按「繼續」。", &[("conflicts", (conflicts).to_string())], &[]) } else { crate::i18n::t("Conflict 都解決了，按「繼續」完成。").to_string() })
                 .child(div().flex_1())
                 .child(dim(
                     btn(&p, "continue", Bk::Primary, true, crate::i18n::t("繼續")).when(conflicts == 0, |b| b.on_click(cx.listener(|this, _, _, cx| this.abort_or_continue("continue", cx)))),
@@ -87,7 +87,7 @@ impl GitTabs {
                 let (a, b) = (s.path.clone(), s.path.clone());
                 vec![
                     btn(&p, "h-stage", Bk::Normal, true, crate::i18n::t("Stage 檔案")).tooltip_text("S").on_click(cx.listener(move |this, _, _, cx| this.stage_files(vec![a.clone()], cx))).into_any_element(),
-                    btn(&p, "h-discard", Bk::Normal, true, crate::i18n::t("捨棄")).on_click(cx.listener(move |this, _, _, cx| this.discard_files(vec![b.clone()], cx))).into_any_element(),
+                    btn(&p, "h-discard", Bk::Normal, true, crate::i18n::t("Discard")).on_click(cx.listener(move |this, _, _, cx| this.discard_files(vec![b.clone()], cx))).into_any_element(),
                 ]
             }
             (Some(s), _) => {
@@ -115,7 +115,7 @@ impl GitTabs {
         } else {
             if empty_status {
                 // The panes stay where they are (as in Fork), so it is plain what a change would look like.
-                div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "✓", crate::i18n::t("沒有未提交的修改"), Some(crate::i18n::t("工作目錄是乾淨的")))).child(self.render_diff_hint(true)).into_any_element()
+                div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "✓", crate::i18n::t("沒有 changes"), Some(crate::i18n::t("工作目錄是乾淨的")))).child(self.render_diff_hint(true)).into_any_element()
             } else {
                 div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "", crate::i18n::t("選一個檔案"), None)).child(self.render_diff_hint(true)).into_any_element()
             }
@@ -146,7 +146,7 @@ impl GitTabs {
             .h_full()
             .min_h_0()
             .overflow_hidden()
-            .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).child(sub(&p, crate::i18n::tr("已看 {seen_n} / {total} 個檔案", &[("seen_n", (seen_n).to_string()), ("total", (total).to_string())], &[]))))
+            .child(div().px(px(10.)).pt(px(8.)).pb(px(4.)).child(sub(&p, crate::i18n::tr("Reviewed {seen_n} / {total} 個檔案", &[("seen_n", (seen_n).to_string()), ("total", (total).to_string())], &[]))))
             .child(
                 div()
                     .h(px(3.))
@@ -179,7 +179,7 @@ impl GitTabs {
                         (st_n > 0).then(|| btn(&p, "unstage-all", Bk::Normal, true, crate::i18n::t("全部取消")).on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx))).into_any_element()),
                     ))
                     .child(st_tree)
-                    .when(st_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child(crate::i18n::t("（沒有。按 Stage 把要提交的檔案放進來）")))),
+                    .when(st_n == 0, |d| d.child(div().px(px(16.)).text_size(px(12.)).text_color(p.faint).child(crate::i18n::t("（沒有。按 Stage 把要 commit 的檔案放進來）")))),
             )
             .child(
                 div()

@@ -139,8 +139,8 @@ impl GitTabs {
         let has_parent = ix.is_some_and(|i| !r.commits[i].parents.is_empty());
         vec![
             MenuItem::new(crate::i18n::t("Checkout 這個 commit…"), move |t, _, cx| t.checkout_commit(a.clone(), cx)),
-            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
-            MenuItem::new(crate::i18n::t("Cherry-pick 到目前分支"), move |t, _, cx| t.cherry_pick(c.clone(), cx)),
+            MenuItem::new(crate::i18n::t("從這裡開新 branch…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("Cherry-pick 到目前 branch"), move |t, _, cx| t.cherry_pick(c.clone(), cx)),
             MenuItem::new("Revert…", move |t, _, cx| t.revert(d.clone(), cx)),
             MenuItem::new(crate::i18n::tr("Reset {branch} 到這裡…", &[("branch", (branch).to_string())], &[]), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
             MenuItem::new(crate::i18n::t("加 Tag…"), move |t, w, cx| t.create_tag(f.clone(), w, cx)),
@@ -443,7 +443,7 @@ impl GitTabs {
                 .hover(move |s| s.bg(p.hover))
                 .on_click(cx.listener(|this, _, _, cx| this.set_view(View::Changes, cx)))
                 .child(icon(Ico::FilePenLine, 14., p.warn))
-                .child(crate::i18n::t("未提交的修改"))
+                .child(crate::i18n::t("Changes"))
                 .child(div().px(px(6.)).rounded(px(8.)).bg(p.warn_bg).text_size(px(11.5)).text_color(p.warn).child(pending.to_string()))
         });
         on_split(div().id("hist").flex().flex_col().flex_1().min_h_0(), SplitKind::HistTop, cx)
@@ -628,7 +628,7 @@ impl GitTabs {
                         .child(act("a-cp", "Cherry-pick").on_click(cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx))))
                         .child(act("a-rv", "Revert").on_click(cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx))))
                         .child(act("a-co", "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s4.clone(), cx))))
-                        .child(act("a-br", crate::i18n::t("開分支")).on_click(cx.listener({
+                        .child(act("a-br", crate::i18n::t("Branch")).on_click(cx.listener({
                             let s = sha.clone();
                             move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
                         })))

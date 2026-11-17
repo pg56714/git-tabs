@@ -194,7 +194,7 @@ impl GitTabs {
         let subject = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Commit 標題")));
         let desc = cx.new(|cx| TextareaState::new(window, cx).placeholder(crate::i18n::t("說明（可留空）")));
         let search = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA")));
-        let side_filter = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("篩選")));
+        let side_filter = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Filter")));
         let nav_focus = cx.focus_handle().tab_stop(true);
         let mut subs = Vec::new();
         subs.push(cx.subscribe(&side_filter, |_, _, ev: &InputEvent, cx| {
@@ -381,7 +381,7 @@ impl GitTabs {
                     cx.notify();
                 });
                 if !pins.is_empty() {
-                    this.toast(crate::i18n::tr("身分改成手動選擇：{} 個 repo 已依舊規則固定好身分", &[], &[pins.len().to_string()]), ToastKind::Info, None, cx);
+                    this.toast(crate::i18n::tr("Identity 改成手動選擇：{} 個 repo 已依舊規則固定好 identity", &[], &[pins.len().to_string()]), ToastKind::Info, None, cx);
                 }
                 cx.notify();
             },
@@ -516,7 +516,7 @@ impl GitTabs {
         self.subject.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Commit 標題"), window, cx));
         self.desc.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("說明（可留空）"), window, cx));
         self.search.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
-        self.side_filter.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("篩選"), window, cx));
+        self.side_filter.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Filter"), window, cx));
         cx.notify();
     }
 
@@ -836,7 +836,7 @@ impl GitTabs {
                         this.load_detail(&p, cx);
                     }
                 }
-                Err(e) => this.toast(crate::i18n::t("讀不到歷史"), ToastKind::Err, Some(e), cx),
+                Err(e) => this.toast(crate::i18n::t("讀不到 history"), ToastKind::Err, Some(e), cx),
             }
             cx.notify();
         });
@@ -1217,7 +1217,7 @@ impl GitTabs {
         cx.notify();
     }
 
-    // ----- reviewed ("已看") -----
+    // ----- reviewed ("Reviewed") -----
 
     pub fn seen_key(&self, r: &RepoState, list: ListKind, path: &str) -> Option<String> {
         match list {
@@ -1434,7 +1434,7 @@ pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {
     }
 }
 
-/// Short fingerprint of a diff, so "已看" can be cleared when the file changes again.
+/// Short fingerprint of a diff, so "Reviewed" can be cleared when the file changes again.
 pub fn diff_hash(d: &FileDiff) -> String {
     d.fingerprint()
 }

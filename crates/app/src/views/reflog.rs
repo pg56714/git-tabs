@@ -29,7 +29,7 @@ impl GitTabs {
                     .min_h(px(41.))
                     .border_b_1()
                     .border_color(p.border)
-                    .child(sub(&p, crate::i18n::t("HEAD 的移動紀錄。不小心 reset、rebase 或刪掉分支時，可以從這裡找回 commit。"))),
+                    .child(sub(&p, crate::i18n::t("HEAD 的移動紀錄。不小心 reset、rebase 或刪掉 branch 時，可以從這裡找回 commit。"))),
             )
             .child(
                 div()
@@ -71,7 +71,7 @@ impl GitTabs {
                                     .gap(px(4.))
                                     .opacity(0.)
                                     .group_hover("rl", |s| s.opacity(1.))
-                                    .child(btn(&p, SharedString::from(format!("rlb-{}", e.selector)), Bk::Normal, true, crate::i18n::t("從這裡開分支")).on_click(cx.listener(move |this, _, w, cx| this.new_branch(Some(s2.clone()), w, cx))))
+                                    .child(btn(&p, SharedString::from(format!("rlb-{}", e.selector)), Bk::Normal, true, crate::i18n::t("從這裡開 branch")).on_click(cx.listener(move |this, _, w, cx| this.new_branch(Some(s2.clone()), w, cx))))
                                     .child(btn(&p, SharedString::from(format!("rlc-{}", e.selector)), Bk::Normal, true, "Checkout").on_click(cx.listener(move |this, _, _, cx| this.checkout_commit(s3.clone(), cx))))
                                     .child(btn(&p, SharedString::from(format!("rlr-{}", e.selector)), Bk::Normal, true, crate::i18n::t("Reset 到這裡")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s4.clone(), cx)))),
                             )

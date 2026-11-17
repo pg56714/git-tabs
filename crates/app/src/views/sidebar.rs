@@ -170,8 +170,8 @@ impl GitTabs {
         let folds = if filtering { &no_folds } else { &self.folded };
         let open = |key: &str| filtering || !self.folded.contains(key);
         let mut rows: Vec<AnyElement> = vec![
-            self.nav_item("nav-changes", Ico::FilePenLine, crate::i18n::t("未提交的修改").into(), Some(changes), view == View::Changes, View::Changes, cx),
-            self.nav_item("nav-history", Ico::GitCommitVertical, crate::i18n::t("歷史").into(), None, view == View::History, View::History, cx),
+            self.nav_item("nav-changes", Ico::FilePenLine, crate::i18n::t("Changes").into(), Some(changes), view == View::Changes, View::Changes, cx),
+            self.nav_item("nav-history", Ico::GitCommitVertical, crate::i18n::t("History").into(), None, view == View::History, View::History, cx),
             div()
                 .px(px(10.))
                 .pt(px(10.))
@@ -181,7 +181,7 @@ impl GitTabs {
 
         // ---- branches
         let branches: Vec<_> = refs.iter().flat_map(|x| x.refs.branches.iter()).filter(|b| hit(&b.name)).cloned().collect();
-        rows.push(self.section("b", crate::i18n::t("分支"), branches.is_empty(), cx).into_any_element());
+        rows.push(self.section("b", crate::i18n::t("Branches"), branches.is_empty(), cx).into_any_element());
         if open("b") {
             let items: Vec<(String, usize)> = branches.iter().enumerate().map(|(i, b)| (b.name.clone(), i)).collect();
             for row in tree_rows(&items, "bt", folds) {
@@ -256,7 +256,7 @@ impl GitTabs {
             groups.retain(|g| !g.2.is_empty());
         }
         rows.push(
-            self.section("r", crate::i18n::t("遠端"), groups.is_empty(), cx)
+            self.section("r", crate::i18n::t("Remote"), groups.is_empty(), cx)
                 .child(div().flex_1())
                 .child(self.add_btn("rm-add", crate::i18n::t("新增 remote"), cx, |this, w, cx| this.add_remote(w, cx)))
                 .into_any_element(),
@@ -343,7 +343,7 @@ impl GitTabs {
                                             t.simple_op(&pth, "push-tag", a.clone(), "Push tag", Some(crate::i18n::tr("已 push {a}", &[("a", (a).to_string())], &[])), cx)
                                         }
                                     }),
-                                    MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
+                                    MenuItem::new(crate::i18n::t("從這裡開新 branch…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
                                     MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(c.clone(), "tag", cx)),
                                     MenuItem::sep(),
                                     MenuItem::new(crate::i18n::t("刪除 tag"), move |t, _, cx| {
@@ -452,7 +452,7 @@ impl GitTabs {
                     let note = match m.state {
                         "uninit" => crate::i18n::t("還沒取回"),
                         "changed" => crate::i18n::t("不是記錄的 commit"),
-                        "conflict" => crate::i18n::t("有衝突"),
+                        "conflict" => crate::i18n::t("有 conflict"),
                         _ => "",
                     };
                     rows.push(
@@ -495,12 +495,12 @@ impl GitTabs {
     pub fn remote_item_menu(&self, path: &std::path::Path, full: &str) -> Vec<MenuItem> {
         let (pa, a, b, c, d, e) = (path.to_path_buf(), full.to_string(), full.to_string(), full.to_string(), full.to_string(), full.to_string());
         vec![
-            MenuItem::new(crate::i18n::t("切換（建立本地分支）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
-            MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)),
-            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
-            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("分支名稱"), cx)),
+            MenuItem::new(crate::i18n::t("切換（建立本地 branch）"), move |t, _, cx| t.switch_branch(&pa, &a, cx)),
+            MenuItem::new(crate::i18n::t("Merge 進目前的 branch"), move |t, _, cx| t.merge_into(b.clone(), cx)),
+            MenuItem::new(crate::i18n::t("從這裡開新 branch…"), move |t, w, cx| t.new_branch(Some(c.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(d.clone(), crate::i18n::t("Branch 名稱"), cx)),
             MenuItem::sep(),
-            MenuItem::new(crate::i18n::t("刪除遠端分支…"), move |t, _, cx| t.delete_remote_branch(e.clone(), cx)).danger(),
+            MenuItem::new(crate::i18n::t("刪除 remote branch…"), move |t, _, cx| t.delete_remote_branch(e.clone(), cx)).danger(),
         ]
     }
 
@@ -509,14 +509,14 @@ impl GitTabs {
         let mk = |n: &str| n.to_string();
         let (a, b, c, d, f, g, h) = (mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n), mk(&n));
         vec![
-            MenuItem::new(crate::i18n::t("切換到這個分支"), move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
-            MenuItem::new(crate::i18n::t("Merge 進目前的分支"), move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
-            MenuItem::new(crate::i18n::t("把目前的分支 rebase 到這裡"), move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
-            MenuItem::new(crate::i18n::t("從這裡開新分支…"), move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("切換到這個 branch"), move |t, _, cx| t.switch_branch(&p, &a, cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("Merge 進目前的 branch"), move |t, _, cx| t.merge_into(b.clone(), cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("把目前的 branch rebase 到這裡"), move |t, _, cx| t.rebase_onto(c.clone(), cx)).disabled(current),
+            MenuItem::new(crate::i18n::t("從這裡開新 branch…"), move |t, w, cx| t.new_branch(Some(d.clone()), w, cx)),
             MenuItem::new(crate::i18n::t("重新命名…"), move |t, w, cx| t.rename_branch(h.clone(), w, cx)),
-            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(f.clone(), crate::i18n::t("分支名稱"), cx)),
+            MenuItem::new(crate::i18n::t("複製名稱"), move |t, _, cx| t.copy(f.clone(), crate::i18n::t("Branch 名稱"), cx)),
             MenuItem::sep(),
-            MenuItem::new(crate::i18n::t("刪除分支…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),
+            MenuItem::new(crate::i18n::t("刪除 branch…"), move |t, _, cx| t.delete_branch(g.clone(), cx)).danger().disabled(current),
         ]
     }
 }

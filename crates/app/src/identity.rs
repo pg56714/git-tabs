@@ -94,7 +94,7 @@ pub fn new_identity(existing: &[Identity]) -> Identity {
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     Identity {
         id: format!("id{stamp:x}"),
-        name: crate::i18n::tr("新身分 {}", &[], &[(existing.len() + 1).to_string()]),
+        name: crate::i18n::tr("新 identity {}", &[], &[(existing.len() + 1).to_string()]),
         short: String::new(),
         color: String::new(),
         key: String::new(),
@@ -143,7 +143,7 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
         }
         let email = text(inc, "email");
         if base.is_empty() {
-            base = email.split('@').nth(1).unwrap_or("身分").to_string();
+            base = email.split('@').nth(1).unwrap_or("Identity").to_string();
         }
         let (n, e, k) = (text(inc, "name"), email, text(inc, "key"));
         add(&mut ids, existing, &|id| {

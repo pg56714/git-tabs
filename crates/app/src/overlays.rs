@@ -140,7 +140,7 @@ impl GitTabs {
 
     pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("輸入指令、repo、分支或 commit…（例如：push my-repo）")));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("輸入指令、repo、branch 或 commit…（例如：push my-repo）")));
         input.update(cx, |s, cx| s.focus(window, cx));
         let sub = cx.subscribe_in(&input, window, |this, s, ev: &InputEvent, window, cx| match ev {
             InputEvent::Change => {
@@ -218,9 +218,9 @@ impl GitTabs {
             each!("Pull --rebase", n.clone(), |t, path, cx| t.pull_repo(&path, "rebase", cx));
             each!("Push", n.clone(), |t, path, cx| t.push_repo(&path, false, cx));
             v.push(item("Stash", n.clone(), |t, w, cx| t.stash_push(w, cx)));
-            v.push(item(crate::i18n::t("新增分支"), n.clone(), |t, w, cx| t.new_branch(None, w, cx)));
-            v.push(item(crate::i18n::t("看未提交的修改"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Changes, cx)));
-            v.push(item(crate::i18n::t("看歷史"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::History, cx)));
+            v.push(item(crate::i18n::t("新增 branch"), n.clone(), |t, w, cx| t.new_branch(None, w, cx)));
+            v.push(item(crate::i18n::t("看 changes"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Changes, cx)));
+            v.push(item(crate::i18n::t("看 history"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::History, cx)));
             v.push(item(crate::i18n::t("檢查更新"), "git-tabs", |t, _, cx| t.check_update(true, cx)));
             v.push(item(crate::i18n::t("看 Reflog"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Reflog, cx)));
             let ps = p.display().to_string();
@@ -230,18 +230,18 @@ impl GitTabs {
             v.push(item(crate::i18n::t("重新整理"), n.clone(), |t, _, cx| t.refresh_active(cx)));
             for b in r.refs.iter().flat_map(|x| x.refs.branches.iter()).filter(|b| !b.current) {
                 let (path, name) = (p.clone(), b.name.clone());
-                v.push(item(crate::i18n::tr("切換分支：{}", &[], &[(b.name).to_string()]), n.clone(), move |t, _, cx| t.switch_branch(&path, &name, cx)));
+                v.push(item(crate::i18n::tr("切換 branch：{}", &[], &[(b.name).to_string()]), n.clone(), move |t, _, cx| t.switch_branch(&path, &name, cx)));
             }
             if !self.cfg.identities.is_empty() {
                 for id in &self.cfg.identities {
                     let key = id.id.clone();
-                    v.push(item(crate::i18n::tr("身分：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(key.clone(), cx)));
+                    v.push(item(crate::i18n::tr("Identity：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(key.clone(), cx)));
                 }
             }
             for (i, x) in self.repos.iter().enumerate() {
                 let up = x.summary.as_ref().filter(|s| s.ahead > 0).map(|s| format!(" (↑{})", s.ahead)).unwrap_or_default();
                 let path = x.path.clone();
-                v.push(item(format!("Push {}{up}", x.name), crate::i18n::t("遠端"), move |t, _, cx| {
+                v.push(item(format!("Push {}{up}", x.name), crate::i18n::t("Remote"), move |t, _, cx| {
                     t.switch_tab(i, cx);
                     t.push_repo(&path, false, cx);
                 }));
@@ -252,10 +252,10 @@ impl GitTabs {
                 v.push(item(c.subject.clone(), short(&c.sha), move |t, _, cx| t.show_commit(sha.clone(), cx)));
             }
         }
-        v.push(item(crate::i18n::t("全部 repo 一起 Fetch"), crate::i18n::t("遠端"), |t, _, cx| t.fetch_all(false, cx)));
+        v.push(item(crate::i18n::t("全部 repo 一起 Fetch"), crate::i18n::t("Remote"), |t, _, cx| t.fetch_all(false, cx)));
         v.push(item(crate::i18n::t("加入 repo"), "repo", |t, w, cx| t.open_add_repo(w, cx)));
         v.push(item(crate::i18n::t("開啟設定"), crate::i18n::t("設定"), |t, w, cx| t.open_settings(crate::model::SettingsTab::General, None, w, cx)));
-        v.push(item(crate::i18n::t("身分與 SSH key"), crate::i18n::t("設定"), |t, w, cx| t.open_settings(crate::model::SettingsTab::Ids, None, w, cx)));
+        v.push(item(crate::i18n::t("Identity 與 SSH key"), crate::i18n::t("設定"), |t, w, cx| t.open_settings(crate::model::SettingsTab::Ids, None, w, cx)));
         v.push(item(crate::i18n::t("切換深淺色"), crate::i18n::t("外觀"), |t, w, cx| t.cycle_theme(w, cx)));
         v
     }
