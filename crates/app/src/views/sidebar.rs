@@ -223,7 +223,7 @@ impl GitTabs {
                             }),
                         )
                         .child(if cur {
-                            div().w(px(13.)).flex_none().text_color(p.ok).font_weight(gpui_kit::FontWeight::BOLD).child("\u{2713}").into_any_element()
+                            icon(Ico::Check, 14., p.text).into_any_element()
                         } else {
                             icon(Ico::GitBranch, 13., p.muted).into_any_element()
                         })

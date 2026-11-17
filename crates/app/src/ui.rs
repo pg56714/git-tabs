@@ -107,7 +107,7 @@ pub fn ref_colors(p: &Pal) -> (Hsla, Hsla, Hsla, Hsla) {
     if p.panel.l < 0.5 {
         (hex(0x3d3321), hex(0xe69a2e), hex(0x2f2a22), hex(0xb8863f))
     } else {
-        (hex(0xfffbf2), hex(0xf2a33a), hex(0xfdf0dc), hex(0xf2a33a))
+        (hex(0xfff8e1), hex(0xf0a030), hex(0xfff1cc), hex(0xf0a030))
     }
 }
 
@@ -118,7 +118,7 @@ gpui_kit::assets::icon_assets!(
     ExtraIcons,
     [
         Archive, ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Cloud, CloudDownload, Copy, Ellipsis, File, FileClock, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch, GitBranchPlus,
-        GitCommitVertical, Github, ListFilter, Moon, Package, Plus, RefreshCw, RotateCcw, ScrollText, Search, Settings, Square, SquareCheck, SquarePen,
+        Check, GitCommitVertical, Github, ListFilter, Moon, Package, Plus, RefreshCw, RotateCcw, ScrollText, Search, Settings, Square, SquareCheck, SquarePen,
         SquareTerminal, Sun, SunMoon, Tag, TextWrap, Trash, User, X
     ]
 );
@@ -162,13 +162,13 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
     let (bg, border) = match kind {
         "remote" => (rf, rb),
-        "tag" => (p.panel, p.border_strong),
+        "tag" => (p.accent_bg, p.accent),
         _ => (lf, lb),
     };
     let mark: Option<AnyElement> = match kind {
-        "head" | "detached" => Some(div().text_color(p.text).font_weight(FontWeight::BOLD).child("\u{2713}").into_any_element()),
+        "head" | "detached" => Some(icon(Ico::Check, 14., p.text).into_any_element()),
         "remote" => Some(icon(remote_icon(github), 13., p.text).into_any_element()),
-        "tag" => Some(icon(Ico::Tag, 12., p.muted).into_any_element()),
+        "tag" => Some(icon(Ico::Tag, 12., p.accent).into_any_element()),
         _ => None,
     };
     let shown = if kind == "detached" { String::new() } else { name.to_string() };
@@ -181,7 +181,7 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
         .items_center()
         .gap(px(4.))
         .rounded(px(5.))
-        .border_1()
+        .border(px(1.5))
         .border_color(border)
         .font_weight(if kind == "tag" { FontWeight::NORMAL } else { FontWeight::SEMIBOLD })
         .bg(bg)
@@ -237,7 +237,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
         .flex()
         .items_center()
         .rounded(px(5.))
-        .border_1()
+        .border(px(1.5))
         .border_color(lb)
         .overflow_hidden()
         .text_size(px(12.))
@@ -265,7 +265,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                 .gap(px(4.))
                 .px(px(6.))
                 .bg(lf)
-                .when(current, |d| d.child(div().text_color(p.text).font_weight(FontWeight::BOLD).child("\u{2713}")))
+                .when(current, |d| d.child(icon(Ico::Check, 14., p.text)))
                 .child(name.to_string()),
         )
 }
