@@ -419,7 +419,42 @@ pub fn parse_refs(out: &str) -> Refs {
             r.tags.push(Tag { name: n.into(), sha: if peeled.is_empty() { sha } else { peeled.into() } });
         }
     }
+    // Newest version first, as Fork lists them: v0.10.0 before v0.9.0, v0.5.0 before v0.1.0.
+    r.tags.sort_by(|a, b| natural_cmp(&b.name, &a.name));
     r
+}
+
+/// Orders names by their digit runs as numbers ("v0.10" after "v0.9"), the rest as text.
+pub fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    fn chunks(s: &str) -> Vec<(bool, &str)> {
+        let mut v = Vec::new();
+        let mut start = 0;
+        let mut digit = s.chars().next().is_some_and(|c| c.is_ascii_digit());
+        for (i, c) in s.char_indices() {
+            if c.is_ascii_digit() != digit {
+                v.push((digit, &s[start..i]));
+                start = i;
+                digit = !digit;
+            }
+        }
+        if start < s.len() {
+            v.push((digit, &s[start..]));
+        }
+        v
+    }
+    for (x, y) in chunks(a).into_iter().zip(chunks(b)) {
+        let o = match (x.0, y.0) {
+            (true, true) => {
+                let (nx, ny) = (x.1.trim_start_matches('0'), y.1.trim_start_matches('0'));
+                nx.len().cmp(&ny.len()).then_with(|| nx.cmp(ny))
+            }
+            _ => x.1.cmp(y.1),
+        };
+        if o != std::cmp::Ordering::Equal {
+            return o;
+        }
+    }
+    a.len().cmp(&b.len())
 }
 
 // ---------- worktree / stash / reflog ----------
@@ -490,6 +525,14 @@ pub fn parse_reflog(out: &str) -> Vec<ReflogEntry> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tags_list_newest_first() {
+        let out = ["v0.1.0", "v0.10.0", "v0.2.0", "v0.1.2", "v0.9.0", "v0.1.1"].map(|n| format!("refs/tags/{n}abc0
+")).concat();
+        let names: Vec<String> = parse_refs(&out).tags.into_iter().map(|t| t.name).collect();
+        assert_eq!(names, ["v0.10.0", "v0.9.0", "v0.2.0", "v0.1.2", "v0.1.1", "v0.1.0"]);
+    }
+
     use super::*;
 
     #[test]

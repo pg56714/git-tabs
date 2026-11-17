@@ -547,6 +547,16 @@ pub fn switch(repo: &Path, name: &str) -> Result<String, String> {
     }
     let remote = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/remotes/{name}")]).is_ok();
     if remote {
+        // "origin/main" while a local main exists: a remote branch cannot be checked out itself, so
+        // that is main. It follows the remote when it is only behind it (what pull would do).
+        if let Some((_, short)) = name.split_once('/') {
+            let have_local = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/heads/{short}")]).is_ok();
+            if have_local {
+                let out = write(repo, &["switch", short])?;
+                let behind = read(repo, &["merge-base", "--is-ancestor", "HEAD", name]).is_ok();
+                return if behind { write(repo, &["merge", "--ff-only", name]).map(|m| format!("{out}{m}")) } else { Ok(out) };
+            }
+        }
         return write(repo, &["switch", "--track", name]);
     }
     Err(format!("找不到分支 {name}"))

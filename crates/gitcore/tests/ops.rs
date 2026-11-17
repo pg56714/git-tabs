@@ -559,3 +559,27 @@ fn force_push_refuses_a_commit_it_never_took_in() {
     git(d.path(), &["pull", "-q", "--rebase"]);
     call(&ctx, "push", json!({"repo": r(&d), "force": true}));
 }
+
+/// Double-clicking "origin/main" while a local main exists must land on main, not fail.
+#[test]
+fn switching_to_a_remote_branch_uses_the_local_branch_of_that_name() {
+    let _s = serial();
+    let (d, ctx) = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "-q", "--bare", "-b", "main"]);
+    git(d.path(), &["remote", "add", "origin", &remote.path().display().to_string()]);
+    git(d.path(), &["push", "-q", "-u", "origin", "main"]);
+    // origin gets a newer commit; the local main stays behind, and HEAD is elsewhere.
+    let other = tempfile::tempdir().unwrap();
+    git(other.path(), &["clone", "-q", &remote.path().display().to_string(), "."]);
+    std::fs::write(other.path().join("n.txt"), "new
+").unwrap();
+    git(other.path(), &["add", "."]);
+    git(other.path(), &["commit", "-qm", "newer"]);
+    git(other.path(), &["push", "-q"]);
+    git(d.path(), &["fetch", "-q"]);
+    git(d.path(), &["switch", "-q", "--detach", "HEAD"]);
+    call(&ctx, "switch", json!({"repo": r(&d), "name": "origin/main"}));
+    assert_eq!(git(d.path(), &["branch", "--show-current"]).trim(), "main");
+    assert_eq!(git(d.path(), &["rev-parse", "HEAD"]), git(d.path(), &["rev-parse", "origin/main"]), "main followed the remote");
+}

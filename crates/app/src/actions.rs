@@ -749,7 +749,23 @@ impl GitTabs {
 
     pub fn checkout_commit(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(path) = self.active_path() else { return };
-        let subject = self.repo().and_then(|r| r.commits.iter().find(|c| c.sha == sha)).map(|c| c.subject.clone()).unwrap_or_default();
+        let commit = self.repo().and_then(|r| r.commits.iter().find(|c| c.sha == sha)).cloned();
+        let subject = commit.as_ref().map(|c| c.subject.clone()).unwrap_or_default();
+        // A commit that carries branch labels is checked out as that branch, not as a bare commit
+        // (which would leave HEAD detached with the branch still behind): the checked-out branch
+        // means there is nothing to do, a local branch is switched to, a remote branch gives its
+        // local branch (made if it does not exist), as Fork's Checkout does.
+        if let Some(c) = &commit {
+            if c.refs.iter().any(|x| x.kind == "head") {
+                self.toast(crate::i18n::t("已經在這個分支上"), ToastKind::Info, None, cx);
+                return;
+            }
+            let pick = c.refs.iter().find(|x| x.kind == "branch").or_else(|| c.refs.iter().find(|x| x.kind == "remote"));
+            if let Some(label) = pick {
+                self.switch_branch(&path, &label.name.clone(), cx);
+                return;
+            }
+        }
         self.confirm(
             crate::i18n::t("Checkout 這個 commit？"),
             crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回分支或從這裡開新分支。", &[], &[(short(&sha)).to_string(), subject]),

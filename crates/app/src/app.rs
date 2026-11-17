@@ -693,14 +693,22 @@ impl GitTabs {
                 match res {
                     Ok(snap) => {
                         let sig = |r: &RepoState| -> String {
-                            r.refs.as_ref().map(|x| x.refs.branches.iter().chain(&x.refs.remotes).map(|b| format!("{}{}", b.sha, b.name)).collect::<String>()).unwrap_or_default()
+                            // Every label the list draws: branches (and which one is checked out), remote branches, tags.
+                            r.refs
+                                .as_ref()
+                                .map(|x| {
+                                    let b = x.refs.branches.iter().chain(&x.refs.remotes).map(|b| format!("{}{}{}", b.sha, b.name, if b.current { "*" } else { "" }));
+                                    b.chain(x.refs.tags.iter().map(|t| format!("{}{}", t.sha, t.name))).collect::<String>()
+                                })
+                                .unwrap_or_default()
                         };
                         let (old_head, old_refs) = (r.summary.as_ref().and_then(|s| s.head.clone()), sig(r));
+                        let old_branch = r.summary.as_ref().and_then(|s| s.branch.clone());
                         r.summary = Some(snap.summary);
                         r.status = snap.status;
                         r.refs = Some(snap.refs);
                         r.error = None;
-                        reload_log = !r.commits.is_empty() && (old_head != r.summary.as_ref().and_then(|s| s.head.clone()) || old_refs != sig(r));
+                        reload_log = !r.commits.is_empty() && (old_head != r.summary.as_ref().and_then(|s| s.head.clone()) || old_branch != r.summary.as_ref().and_then(|s| s.branch.clone()) || old_refs != sig(r));
                         ok = true;
                     }
                     Err(e) => r.error = Some(e.trim_start_matches("Error: ").to_string()),
