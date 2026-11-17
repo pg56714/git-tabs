@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.0 (2026-11-17)
+
+### Features
+
+- **update:** manual "Check for updates" instead of 6-hourly polling; pin Rust 1.99.1 and cargo-packager 0.11.8 ([f0f3488](https://github.com/pg56714/git-tabs/commit/f0f3488423dbdfb07b49cdf57d7adb2ae4d201a1))
+
+### Fixes
+
+- **ui:** jump to the first change once a new file's diff is measured ([0354ca0](https://github.com/pg56714/git-tabs/commit/0354ca07be8eef6a4cab16ed80354b74c6b6aaeb))
+
 ## v0.5.0 (2026-11-16)
 
 ### Features
