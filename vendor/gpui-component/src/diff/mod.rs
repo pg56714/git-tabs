@@ -1567,7 +1567,7 @@ fn line_highlights(
             (
                 range,
                 HighlightStyle {
-                    background_color: Some(status.opacity(0.3)),
+                    background_color: Some(status.opacity(0.38)),
                     ..Default::default()
                 },
             )
@@ -1664,9 +1664,12 @@ fn code_line(
     let status = if conflict_part.is_some() {
         conflict_tint(conflict_part, cx)
     } else if side == DiffSide::Original {
-        cx.theme().danger
+        // git-tabs: purer, brighter red and green than the theme's text colours, as Fork draws them.
+        if cx.theme().is_dark() { gpui::rgb(0xf85149).into() } else { gpui::rgb(0xff3b3b).into() }
+    } else if cx.theme().is_dark() {
+        gpui::rgb(0x3fb950).into()
     } else {
-        cx.theme().success
+        gpui::rgb(0x1ed24b).into()
     };
     let selected = code.is_selected(file, side, ix)
         || (code.mode == DiffMode::Unified
@@ -1808,7 +1811,7 @@ fn code_line(
         .text_size(code.font_size)
         .line_height(code.row_height)
         .when(changed && code.change_background, |this| {
-            this.bg(status.opacity(0.12))
+            this.bg(status.opacity(0.13))
         })
         // An overlay, so the change background shows through a translucent fill.
         .when_some(decoration, |this, background| {
