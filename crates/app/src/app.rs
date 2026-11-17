@@ -1136,6 +1136,18 @@ impl GitTabs {
             s.set_files(files, cx);
             s.set_selected_lines(None, cx);
         });
+        // The first draw of a new file can land half way down the list (row heights are not
+        // measured yet); once they are, go to the top of the first change.
+        let want = self.repo().map(|r| r.diff_for.clone());
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_millis(150)).await;
+            let _ = this.update(cx, |this, cx| {
+                if this.repo().map(|r| r.diff_for.clone()) == want {
+                    this.goto_hunk(0, cx);
+                }
+            });
+        })
+        .detach();
         cx.notify();
     }
 
