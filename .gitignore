@@ -1,7 +1,5 @@
-node_modules/
 dist/
 target/
-src-tauri/gen/
 *.log
 .DS_Store
 .claude/

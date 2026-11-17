@@ -78,21 +78,19 @@ crates/app       the desktop app, built on GPUI Kit (GPU-rendered, no web view)
 
 ## Development
 
-Requirements: Rust (stable), git 2.36+ (for `hasconfig:` includes). On Linux also the packages listed in `.github/workflows/ci.yml`.
+Requirements: Rust (the version in `rust-toolchain.toml`), git. On Linux also the packages installed in the build job of `.github/workflows/release.yml`.
 
 ```bash
 cargo run -p git-tabs          # run the app
-cargo test --workspace         # unit and end-to-end tests
-bun test scripts               # the release script (needs Bun)
+cargo test --workspace         # unit and end-to-end tests, including the release helper
 ```
 
 Useful flags while developing: `--config-dir <dir>` keeps the settings in a scratch folder and `--git-global <file>` points git at a scratch global config, so testing never touches your real settings. `--check <repo>` prints a repo's branch and changed files without opening a window.
 
 ### Releasing
 
-Actions → **Release** → **Run workflow**. It picks the next version from the Conventional Commits since the last tag (`feat` → minor, `fix`/`perf` → patch, breaking → minor before 1.0), writes `CHANGELOG.md`, commits and tags `chore(release): vX.Y.Z`, builds Windows (installer + portable exe), macOS (universal dmg) and Linux (AppImage + deb), and publishes the release when all three have uploaded. With nothing new since the last tag it stops without releasing. `bun scripts/release.ts --dry-run` shows what it would do.
+Actions → **Release** → **Run workflow**. It picks the next version from the Conventional Commits since the last tag (`feat` → minor, `fix`/`perf` → patch, breaking → minor before 1.0), writes `CHANGELOG.md`, commits and tags `chore(release): vX.Y.Z`, builds Windows (installer + portable exe), macOS (universal dmg) and Linux (AppImage + deb), and publishes the release when all three have uploaded. With nothing new since the last tag it stops without releasing. `cargo run -p release -- --dry-run` shows what it would do.
 
-The **CI** workflow runs the tests and a trial packaging on all three systems for every push, without publishing.
 
 ### Toolchain
 

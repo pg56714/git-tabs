@@ -78,21 +78,18 @@ crates/app       桌面程式，用 GPUI Kit 寫成（GPU 繪製，不含網頁�
 
 ## 開發
 
-需要：Rust（stable）、git 2.36+（為了 `hasconfig:` include）。Linux 另外需要 `.github/workflows/ci.yml` 裡列的套件。
+需要：Rust（版本見 `rust-toolchain.toml`）、git。Linux 另外需要 `.github/workflows/release.yml` 建置工作裡安裝的那些套件。
 
 ```bash
 cargo run -p git-tabs          # 執行程式
-cargo test --workspace         # 單元測試與端到端測試
-bun test scripts               # 發版腳本（需要 Bun）
+cargo test --workspace         # 單元測試與端到端測試，包含發版小工具
 ```
 
 開發時好用的參數：`--config-dir <資料夾>` 把設定放在暫存資料夾，`--git-global <檔案>` 讓 git 讀暫存的全域設定，測試時就不會動到你真正的設定。`--check <repo>` 不開視窗，只印出 repo 的分支與有修改的檔案。
 
 ### 發版
 
-Actions → **Release** → **Run workflow**。它會依上次 tag 之後的 Conventional Commits 決定下一個版本（`feat` → minor，`fix`/`perf` → patch，破壞性修改在 1.0 之前 → minor），寫入 `CHANGELOG.md`，commit 並打上 `chore(release): vX.Y.Z` 的 tag，建出 Windows（安裝檔加免安裝 exe）、macOS（universal dmg）和 Linux（AppImage 加 deb），三個都上傳完才公開。上次 tag 之後沒有新東西就直接停止，不發版。`bun scripts/release.ts --dry-run` 可以先看它會做什麼。
-
-**CI** 工作流程每次 push 都會跑測試，並在三個系統試打包（不發布）。
+Actions → **Release** → **Run workflow**。它會依上次 tag 之後的 Conventional Commits 決定下一個版本（`feat` → minor，`fix`/`perf` → patch，破壞性修改在 1.0 之前 → minor），寫入 `CHANGELOG.md`，commit 並打上 `chore(release): vX.Y.Z` 的 tag，建出 Windows（安裝檔加免安裝 exe）、macOS（universal dmg）和 Linux（AppImage 加 deb），三個都上傳完才公開。上次 tag 之後沒有新東西就直接停止，不發版。`cargo run -p release -- --dry-run` 可以先看它會做什麼。
 
 ### 工具鏈
 
