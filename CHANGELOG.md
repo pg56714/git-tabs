@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.10.0 (2026-11-17)
+
+### Features
+
+- **release:** publish SHA256SUMS and build attestations, verify downloads on update ([f9671b3](https://github.com/pg56714/git-tabs/commit/f9671b3f3502462c0d041b749ba04f18b7768ba7))
+
+### Other
+
+- **release:** rewrite the release script in Rust and drop bun and the TypeScript tooling ([8393377](https://github.com/pg56714/git-tabs/commit/839337777012288917bc61dec6b676e328e1fcb0))
+- drop the notes about the old Vue build from the comments ([2a147b6](https://github.com/pg56714/git-tabs/commit/2a147b6d7c9756cd5c12480a54561fded0e0232a))
+- **i18n:** use English for git terms in the Chinese UI ([3176572](https://github.com/pg56714/git-tabs/commit/3176572d3c9f88457c1f305d6cdefea782ebbc8c))
+- remove the unused oxlint config ([275b2bb](https://github.com/pg56714/git-tabs/commit/275b2bb973280cd9e04f420b27af5fe0cbeb523e))
+- **identity:** pick identities by hand, drop automatic rules ([8005f3c](https://github.com/pg56714/git-tabs/commit/8005f3c0cec06f99799af800ab376529e6a426fc))
+
 ## v0.9.0 (2026-11-17)
 
 ### Features
