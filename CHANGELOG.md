@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.0 (2026-11-17)
+
+### Features
+
+- **changes:** keep the Unstaged / Staged / commit panes when the tree is clean, as Fork does ([492467d](https://github.com/pg56714/git-tabs/commit/492467df195e5d91a4e02c6c857cae3b9d38df2f))
+- **ui:** the tab row is the window's title bar ([823e9e3](https://github.com/pg56714/git-tabs/commit/823e9e3891aac3de8761e4abd39a5dfd148d4ffa))
+- **ui:** Fork-style ref labels and date column ([b04ab0a](https://github.com/pg56714/git-tabs/commit/b04ab0a3d9d48a652110278d7ce6dc216bac3b81))
+
+### Fixes
+
+- **history:** checking out a commit that carries a branch label lands on that branch ([1dcc0d0](https://github.com/pg56714/git-tabs/commit/1dcc0d0b1c00eff0e358b3f2729c985b8dc679a5))
+
 ## v0.7.0 (2026-11-17)
 
 ### Features
