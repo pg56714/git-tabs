@@ -133,16 +133,16 @@
             "color": "#0550ae"
           },
           "comment": {
-            "color": "#6e7781"
+            "color": "#59636e"
           },
           "comment.doc": {
-            "color": "#6e7781"
+            "color": "#59636e"
           },
           "constant": {
             "color": "#0550ae"
           },
           "constructor": {
-            "color": "#8250df"
+            "color": "#6639ba"
           },
           "embedded": {
             "color": "#1f2328"
@@ -154,7 +154,7 @@
             "font_weight": 700
           },
           "function": {
-            "color": "#8250df"
+            "color": "#6639ba"
           },
           "keyword": {
             "color": "#cf222e"
@@ -346,10 +346,10 @@
             "color": "#79c0ff"
           },
           "comment": {
-            "color": "#8b949e"
+            "color": "#9198a1"
           },
           "comment.doc": {
-            "color": "#8b949e"
+            "color": "#9198a1"
           },
           "constant": {
             "color": "#79c0ff"
