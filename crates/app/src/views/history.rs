@@ -494,6 +494,7 @@ impl GitTabs {
         let subject = d.message.lines().next().unwrap_or("").to_string();
         let body = d.message.lines().skip(1).collect::<Vec<_>>().join("\n").trim().to_string();
         let sha = d.sha.clone();
+        let gh_url = self.repo().and_then(|r| r.summary.as_ref()).and_then(|s| s.remote_url.as_deref()).and_then(gitcore::avatar::github_slug).map(|slug| format!("https://github.com/{slug}/commit/{}", d.sha));
         let (s1, s2, s3, s4, s5, s6) = (sha.clone(), sha.clone(), sha.clone(), sha.clone(), sha.clone(), sha.clone());
         let kv = |k: &'static str, v: AnyElement| div().flex().gap(px(10.)).items_center().child(div().w(px(72.)).flex_none().child(k)).child(v);
         let act = |id: &'static str, label: &'static str| btn(&p, id, Bk::Normal, true, label);
@@ -557,11 +558,33 @@ impl GitTabs {
                         "SHA",
                         div()
                             .flex()
+                            .items_center()
                             .gap_2()
                             .text_color(p.text)
                             .font_family("Cascadia Mono")
                             .child(sha.clone())
-                            .child(div().id("copy-sha").text_color(p.accent).cursor_pointer().child(crate::i18n::t("複製")).on_click(cx.listener(move |this, _, _, cx| this.copy(s1.clone(), &short(&s1), cx))))
+                            .child(
+                                div()
+                                    .id("copy-sha")
+                                    .flex_none()
+                                    .cursor_pointer()
+                                    .tooltip_text(crate::i18n::t("複製 SHA"))
+                                    .child(icon(Ico::Copy, 14., p.muted))
+                                    .on_click(cx.listener(move |this, _, _, cx| this.copy(s1.clone(), &short(&s1), cx))),
+                            )
+                            .when_some(gh_url, |d, url| {
+                                d.child(
+                                    div()
+                                        .id("open-sha-gh")
+                                        .flex_none()
+                                        .cursor_pointer()
+                                        .tooltip_text(crate::i18n::tr("在 GitHub 開啟 '{}'", &[], &[short(&sha).to_string()]))
+                                        .child(icon(Ico::Github, 14., p.muted))
+                                        .on_click(move |_, _, _| {
+                                            let _ = gitcore::open_url(&url);
+                                        }),
+                                )
+                            })
                             .into_any_element(),
                     ))
                     .child(kv(
