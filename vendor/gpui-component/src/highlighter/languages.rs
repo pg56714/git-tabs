@@ -401,7 +401,7 @@ impl Language {
             #[cfg(feature = "tree-sitter-yaml")]
             Self::Yaml => (
                 tree_sitter_yaml::LANGUAGE,
-                tree_sitter_yaml::HIGHLIGHTS_QUERY,
+                include_str!("languages/yaml/highlights.scm"),
                 "",
                 "",
             ),
