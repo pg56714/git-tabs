@@ -23,7 +23,7 @@ impl GitTabs {
         if list == ListKind::U {
             items.push(MenuItem::new("Stage", move |t, _, cx| t.stage_files(vec![a.clone()], cx)));
             if !conflicted {
-                items.push(MenuItem::new(if untracked { crate::i18n::t("刪除這個新檔案…") } else { crate::i18n::t("Discard 修改…") }, move |t, _, cx| t.discard_files(vec![b.clone()], cx)).danger());
+                items.push(MenuItem::new(if untracked { crate::i18n::t("刪除這個新檔案") } else { crate::i18n::t("Discard 修改") }, move |t, _, cx| t.discard_files(vec![b.clone()], cx)).danger());
             }
         } else {
             items.push(MenuItem::new(crate::i18n::t("取消 Stage"), move |t, _, cx| t.unstage_files(vec![a.clone()], cx)));

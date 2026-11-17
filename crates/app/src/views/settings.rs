@@ -35,6 +35,17 @@ fn seg<'a>(p: &crate::theme::Pal, opts: &[(&'a str, &'a str)], current: &str, mu
     div().flex().flex_none().border_1().border_color(p.border_strong).rounded(px(7.)).overflow_hidden().children(items).into_any_element()
 }
 
+/// Menu items that give each of `paths` an identity (or none) in the add-repo dialog.
+fn pin_items(ids: &[(String, String)], paths: Vec<String>) -> Vec<MenuItem> {
+    let ps = paths.clone();
+    let mut items = vec![MenuItem::new(crate::i18n::t("之後再選"), move |t, _, cx| t.add_repo_set_pins(ps.clone(), None, cx))];
+    for (id, name) in ids.iter().cloned() {
+        let ps = paths.clone();
+        items.push(MenuItem::new(name, move |t, _, cx| t.add_repo_set_pins(ps.clone(), Some(id.clone()), cx)));
+    }
+    items
+}
+
 impl GitTabs {
     fn labeled(&self, label: &str, content: AnyElement) -> AnyElement {
         div().flex().items_center().gap(px(10.)).child(div().w(px(110.)).flex_none().child(label.to_string())).child(div().flex_1().min_w_0().child(content)).into_any_element()
@@ -111,7 +122,7 @@ impl GitTabs {
                     .items_center()
                     .gap(px(8.))
                     .child(btn(&p, "id-add", Bk::Normal, false, crate::i18n::t("＋ 新增 identity")).on_click(cx.listener(|this, _, w, cx| this.settings_add(w, cx))))
-                    .child(btn(&p, "id-scan", Bk::Normal, false, if scanning { crate::i18n::t("尋找中…") } else { crate::i18n::t("從這台電腦找") }).tooltip_text(crate::i18n::t("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf")).when(!scanning, |b| b.on_click(cx.listener(|this, _, _, cx| this.settings_scan(cx)))))
+                    .child(btn(&p, "id-scan", Bk::Normal, false, if scanning { crate::i18n::t("尋找中") } else { crate::i18n::t("從這台電腦找") }).tooltip_text(crate::i18n::t("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf")).when(!scanning, |b| b.on_click(cx.listener(|this, _, _, cx| this.settings_scan(cx)))))
                     .into_any_element(),
             );
         } else {
@@ -192,7 +203,7 @@ impl GitTabs {
                     .gap(px(10.))
                     .child(div().child(format!("git-tabs {}", env!("CARGO_PKG_VERSION"))))
                     .child(
-                        btn(&p, "chk-update", Bk::Normal, true, if checking { crate::i18n::t("檢查中…") } else { crate::i18n::t("檢查更新") })
+                        btn(&p, "chk-update", Bk::Normal, true, if checking { crate::i18n::t("檢查中") } else { crate::i18n::t("檢查更新") })
                             .on_click(cx.listener(|this, _, _, cx| this.check_update(true, cx))),
                     )
                     .into_any_element(),
@@ -203,7 +214,7 @@ impl GitTabs {
         }
         let saving = m.saving;
         let cancel = btn(&p, "s-cancel", Bk::Normal, false, crate::i18n::t("取消")).on_click(cx.listener(|this, _, w, cx| this.close_modal(w, cx)));
-        let save = dim(btn(&p, "s-save", Bk::Primary, false, if saving { crate::i18n::t("儲存中…") } else { crate::i18n::t("儲存") }).when(!saving, |b| b.on_click(cx.listener(|this, _, w, cx| this.settings_save(w, cx)))), saving);
+        let save = dim(btn(&p, "s-save", Bk::Primary, false, if saving { crate::i18n::t("儲存中") } else { crate::i18n::t("儲存") }).when(!saving, |b| b.on_click(cx.listener(|this, _, w, cx| this.settings_save(w, cx)))), saving);
         self.dialog(div().child(crate::i18n::t("設定")).into_any_element(), div().flex().flex_col().gap(px(10.)).children(body).into_any_element(), vec![cancel.into_any_element(), save.into_any_element()], 880., cx)
     }
 
@@ -240,8 +251,8 @@ impl GitTabs {
                 .items_center()
                 .gap(px(6.))
                 .child(div().flex_1().child(Input::new(&d.key)))
-                .child(btn(&p, SharedString::from(format!("kb-{i}")), Bk::Normal, true, crate::i18n::t("選檔案…")).on_click(cx.listener(move |this, _, w, cx| this.settings_browse_key(i, w, cx))))
-                .child(dim(btn(&p, SharedString::from(format!("kt-{i}")), Bk::Normal, true, if d.testing { crate::i18n::t("連線中…") } else { crate::i18n::t("測試連線") }).when(!d.testing, |b| b.on_click(cx.listener(move |this, _, _, cx| this.settings_test(i, cx)))), d.testing))
+                .child(btn(&p, SharedString::from(format!("kb-{i}")), Bk::Normal, true, crate::i18n::t("選擇檔案")).on_click(cx.listener(move |this, _, w, cx| this.settings_browse_key(i, w, cx))))
+                .child(dim(btn(&p, SharedString::from(format!("kt-{i}")), Bk::Normal, true, if d.testing { crate::i18n::t("連線中") } else { crate::i18n::t("測試連線") }).when(!d.testing, |b| b.on_click(cx.listener(move |this, _, _, cx| this.settings_test(i, cx)))), d.testing))
                 .child(btn(&p, SharedString::from(format!("kg-{i}")), if d.kg.open { Bk::On } else { Bk::Normal }, true, crate::i18n::t("產生新 key")).on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(Modal::Settings(m)) = &mut this.modal
                         && let Some(d) = m.ids.get_mut(i)
@@ -307,16 +318,21 @@ impl GitTabs {
         let fresh: Vec<String> = m.found.iter().filter(|f| !open.contains(&f.replace('/', "\\").to_lowercase())).cloned().collect();
         let all_picked = !fresh.is_empty() && fresh.iter().all(|f| m.picked.contains(f));
         let n_picked = m.picked.len();
-        let pin = m.pin.clone();
         let busy = m.busy;
         let ids: Vec<(String, String)> = self.cfg.identities.iter().map(|i| (i.id.clone(), crate::i18n::tr("{}（{}）", &[], &[(i.name).to_string(), (if i.account.is_empty() { &i.email } else { &i.account }).to_string()]))).collect();
-        let pin_label = ids.iter().find(|x| x.0 == pin).map(|x| x.1.clone()).unwrap_or_else(|| crate::i18n::t("之後再選").into());
+        let short_name = |id: &str| self.cfg.identities.iter().find(|i| i.id == id).map(|i| i.name.clone());
+        // Picked repos that still have no identity.
+        let n_unset = m.picked.iter().filter(|f| !m.pins.contains_key(*f)).count();
         let fresh2 = fresh.clone();
         let rows: Vec<AnyElement> = fresh
             .iter()
-            .map(|f| {
+            .enumerate()
+            .map(|(ri, f)| {
                 let on = m.picked.contains(f);
                 let f2 = f.clone();
+                let pin = m.pins.get(f).cloned();
+                let label = pin.as_deref().and_then(short_name);
+                let (f3, ids2) = (f.clone(), ids.clone());
                 div()
                     .id(SharedString::from(format!("ar-{f}")))
                     .flex()
@@ -339,10 +355,50 @@ impl GitTabs {
                     }))
                     .child(check_box(&p, on))
                     .child(div().flex_none().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(base_name(f)))
-                    .child(div().overflow_hidden().text_ellipsis().font_family("Cascadia Mono").child(sub(&p, f.clone())))
+                    .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().font_family("Cascadia Mono").child(sub(&p, f.clone())))
+                    .when(!ids.is_empty(), |d| {
+                        d.child(
+                            btn(&p, SharedString::from(format!("ar-pin-{ri}")), if label.is_some() { Bk::Normal } else { Bk::Ghost }, true, format!("{} ▾", label.clone().unwrap_or_else(|| crate::i18n::t("之後再選").to_string())))
+                                .flex_none()
+                                .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                                    // The row toggles its checkbox on click; this button must not.
+                                    cx.stop_propagation();
+                                    let items = pin_items(&ids2, vec![f3.clone()]);
+                                    this.open_menu(ev.position(), items, true, cx);
+                                })),
+                        )
+                    })
                     .into_any_element()
             })
             .collect();
+
+        // "Set all" applies to the checked repos, or to every listed one when none is checked.
+        let bulk_targets: Vec<String> = if n_picked > 0 { fresh.iter().filter(|f| m.picked.contains(*f)).cloned().collect() } else { fresh.clone() };
+        let bulk_label = if n_picked > 0 { crate::i18n::t("選取的設為") } else { crate::i18n::t("全部設為") };
+        let ids_bulk = ids.clone();
+        let picked_note = if n_picked == 0 {
+            String::new()
+        } else {
+            let mut s = crate::i18n::tr("，已選 {n_picked} 個", &[("n_picked", (n_picked).to_string())], &[]);
+            if !ids.is_empty() && n_unset > 0 {
+                s.push_str(&crate::i18n::tr("，{m} 個還沒選 identity", &[("m", n_unset.to_string())], &[]));
+            }
+            s
+        };
+        let summary = crate::i18n::tr("在這個資料夾底下找到 {} 個 repo，其中 {} 個還沒開{}", &[], &[m.found.len().to_string(), fresh.len().to_string(), picked_note]);
+
+        // Clone: one line until it is opened.
+        let clone_open = m.clone_open;
+        let clone_pin_label = short_name(&m.clone_pin);
+        let default_dest = {
+            let base = m.scan_dir.read(cx).value().trim_end_matches(['/', '\\']).to_string();
+            let base = if base.is_empty() { self.cfg.clone_dir.trim_end_matches(['/', '\\']).to_string() } else { base };
+            let name = m.url.read(cx).value().trim().trim_end_matches(".git").rsplit(['/', ':']).next().unwrap_or("").to_string();
+            format!("{base}\\{}", if name.is_empty() { "<repo>".to_string() } else { name })
+        };
+        let dest_open = m.dest_open;
+        let ids_clone = ids.clone();
+
         let body = div()
             .flex()
             .flex_col()
@@ -354,7 +410,7 @@ impl GitTabs {
                     .items_center()
                     .child(div().flex_1().child(Input::new(&m.scan_dir)))
                     .child(btn(&p, "ar-scan", Bk::Normal, false, crate::i18n::t("掃描")).on_click(cx.listener(|this, _, _, cx| this.add_repo_scan(cx))))
-                    .child(btn(&p, "ar-browse", Bk::Normal, false, crate::i18n::t("選資料夾…")).on_click(cx.listener(|this, _, w, cx| this.add_repo_browse(w, cx)))),
+                    .child(btn(&p, "ar-browse", Bk::Normal, false, crate::i18n::t("選擇資料夾")).on_click(cx.listener(|this, _, w, cx| this.add_repo_browse(w, cx)))),
             )
             .child(
                 div()
@@ -385,7 +441,13 @@ impl GitTabs {
                                 })),
                         )
                     })
-                    .child(sub(&p, crate::i18n::tr("在這個資料夾底下找到 {} 個 repo，其中 {} 個還沒開{}", &[], &[(m.found.len()).to_string(), (fresh.len()).to_string(), (if n_picked > 0 { crate::i18n::tr("，已選 {n_picked} 個", &[("n_picked", (n_picked).to_string())], &[]) } else { String::new() }).to_string()]))),
+                    .child(div().flex_1().min_w_0().child(sub(&p, summary)))
+                    .when(!ids.is_empty() && !fresh.is_empty(), |d| {
+                        d.child(btn(&p, "ar-bulk", Bk::Normal, true, format!("{bulk_label} ▾")).flex_none().on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                            let items = pin_items(&ids_bulk, bulk_targets.clone());
+                            this.open_menu(ev.position(), items, true, cx);
+                        })))
+                    }),
             )
             .child(
                 div()
@@ -399,48 +461,82 @@ impl GitTabs {
                     .children(rows)
                     .when(fresh.is_empty(), |d| d.child(sub(&p, crate::i18n::t("（都已經開了）")))),
             )
-            .child(div().flex().items_center().gap(px(8.)).child(sub(&p, crate::i18n::t("或"))).child(btn(&p, "ar-one", Bk::Normal, true, crate::i18n::t("直接選一個 repo 資料夾…")).on_click(cx.listener(|this, _, _, cx| this.add_repo_pick_one(cx)))))
             .child(
                 div()
                     .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .p(px(10.))
-                    .border_1()
-                    .border_color(p.border)
-                    .rounded(px(8.))
-                    .child(div().text_size(px(12.)).text_color(p.muted).child(crate::i18n::t("Clone 新的 repo")))
-                    .child(Input::new(&m.url))
-                    .child(div().flex().gap(px(6.)).child(div().flex_1().child(Input::new(&m.clone_to))).child(dim(btn(&p, "ar-clone", Bk::Normal, false, "Clone").when(!busy, |b| b.on_click(cx.listener(|this, _, _, cx| this.add_repo_clone(cx)))), busy))),
+                    .items_center()
+                    .gap(px(8.))
+                    .child(btn(&p, "ar-one", Bk::Normal, true, crate::i18n::t("選擇單一 repo 資料夾")).px(px(16.)).on_click(cx.listener(|this, _, _, cx| this.add_repo_pick_one(cx))))
+                    .child(
+                        btn(&p, "ar-clone-toggle", if clone_open { Bk::On } else { Bk::Normal }, true, if clone_open { crate::i18n::t("Clone 新的 repo ▴") } else { crate::i18n::t("Clone 新的 repo ▾") }).px(px(16.)).on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(Modal::AddRepo(m)) = &mut this.modal {
+                                m.clone_open = !m.clone_open;
+                            }
+                            cx.notify();
+                        })),
+                    ),
             )
-            .when(!ids.is_empty(), |d| {
-                d.child(self.labeled(
-                    crate::i18n::t("Identity"),
-                    btn(&p, "ar-pin", Bk::Normal, false, format!("{pin_label} ▾"))
-                        .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                            let mut items = vec![MenuItem::new(crate::i18n::t("之後再選"), |t, _, cx| {
-                                if let Some(Modal::AddRepo(m)) = &mut t.modal {
-                                    m.pin.clear();
-                                }
-                                cx.notify();
-                            })];
-                            for (id, name) in ids.clone() {
-                                items.push(MenuItem::new(name, move |t, _, cx| {
-                                    if let Some(Modal::AddRepo(m)) = &mut t.modal {
-                                        m.pin = id.clone();
+            .when(clone_open, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .p(px(10.))
+                        .border_1()
+                        .border_color(p.border)
+                        .rounded(px(8.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(div().flex_1().child(Input::new(&m.url)))
+                                .when(!ids_clone.is_empty(), |d| {
+                                    d.child(
+                                        btn(&p, "ar-clone-pin", if clone_pin_label.is_some() { Bk::Normal } else { Bk::Ghost }, false, format!("{} ▾", clone_pin_label.clone().unwrap_or_else(|| crate::i18n::t("之後再選").to_string()))).flex_none().on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                                            let mut items = vec![MenuItem::new(crate::i18n::t("之後再選"), |t, _, cx| {
+                                                if let Some(Modal::AddRepo(m)) = &mut t.modal {
+                                                    m.clone_pin.clear();
+                                                }
+                                                cx.notify();
+                                            })];
+                                            for (id, name) in ids_clone.clone() {
+                                                items.push(MenuItem::new(name, move |t, _, cx| {
+                                                    if let Some(Modal::AddRepo(m)) = &mut t.modal {
+                                                        m.clone_pin = id.clone();
+                                                    }
+                                                    cx.notify();
+                                                }));
+                                            }
+                                            this.open_menu(ev.position(), items, true, cx);
+                                        })),
+                                    )
+                                })
+                                .child(dim(btn(&p, "ar-clone", Bk::Primary, false, "Clone").flex_none().min_w(px(96.)).when(!busy, |b| b.on_click(cx.listener(|this, _, _, cx| this.add_repo_clone(cx)))), busy)),
+                        )
+                        .child(if dest_open {
+                            div().flex().items_center().gap(px(6.)).child(div().flex_1().child(Input::new(&m.clone_to))).child(sub(&p, crate::i18n::tr("留空就放在 {}", &[], &[default_dest.clone()]))).into_any_element()
+                        } else {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(sub(&p, crate::i18n::tr("會放在 {}", &[], &[default_dest.clone()])))
+                                .child(btn(&p, "ar-dest", Bk::Normal, true, crate::i18n::t("更改存放位置")).min_w(px(72.)).px(px(16.)).on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(Modal::AddRepo(m)) = &mut this.modal {
+                                        m.dest_open = true;
                                     }
                                     cx.notify();
-                                }));
-                            }
-                            this.open_menu(ev.position(), items, false, cx);
-                        }))
-                        .into_any_element(),
-                ))
+                                })))
+                                .into_any_element()
+                        }),
+                )
             })
             .when_some(m.err.clone(), |d, e| d.child(div().text_size(px(12.)).text_color(p.danger).child(e)));
         let cancel = btn(&p, "ar-cancel", Bk::Normal, false, crate::i18n::t("取消")).on_click(cx.listener(|this, _, w, cx| this.close_modal(w, cx)));
         let add = dim(btn(&p, "ar-add", Bk::Primary, false, crate::i18n::tr("加入 {}", &[], &[(if n_picked > 0 { n_picked.to_string() } else { String::new() }).to_string()])).when(n_picked > 0 && !busy, |b| b.on_click(cx.listener(|this, _, w, cx| this.add_repo_add_picked(w, cx)))), n_picked == 0 || busy);
-        self.dialog(div().child(crate::i18n::t("加入 repo")).into_any_element(), body.into_any_element(), vec![div().child(if busy { sub(&p, crate::i18n::t("處理中…")) } else { div() }).into_any_element(), cancel.into_any_element(), add.into_any_element()], 880., cx)
+        self.dialog(div().child(crate::i18n::t("加入 repo")).into_any_element(), body.into_any_element(), vec![div().child(if busy { sub(&p, crate::i18n::t("處理中")) } else { div() }).into_any_element(), cancel.into_any_element(), add.into_any_element()], 880., cx)
     }
 
     pub fn render_blame(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -448,7 +544,7 @@ impl GitTabs {
         let Some(Modal::Blame(m)) = &self.modal else { return div().into_any_element() };
         let title = div().flex().gap_1().child(crate::i18n::t("Blame：")).child(div().font_family("Cascadia Mono").child(m.path.clone())).when_some(m.rev.clone(), |d, r| d.child(sub(&p, format!(" @ {}", short(&r))))).into_any_element();
         let body: AnyElement = if m.loading {
-            sub(&p, crate::i18n::t("載入中…")).into_any_element()
+            sub(&p, crate::i18n::t("載入中")).into_any_element()
         } else if let Some(e) = &m.err {
             div().text_size(px(12.)).text_color(p.danger).child(e.clone()).into_any_element()
         } else {

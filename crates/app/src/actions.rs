@@ -1043,7 +1043,7 @@ impl GitTabs {
     }
 
     pub fn open_worktree(&mut self, path: String, cx: &mut Context<Self>) {
-        self.add_repos(vec![PathBuf::from(path)], None, cx);
+        self.add_repos(vec![(PathBuf::from(path), None)], cx);
     }
 
     pub fn remove_worktree(&mut self, wt: String, cx: &mut Context<Self>) {
@@ -1075,12 +1075,12 @@ impl GitTabs {
 
     // ----- repos -----
 
-    pub fn add_repos(&mut self, paths: Vec<PathBuf>, pin: Option<String>, cx: &mut Context<Self>) {
+    pub fn add_repos(&mut self, paths: Vec<(PathBuf, Option<String>)>, cx: &mut Context<Self>) {
         let ctx = self.ctx.clone();
-        self.work(cx, move || paths.iter().map(|p| ops::toplevel(p)).collect::<Vec<_>>(), move |this, tops, cx| {
+        self.work(cx, move || paths.into_iter().map(|(p, pin)| (ops::toplevel(&p), pin)).collect::<Vec<_>>(), move |this, tops, cx| {
             let mut added = 0usize;
             let mut last = None;
-            for t in tops {
+            for (t, pin) in tops {
                 match t {
                     Ok(top) => {
                         let same = |a: &Path, b: &Path| a.display().to_string().replace('/', "\\").to_lowercase() == b.display().to_string().replace('/', "\\").to_lowercase();

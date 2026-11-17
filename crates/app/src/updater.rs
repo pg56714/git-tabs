@@ -89,7 +89,7 @@ impl GitTabs {
                 .child(div().child(text))
                 .child(div().flex_1())
                 .child(
-                    btn(&p, "update-now", Bk::Primary, true, if updating { crate::i18n::t("更新中…") } else { crate::i18n::t("立即更新") })
+                    btn(&p, "update-now", Bk::Primary, true, if updating { crate::i18n::t("更新中") } else { crate::i18n::t("立即更新") })
                         .on_click(cx.listener(|this, _, _, cx| this.install_update(cx))),
                 )
                 .child(btn(&p, "update-later", Bk::Ghost, true, crate::i18n::t("稍後")).on_click(cx.listener(|this, _, _, cx| {

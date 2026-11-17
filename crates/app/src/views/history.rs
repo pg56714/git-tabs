@@ -138,16 +138,16 @@ impl GitTabs {
         let own = r.summary.as_ref().is_some_and(|s| s.branch.is_some()) && row.is_some_and(|g| !g.off_head && !g.merge);
         let has_parent = ix.is_some_and(|i| !r.commits[i].parents.is_empty());
         vec![
-            MenuItem::new(crate::i18n::t("Checkout 這個 commit…"), move |t, _, cx| t.checkout_commit(a.clone(), cx)),
-            MenuItem::new(crate::i18n::t("從這裡開新 branch…"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
+            MenuItem::new(crate::i18n::t("Checkout 這個 commit"), move |t, _, cx| t.checkout_commit(a.clone(), cx)),
+            MenuItem::new(crate::i18n::t("從這裡開新 branch"), move |t, w, cx| t.new_branch(Some(b.clone()), w, cx)),
             MenuItem::new(crate::i18n::t("Cherry-pick 到目前 branch"), move |t, _, cx| t.cherry_pick(c.clone(), cx)),
-            MenuItem::new("Revert…", move |t, _, cx| t.revert(d.clone(), cx)),
-            MenuItem::new(crate::i18n::tr("Reset {branch} 到這裡…", &[("branch", (branch).to_string())], &[]), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
-            MenuItem::new(crate::i18n::t("加 Tag…"), move |t, w, cx| t.create_tag(f.clone(), w, cx)),
+            MenuItem::new(crate::i18n::t("Revert 這個 commit"), move |t, _, cx| t.revert(d.clone(), cx)),
+            MenuItem::new(crate::i18n::tr("Reset {branch} 到這裡", &[("branch", (branch).to_string())], &[]), move |t, _, cx| t.reset_to(e.clone(), cx)).danger(),
+            MenuItem::new(crate::i18n::t("在這個 commit 加 Tag"), move |t, w, cx| t.create_tag(f.clone(), w, cx)),
             MenuItem::sep(),
-            MenuItem::new(crate::i18n::t("改訊息…"), move |t, w, cx| t.reword_commit(w1.clone(), w, cx)).disabled(!own),
-            MenuItem::new(crate::i18n::t("併入上一個 commit…"), move |t, _, cx| t.squash_commit(w2.clone(), cx)).disabled(!own || !has_parent),
-            MenuItem::new(crate::i18n::t("丟掉這個 commit…"), move |t, _, cx| t.drop_commit(w3.clone(), cx)).danger().disabled(!own),
+            MenuItem::new(crate::i18n::t("修改 commit 訊息"), move |t, w, cx| t.reword_commit(w1.clone(), w, cx)).disabled(!own),
+            MenuItem::new(crate::i18n::t("併入上一個 commit"), move |t, _, cx| t.squash_commit(w2.clone(), cx)).disabled(!own || !has_parent),
+            MenuItem::new(crate::i18n::t("丟掉這個 commit"), move |t, _, cx| t.drop_commit(w3.clone(), cx)).danger().disabled(!own),
             MenuItem::sep(),
             MenuItem::new(crate::i18n::t("複製 SHA"), {
                 let s = g.clone();
@@ -396,7 +396,7 @@ impl GitTabs {
                 )
             })
             .child(sub(&p, crate::i18n::tr("{count}{} 個 commit", &[("count", (count).to_string())], &[(if log_done { "" } else { "+" }).to_string()])))
-            .when(log_loading, |d| d.child(sub(&p, crate::i18n::t("載入中…"))));
+            .when(log_loading, |d| d.child(sub(&p, crate::i18n::t("載入中"))));
 
         // ---- detail pane
         let tab = self.hist_tab;
@@ -633,7 +633,7 @@ impl GitTabs {
                             move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
                         })))
                         .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx))))
-                        .child(act("a-rs", crate::i18n::t("Reset 到這裡…")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx))))
+                        .child(act("a-rs", crate::i18n::t("Reset 到這裡")).on_click(cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx))))
                 }
             })
             .child(
@@ -769,7 +769,7 @@ impl GitTabs {
                     .into_any_element()
             }
             (Some(_), Some(FileShown::Note(why))) => empty(&p, "", &why, None),
-            (Some(_), _) => empty(&p, "", crate::i18n::t("載入中…"), None),
+            (Some(_), _) => empty(&p, "", crate::i18n::t("載入中"), None),
         };
         on_split(div().id("trtab").flex().flex_1().min_h_0(), SplitKind::HistFiles, cx)
             .child(div().id("hist-ftree").flex_none().w(px(hf)).h_full().py(px(6.)).child(tree))

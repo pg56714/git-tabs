@@ -140,7 +140,7 @@ impl GitTabs {
 
     pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("輸入指令、repo、branch 或 commit…（例如：push my-repo）")));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("輸入指令、repo、branch 或 commit（例如：push my-repo）")));
         input.update(cx, |s, cx| s.focus(window, cx));
         let sub = cx.subscribe_in(&input, window, |this, s, ev: &InputEvent, window, cx| match ev {
             InputEvent::Change => {

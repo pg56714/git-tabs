@@ -1,6 +1,6 @@
 //! State shapes: per-repo state, overlays (menu, modals, toasts) and their callbacks.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -352,9 +352,15 @@ pub struct AddRepoModal {
     pub scan_dir: Entity<InputState>,
     pub found: Vec<String>,
     pub picked: HashSet<String>,
-    pub pin: String,
+    /// Identity id chosen for each listed repo (path -> id); a repo without an entry is chosen later.
+    pub pins: HashMap<String, String>,
     pub url: Entity<InputState>,
     pub clone_to: Entity<InputState>,
+    /// Identity id for the clone, "" for later.
+    pub clone_pin: String,
+    pub clone_open: bool,
+    /// Whether the clone folder box is shown (otherwise the default is used).
+    pub dest_open: bool,
     pub busy: bool,
     pub err: Option<String>,
     pub _subs: Vec<Subscription>,

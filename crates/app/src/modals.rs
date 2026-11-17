@@ -1,6 +1,6 @@
 //! State and actions of the bigger dialogs: add repo, settings (identities) and blame.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use gitcore::config::Identity;
@@ -42,7 +42,7 @@ impl GitTabs {
             }
         });
         crate::debug::log("modal", || "add-repo".into());
-        self.modal = Some(Modal::AddRepo(Box::new(AddRepoModal { scan_dir, found: Vec::new(), picked: HashSet::new(), pin: String::new(), url, clone_to, busy: false, err: None, _subs: vec![sub] })));
+        self.modal = Some(Modal::AddRepo(Box::new(AddRepoModal { scan_dir, found: Vec::new(), picked: HashSet::new(), pins: HashMap::new(), url, clone_to, clone_pin: String::new(), clone_open: false, dest_open: false, busy: false, err: None, _subs: vec![sub] })));
         if !dir.is_empty() {
             self.add_repo_scan(cx);
         }
@@ -89,15 +89,11 @@ impl GitTabs {
 
     pub fn add_repo_pick_one(&mut self, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some(crate::i18n::t("選擇 repo 資料夾").into()) });
-        let pin = match &self.modal {
-            Some(Modal::AddRepo(m)) if !m.pin.is_empty() => Some(m.pin.clone()),
-            _ => None,
-        };
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = rx.await else { return };
             let _ = this.update(cx, |this, cx| {
                 this.modal = None;
-                this.add_repos(paths, pin, cx);
+                this.add_repos(paths.into_iter().map(|p| (p, None)).collect(), cx);
             });
         })
         .detach();
@@ -105,13 +101,24 @@ impl GitTabs {
 
     pub fn add_repo_add_picked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Modal::AddRepo(m)) = &self.modal else { return };
-        let paths: Vec<PathBuf> = m.found.iter().filter(|p| m.picked.contains(*p)).map(PathBuf::from).collect();
-        let pin = Some(m.pin.clone()).filter(|p| !p.is_empty());
+        let paths: Vec<(PathBuf, Option<String>)> = m.found.iter().filter(|p| m.picked.contains(*p)).map(|p| (PathBuf::from(p), m.pins.get(p).cloned())).collect();
         if paths.is_empty() {
             return;
         }
         self.close_modal(window, cx);
-        self.add_repos(paths, pin, cx);
+        self.add_repos(paths, cx);
+    }
+
+    /// Sets (or clears) the identity of some listed repos.
+    pub fn add_repo_set_pins(&mut self, paths: Vec<String>, id: Option<String>, cx: &mut Context<Self>) {
+        let Some(Modal::AddRepo(m)) = &mut self.modal else { return };
+        for p in paths {
+            match &id {
+                Some(id) => m.pins.insert(p, id.clone()),
+                None => m.pins.remove(&p),
+            };
+        }
+        cx.notify();
     }
 
     pub fn add_repo_clone(&mut self, cx: &mut Context<Self>) {
@@ -127,7 +134,7 @@ impl GitTabs {
         let to = m.clone_to.read(cx).value().trim().to_string();
         let base = m.scan_dir.read(cx).value().trim_end_matches(['/', '\\']).to_string();
         let dir = if to.is_empty() { format!("{base}\\{name}") } else { to };
-        let pin = Some(m.pin.clone()).filter(|p| !p.is_empty());
+        let pin = Some(m.clone_pin.clone()).filter(|p| !p.is_empty());
         m.busy = true;
         cx.notify();
         self.work(cx, move || ops::clone(&url, std::path::Path::new(&dir)), move |this, res, cx| {
@@ -138,7 +145,7 @@ impl GitTabs {
                 Ok(path) => {
                     this.modal = None;
                     this.pull_log();
-                    this.add_repos(vec![PathBuf::from(&path)], pin, cx);
+                    this.add_repos(vec![(PathBuf::from(&path), pin)], cx);
                     this.ok(crate::i18n::tr("已 clone {}", &[], &[(crate::format::base_name(&path)).to_string()]), cx);
                 }
                 Err(e) => {

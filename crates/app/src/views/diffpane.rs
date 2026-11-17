@@ -170,7 +170,7 @@ impl GitTabs {
         let Some(r) = self.repo() else { return div().into_any_element() };
         let Some(sel) = r.sel.clone() else { return empty(&p, "◇", crate::i18n::t("選一個檔案來看修改"), None) };
         let key = format!("{}:{}", sel.list.tag(), sel.path);
-        let Some(fd) = r.diff.clone().filter(|_| r.diff_for == key) else { return empty(&p, "", crate::i18n::t("載入中…"), None) };
+        let Some(fd) = r.diff.clone().filter(|_| r.diff_for == key) else { return empty(&p, "", crate::i18n::t("載入中"), None) };
         if fd.binary {
             return empty(&p, "⬚", crate::i18n::t("二進位檔案，無法顯示文字差異"), None);
         }

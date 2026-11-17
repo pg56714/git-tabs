@@ -36,7 +36,7 @@ impl GitTabs {
             }
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("新增 branch…"), |t, w, cx| t.new_branch(None, w, cx)).icon(Ico::Plus));
+        items.push(MenuItem::new(crate::i18n::t("新增 branch"), |t, w, cx| t.new_branch(None, w, cx)).icon(Ico::Plus));
         items
     }
 
@@ -54,7 +54,7 @@ impl GitTabs {
             );
         }
         items.push(MenuItem::sep());
-        items.push(MenuItem::new(crate::i18n::t("管理 identity…"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon(Ico::Settings));
+        items.push(MenuItem::new(crate::i18n::t("管理 identity"), |t, w, cx| t.open_settings(SettingsTab::Ids, None, w, cx)).icon(Ico::Settings));
         items
     }
 
@@ -157,7 +157,7 @@ impl GitTabs {
             .child(sep(&p))
             .child(btn(&p, "stash", Bk::Normal, false, with_icon(Ico::Archive, "Stash")).on_click(cx.listener(|this, _, w, cx| this.stash_push(w, cx))))
             .child(btn(&p, "newbranch", Bk::Normal, false, with_icon(Ico::GitBranchPlus, crate::i18n::t("Branch"))).on_click(cx.listener(|this, _, w, cx| this.new_branch(None, w, cx))))
-            .when_some(busy, |d, b| d.child(div().ml(px(6.)).child(sub(&p, crate::i18n::tr("{b} 執行中…", &[("b", (b).to_string())], &[])))))
+            .when_some(busy, |d, b| d.child(div().ml(px(6.)).child(sub(&p, crate::i18n::tr("{b} 執行中", &[("b", (b).to_string())], &[])))))
             .child(div().flex_1())
             .child(if have_ids {
                 // The identity's name; icon only on a narrow window.
