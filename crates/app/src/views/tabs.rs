@@ -102,10 +102,14 @@ impl GitTabs {
                     .child(
                         div()
                             .id(SharedString::from(format!("x-{i}")))
-                            .px(px(3.))
-                            .rounded(px(4.))
-                            .text_size(px(14.))
-                            .text_color(p.faint)
+                            .w(px(20.))
+                            .h(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(5.))
+                            .text_size(px(18.))
+                            .text_color(p.muted)
                             .cursor_pointer()
                             .opacity(if on { 1. } else { 0. })
                             .group_hover("tab", |s| s.opacity(1.))
@@ -122,29 +126,33 @@ impl GitTabs {
         let plus = div()
             .id("tab-add")
             .flex_none()
-            .w(px(32.))
-            .h(px(30.))
+            .w(px(28.))
+            .h(px(26.))
+            .mb(px(4.))
             .flex()
             .items_center()
             .justify_center()
-            .rounded_t(px(8.))
+            .rounded(px(6.))
             .text_color(p.muted)
             .cursor_pointer()
             .hover(move |s| s.bg(p.hover))
+            .tooltip_text(crate::i18n::t("加入 repo"))
             .on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx)))
-            .child(icon_plus(p.muted));
+            .child(icon_plus(p.text));
         let all = div()
             .id("tab-all")
             .flex_none()
-            .w(px(32.))
-            .h(px(30.))
+            .w(px(28.))
+            .h(px(26.))
+            .mb(px(4.))
             .flex()
             .items_center()
             .justify_center()
-            .rounded_t(px(8.))
+            .rounded(px(6.))
             .text_color(p.muted)
             .cursor_pointer()
             .hover(move |s| s.bg(p.hover))
+            .tooltip_text(crate::i18n::t("所有分頁"))
             .on_click(cx.listener(|this, ev: &gpui_kit::ClickEvent, _, cx| {
                 let items: Vec<MenuItem> = this
                     .repos
@@ -154,15 +162,13 @@ impl GitTabs {
                     .collect();
                 this.open_menu(ev.position(), items, true, cx);
             }))
-            .child(icon_chevron_down(p.muted));
+            .child(icon_chevron_down(p.text));
         div()
             .flex()
-            .flex_none()
+            .flex_1()
             .items_end()
-            .h(px(36.))
-            .pr(px(4.))
+            .h_full()
             .min_w_0()
-            .bg(p.bg)
             .child(
                 div()
                     .id("tabs")
@@ -184,8 +190,14 @@ impl GitTabs {
                     }))
                     .children(tabs),
             )
+            // A thin rule sets the two buttons off from the tabs; they stay plain until the pointer is over them.
+            .child(div().flex_none().w(px(1.)).h(px(16.)).mb(px(7.)).mx(px(6.)).bg(p.border_strong))
             .child(plus)
             .child(all)
+            // The empty space right of the buttons moves the window (and maximises on a double click);
+            // the tabs and buttons themselves must stay clickable. It never gets narrower than 72px, so
+            // there is always a place to grab even when the tabs fill the row.
+            .child(div().flex_1().min_w(px(72.)).h_full().window_control_area(gpui_kit::WindowControlArea::Drag))
             .into_any_element()
     }
 }

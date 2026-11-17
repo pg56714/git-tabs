@@ -66,10 +66,8 @@ fn main() {
     gpui_kit::application().with_assets(ui::AppAssets).run(move |cx| {
         gpui_kit::init(cx);
         views::bind_keys(cx);
-        let options = WindowOptions {
-            window_bounds: Some(app::initial_window(place, cx)),
-            ..Default::default()
-        };
+        // The window draws its own title bar (the tab row lives in it), so the system's is off.
+        let options = WindowOptions { window_bounds: Some(app::initial_window(place, cx)), ..gpui_kit::component::TitleBar::window_options() };
         gpui_kit::open_window(options, cx, move |window, cx| cx.new(|cx| app::GitTabs::new(ctx.clone(), window, cx)))
             .expect("failed to open the window");
         cx.activate(true);

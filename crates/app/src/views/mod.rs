@@ -228,7 +228,8 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
                 this.save_prefs();
             }
         }))
-        .child(this.render_tabs(window, cx))
+        // The tab row is the title bar: it drags the window, and the window buttons sit at its right.
+        .child(gpui_kit::component::TitleBar::new().interactive_children().bg(p.bg).pl(px(6.)).child(this.render_tabs(window, cx)))
         .children(this.render_update_bar(cx))
         .when(has_repo, |d| d.child(this.render_toolbar(window, cx)))
         .child(body)

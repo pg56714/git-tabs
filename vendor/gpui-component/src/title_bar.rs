@@ -44,6 +44,7 @@ pub struct TitleBar {
     style: StyleRefinement,
     children: SmallVec<[AnyElement; 1]>,
     on_close_window: Option<Rc<Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>>>,
+    interactive: bool,
 }
 
 impl TitleBar {
@@ -53,7 +54,16 @@ impl TitleBar {
             style: StyleRefinement::default(),
             children: SmallVec::new(),
             on_close_window: None,
+            interactive: false,
         }
+    }
+
+    /// git-tabs: the children are buttons and tabs, so the whole bar must not be a drag area (on
+    /// Windows the system then takes every click inside it for a title-bar click and the children
+    /// never see it). The caller marks its own empty space with `WindowControlArea::Drag`.
+    pub fn interactive_children(mut self) -> Self {
+        self.interactive = true;
+        self
     }
 
     /// Returns the default title bar options for compatible with the [`crate::TitleBar`].
@@ -326,6 +336,7 @@ impl RenderOnce for TitleBar {
         let is_linux = cfg!(target_os = "linux");
         let is_macos = cfg!(target_os = "macos");
 
+        let interactive = self.interactive;
         let state = window.use_state(cx, |_, _| TitleBarState { should_move: false });
         let radii = crate::window_corner_radii(window, cx);
 
@@ -383,8 +394,10 @@ impl RenderOnce for TitleBar {
                         .justify_between()
                         .flex_shrink_0()
                         .flex_1()
+                        // git-tabs: lets wide children (many tabs) shrink instead of pushing the window buttons off the right edge.
+                        .min_w_0()
                         .when(!is_web, |this| {
-                            this.window_control_area(WindowControlArea::Drag)
+                            this.when(!interactive, |this| this.window_control_area(WindowControlArea::Drag))
                                 .when(window.is_fullscreen(), |this| this.pl_3())
                                 .when(is_linux && is_client_decorated, |this| {
                                     this.child(
