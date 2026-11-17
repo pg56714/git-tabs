@@ -7,6 +7,8 @@
 > - **Windows**: "Windows protected your PC" → **More info** → **Run anyway**
 > - **macOS**: System Settings → Privacy & Security → find git-tabs and click **Open Anyway**, or run `xattr -cr /Applications/git-tabs.app` in Terminal
 > - **Linux**: run `chmod +x` on the AppImage first; the .deb installs as usual
+>
+> Because there is no signature, check what you downloaded: see [Verify your download](#verify-your-download).
 
 A desktop git client with one tab per repository, built for reviewing changes quickly.
 
@@ -24,6 +26,25 @@ Grab the file for your system from the [latest release](https://github.com/pg567
 
 `git-tabs_*_universal.app.tar.gz` is the same macOS app zipped; most people want the `.dmg`.
 
+## Verify your download
+
+Every release carries a `SHA256SUMS` file and a build attestation (GitHub's signed record that the file was built by this repository's release workflow). Either one tells you the file is the one the workflow produced.
+
+```powershell
+# Windows: compare with the line for your file in SHA256SUMS
+Get-FileHash .\git-tabs_windows_x64.exe -Algorithm SHA256
+```
+
+```bash
+# macOS / Linux, with SHA256SUMS in the same folder
+sha256sum -c --ignore-missing SHA256SUMS      # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+
+# Stronger: needs the GitHub CLI
+gh attestation verify <file> --repo pg56714/git-tabs
+```
+
+`SHA256SUMS` sits next to the files on the release page, so it catches a damaged or swapped download but not a compromised GitHub account; the attestation is the check that does. Neither replaces a code signature, so the system warning above stays. The in-app update checks its download against `SHA256SUMS` too, when the release has one.
+
 ## What it does
 
 - **Repo tabs**: each tab shows the branch, ahead/behind, uncommitted changes and which identity the repo uses. Drag to reorder, `Ctrl+1…9` / `Ctrl+Tab` to switch.
@@ -34,20 +55,15 @@ Grab the file for your system from the [latest release](https://github.com/pg567
 - **Remotes**: Sync (fetch → pull → push), fetch, pull (fast-forward, rebase or merge), push (normal or `--force-with-lease`), background fetch. Add, re-point or remove a remote; delete a branch on the remote.
 - **Branches, remotes, tags, stashes, worktrees, submodules, reflog** in the sidebar, with a filter box. Branches with a `/` in their name are grouped into folders; a branch can be renamed. Clicking a stash shows what it holds. A worktree is added from the sidebar and opens as its own tab; so does a submodule.
 - **Conflicts**: a banner while a merge/rebase/cherry-pick is in progress, conflict regions highlighted, "use mine" / "use theirs" / "mark resolved", continue or abort.
-- **Identities**: several SSH keys / names / emails, picked by remote URL or folder, or chosen per repo. A repo no rule matches has no identity until you choose one, and committing there first shows the author git would use. Test a key against GitHub, generate a new ed25519 key.
+- **Identities**: several SSH keys / names / emails, chosen by hand for each repo. A repo with none chosen has no identity, and committing there first shows the author git would use. Test a key against GitHub, generate a new ed25519 key.
 - Panes can be resized by dragging the dividers; their sizes are remembered, and so are the window's size and place. Lots of tabs scroll sideways with the mouse wheel.
 - **Command palette** (`Ctrl+K`), command log of every git command that changed something, light/dark theme.
 
 ## How identities work
 
-Saving identities writes, to your **global** gitconfig:
+You choose an identity for each repo (the identity button in the toolbar). Choosing writes `user.name`, `user.email` and `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes` into that repo's own `.git/config`, so plain `git` in a terminal uses the same identity as the app.
 
-- `includeIf "hasconfig:remote.*.url:git@github.com:org/**"` (and the https / ssh:// forms) for each remote rule,
-- `includeIf "gitdir/i:D:/work/"` for each folder rule,
-
-each pointing at a small file (`identities/<id>.gitconfig` in the app's config folder) holding `user.name`, `user.email` and `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes`.
-
-Plain `git` in a terminal therefore uses the same identity as the app. The app remembers exactly which lines it added and removes only those when you change or delete identities. A repo that matches no rule gets no identity from the app: git uses whatever your global config says, until you choose one for it. Choosing an identity for one repo writes the same three settings into that repo's own `.git/config`, which wins over the global rules.
+Nothing is written to your global gitconfig. Versions before 0.10 picked identities by rules and wrote `includeIf` lines there; on first start the app pins each repo those rules covered, then removes the lines it had added.
 
 ## Languages
 

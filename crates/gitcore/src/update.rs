@@ -96,6 +96,35 @@ fn fetch_text(url: &str) -> Result<String, String> {
     if o.status.success() { Ok(String::from_utf8_lossy(&o.stdout).into_owned()) } else { Err(String::from_utf8_lossy(&o.stderr).trim().to_string()) }
 }
 
+/// The checksum of `name` in the text of a `SHA256SUMS` file (`<hex>  <name>` per line).
+fn expected_sum(sums: &str, name: &str) -> Option<String> {
+    sums.lines().find_map(|l| {
+        let (hash, file) = l.trim().split_once(char::is_whitespace)?;
+        (file.trim_start().trim_start_matches('*') == name).then(|| hash.to_ascii_lowercase())
+    })
+}
+
+fn sha256_hex(p: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let mut f = std::fs::File::open(p).map_err(|e| e.to_string())?;
+    let mut h = Sha256::new();
+    std::io::copy(&mut f, &mut h).map_err(|e| e.to_string())?;
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Checks the downloaded `file` against the release's `SHA256SUMS`. A release without that file
+/// (made before it existed) is accepted; one that has it but does not list this file, or lists a
+/// different checksum, is refused.
+fn verify(rel: &Release, asset: &Asset, file: &Path) -> Result<(), String> {
+    let Some(sums) = rel.assets.iter().find(|a| a.name == "SHA256SUMS") else { return Ok(()) };
+    let text = fetch_text(&sums.browser_download_url).map_err(|e| format!("無法取得 SHA256SUMS：{e}"))?;
+    let want = expected_sum(&text, &asset.name).ok_or_else(|| format!("SHA256SUMS 沒有列出 {}", asset.name))?;
+    if sha256_hex(file)? != want {
+        return Err("下載的檔案和 SHA256SUMS 不符（檔案損壞或被改過）".into());
+    }
+    Ok(())
+}
+
 fn download(url: &str, to: &Path) -> Result<(), String> {
     let o = curl().args(["--max-time", "900", "-o"]).arg(to).arg(url).output().map_err(|e| format!("找不到 curl：{e}"))?;
     if o.status.success() {
@@ -158,7 +187,7 @@ pub fn apply_to(rel: &Release, kind: &Kind) -> Result<Outcome, String> {
             // Next to the target, so the final rename stays on one disk.
             let new = target.with_file_name(format!("{name}.new"));
             download(&asset.browser_download_url, &new).map_err(|e| format!("下載失敗：{e}"))?;
-            if let Err(e) = check_program(&new) {
+            if let Err(e) = check_program(&new).and_then(|_| verify(rel, asset, &new)) {
                 let _ = std::fs::remove_file(&new);
                 return Err(e);
             }
@@ -168,7 +197,10 @@ pub fn apply_to(rel: &Release, kind: &Kind) -> Result<Outcome, String> {
         Kind::Installer => {
             let to = std::env::temp_dir().join(&asset.name);
             download(&asset.browser_download_url, &to).map_err(|e| format!("下載失敗：{e}"))?;
-            check_program(&to)?;
+            if let Err(e) = check_program(&to).and_then(|_| verify(rel, asset, &to)) {
+                let _ = std::fs::remove_file(&to);
+                return Err(e);
+            }
             Command::new(&to).spawn().map_err(|e| format!("無法啟動安裝程式：{e}"))?;
             Ok(Outcome::Quit)
         }
@@ -324,5 +356,47 @@ mod tests {
             a.browser_download_url = url(&d.path().join("nope"));
         }
         assert!(apply_to(&rel, &Kind::AppImage(target)).is_err());
+    }
+
+    #[test]
+    fn reads_a_checksum_list() {
+        let sums = "ABC123  git-tabs_windows_x64.exe
+0f0f *other.AppImage
+";
+        assert_eq!(expected_sum(sums, "git-tabs_windows_x64.exe").as_deref(), Some("abc123"));
+        assert_eq!(expected_sum(sums, "other.AppImage").as_deref(), Some("0f0f"));
+        assert_eq!(expected_sum(sums, "missing.exe"), None);
+    }
+
+    #[test]
+    fn a_checksum_mismatch_blocks_the_swap() {
+        let d = tempfile::tempdir().unwrap();
+        let (served, sums, target) = (d.path().join("served.AppImage"), d.path().join("SHA256SUMS"), d.path().join("git-tabs.AppImage"));
+        fake_program(&served, "NEW");
+        fake_program(&target, "OLD");
+        let rel = |sums_url: String| Release {
+            tag_name: "v9.9.9".into(),
+            html_url: String::new(),
+            assets: vec![
+                Asset { name: "git-tabs_9.9.9_amd64.AppImage".into(), browser_download_url: url(&served) },
+                Asset { name: "SHA256SUMS".into(), browser_download_url: sums_url },
+            ],
+        };
+        // A wrong checksum: refused, and the old file stays.
+        std::fs::write(&sums, format!("{}  git-tabs_9.9.9_amd64.AppImage
+", "0".repeat(64))).unwrap();
+        let err = apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).unwrap_err();
+        assert!(err.contains("SHA256SUMS"), "{err}");
+        assert!(std::fs::read(&target).unwrap().starts_with(b"\x7fELFOLD"));
+        assert!(!d.path().join("git-tabs.AppImage.new").exists());
+        // A file the list does not name: refused too.
+        std::fs::write(&sums, format!("{}  other.AppImage
+", sha256_hex(&served).unwrap())).unwrap();
+        assert!(apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).is_err());
+        // The right checksum: swapped.
+        std::fs::write(&sums, format!("{}  git-tabs_9.9.9_amd64.AppImage
+", sha256_hex(&served).unwrap())).unwrap();
+        assert!(apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).is_ok());
+        assert!(std::fs::read(&target).unwrap().starts_with(b"\x7fELFNEW"));
     }
 }

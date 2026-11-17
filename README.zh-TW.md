@@ -7,6 +7,8 @@
 > - **Windows**：出現「Windows 已保護您的電腦」→ 按「其他資訊」→「仍要執行」
 > - **macOS**：系統設定 → 隱私權與安全性 → 找到 git-tabs 按「強制打開」，或在終端機執行 `xattr -cr /Applications/git-tabs.app`
 > - **Linux**：AppImage 先 `chmod +x` 再執行；deb 直接安裝
+>
+> 因為沒有簽章，請自行驗證下載的檔案：見[驗證下載的檔案](#驗證下載的檔案)。
 
 一個桌面 git 用戶端：每個 repo 一個分頁，專為快速 review 修改而設計。
 
@@ -24,6 +26,25 @@
 
 `git-tabs_*_universal.app.tar.gz` 是同一個 macOS 程式的壓縮檔，一般用 `.dmg` 即可。
 
+## 驗證下載的檔案
+
+每個版本都附有 `SHA256SUMS` 檔和建置證明（GitHub 簽發的紀錄，證明檔案是由本專案的發佈流程建置）。兩者任一都能確認檔案就是流程產出的那一個。
+
+```powershell
+# Windows：和 SHA256SUMS 裡你那個檔案的那一行比對
+Get-FileHash .\git-tabs_windows_x64.exe -Algorithm SHA256
+```
+
+```bash
+# macOS / Linux，SHA256SUMS 放在同一個資料夾
+sha256sum -c --ignore-missing SHA256SUMS      # macOS：shasum -a 256 -c --ignore-missing SHA256SUMS
+
+# 更可靠：需要 GitHub CLI
+gh attestation verify <file> --repo pg56714/git-tabs
+```
+
+`SHA256SUMS` 放在版本頁面、和檔案同一個地方，所以能擋住損壞或被調包的下載，但擋不住 GitHub 帳號被入侵；能擋的是建置證明。兩者都不能取代程式碼簽章，所以上面的系統警告仍然會出現。程式內的自動更新也會用 `SHA256SUMS` 檢查下載的檔案（該版本有這個檔案時）。
+
 ## 功能
 
 - **Repo 分頁**：每個分頁顯示分支、領先／落後幾個 commit、有沒有未提交的修改，以及這個 repo 用的身分。可以拖曳排序，用 `Ctrl+1…9`／`Ctrl+Tab` 切換。
@@ -34,20 +55,15 @@
 - **遠端**：Sync（fetch → pull → push）、fetch、pull（只快轉、rebase 或 merge）、push（一般或 `--force-with-lease`）、背景定時 fetch。可以新增、改網址或移除 remote，也能刪除遠端上的分支。
 - 側欄有**分支、遠端、tag、stash、worktree、submodule、reflog**，上面有篩選框。名稱裡有 `/` 的分支會收進資料夾；分支可以重新命名。點 stash 可以看它裡面改了什麼。worktree 可以從側欄新增，並開成自己的分頁；submodule 也一樣能開成分頁。
 - **衝突**：merge／rebase／cherry-pick 進行中會顯示提示列，衝突區塊用顏色標出，可選「用我的」／「用對方的」／「標記已解決」，再繼續或中止。
-- **身分**：可設定多組 SSH key／名字／email，依 remote 網址或資料夾選擇，也能針對單一 repo 指定。沒有規則對到的 repo 不會被自動套上身分，要自己選；在那之前 commit 會先顯示 git 實際會用的作者。可以測試 key 連 GitHub 對應哪個帳號，也能產生新的 ed25519 key。
+- **身分**：可設定多組 SSH key／名字／email，每個 repo 自己選用哪一組。沒選的 repo 不會有身分；在那之前 commit 會先顯示 git 實際會用的作者。可以測試 key 連 GitHub 對應哪個帳號，也能產生新的 ed25519 key。
 - 各個面板之間的分隔線可以拖曳調整，大小會記住；視窗的大小和位置也會記住。分頁很多時，用滑鼠滾輪就能左右捲動。
 - **指令面板**（`Ctrl+K`）、會改變東西的 git 指令都記在指令紀錄裡、深色／淺色主題。
 
 ## 身分怎麼運作
 
-儲存身分時，會寫入你的**全域** gitconfig：
+每個 repo 自己選身分（工具列的身分按鈕）。選了之後，會把 `user.name`、`user.email` 和 `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes` 寫進那個 repo 自己的 `.git/config`，所以在終端機直接下 `git`，用的也是和 app 一樣的身分。
 
-- 每條 remote 規則寫一組 `includeIf "hasconfig:remote.*.url:git@github.com:org/**"`（另外加上 https 和 ssh:// 的寫法），
-- 每條資料夾規則寫一個 `includeIf "gitdir/i:D:/work/"`，
-
-每一條都指向 app 設定資料夾裡的一個小檔案（`identities/<id>.gitconfig`），裡面是 `user.name`、`user.email` 和 `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes`。
-
-所以在終端機直接下 `git`，用的也是和 app 一樣的身分。app 會記得自己加了哪幾行，修改或刪除身分時只會移除那幾行。沒有規則對到的 repo，app 不會給它身分：在你替它選一個之前，git 用的是你全域設定裡原本的值。對單一 repo 指定身分時，會把同樣三個設定寫進那個 repo 自己的 `.git/config`，優先於全域規則。
+不會寫任何東西到你的全域 gitconfig。0.10 以前的版本是用規則選身分，會在全域寫 `includeIf`；第一次啟動新版時，app 會把那些規則對到的 repo 各自固定好身分，再移除它當初加的那幾行。
 
 ## 語言
 
