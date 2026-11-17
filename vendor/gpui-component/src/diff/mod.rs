@@ -1811,7 +1811,7 @@ fn code_line(
         .text_size(code.font_size)
         .line_height(code.row_height)
         .when(changed && code.change_background, |this| {
-            this.bg(status.opacity(0.13))
+            this.bg(status.opacity(0.10))
         })
         // An overlay, so the change background shows through a translucent fill.
         .when_some(decoration, |this, background| {

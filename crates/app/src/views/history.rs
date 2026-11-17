@@ -319,11 +319,11 @@ impl GitTabs {
                                                 let id = format!("pill-{ix}-{k}");
                                                 match v {
                                                     RefView::Branch { name, current, remotes } => {
-                                                        make(ref_group(&p, name, current, remotes, gh), id, name.to_string(), if current { "head" } else { "branch" })
+                                                        make(ref_group(&p, name, current, remotes, gh, dim), id, name.to_string(), if current { "head" } else { "branch" })
                                                     }
-                                                    RefView::Remote(name) => make(ref_pill(&p, name, "remote", gh), id, name.to_string(), "remote"),
-                                                    RefView::Detached => ref_pill(&p, "", "detached", gh).into_any_element(),
-                                                    RefView::Tag(name) => ref_pill(&p, name, "tag", gh).into_any_element(),
+                                                    RefView::Remote(name) => make(ref_pill(&p, name, "remote", gh, dim), id, name.to_string(), "remote"),
+                                                    RefView::Detached => ref_pill(&p, "", "detached", gh, dim).into_any_element(),
+                                                    RefView::Tag(name) => ref_pill(&p, name, "tag", gh, dim).into_any_element(),
                                                 }
                                             })
                                             .collect::<Vec<AnyElement>>()
@@ -547,10 +547,10 @@ impl GitTabs {
                     .when(!d.refs.is_empty(), |c| c.child(kv("REFS", div().flex().flex_wrap().text_color(p.text).children({
                         let gh = self.on_github();
                         ref_views(&d.refs).into_iter().map(move |v| match v {
-                            RefView::Branch { name, current, remotes } => ref_group(&p, name, current, remotes, gh),
-                            RefView::Remote(name) => ref_pill(&p, name, "remote", gh),
-                            RefView::Detached => ref_pill(&p, "", "detached", gh),
-                            RefView::Tag(name) => ref_pill(&p, name, "tag", gh),
+                            RefView::Branch { name, current, remotes } => ref_group(&p, name, current, remotes, gh, false),
+                            RefView::Remote(name) => ref_pill(&p, name, "remote", gh, false),
+                            RefView::Detached => ref_pill(&p, "", "detached", gh, false),
+                            RefView::Tag(name) => ref_pill(&p, name, "tag", gh, false),
                         })
                     }).into_any_element())))
                     .child(kv(

@@ -158,17 +158,21 @@ pub fn remote_icon(github: bool) -> Ico {
 }
 
 /// `.ref` pill: branch, remote, tag, head, detached.
-pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
+pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool, dim: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
+    // A commit the checked-out branch does not have: its labels fade with its text, as in Fork.
+    let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
+    let (ink, ink2) = if dim { (p.faint, p.faint) } else { (p.text, p.accent) };
     let (bg, border) = match kind {
         "remote" => (rf, rb),
         "tag" => (p.accent_bg, p.accent),
         _ => (lf, lb),
     };
+    let (bg, border) = (fade(bg), fade(border));
     let mark: Option<AnyElement> = match kind {
-        "head" | "detached" => Some(icon(Ico::Check, 14., p.text).into_any_element()),
-        "remote" => Some(icon(remote_icon(github), 13., p.text).into_any_element()),
-        "tag" => Some(icon(Ico::Tag, 12., p.accent).into_any_element()),
+        "head" | "detached" => Some(icon(Ico::Check, 14., ink).into_any_element()),
+        "remote" => Some(icon(remote_icon(github), 13., ink).into_any_element()),
+        "tag" => Some(icon(Ico::Tag, 12., ink2).into_any_element()),
         _ => None,
     };
     let shown = if kind == "detached" { String::new() } else { name.to_string() };
@@ -185,7 +189,7 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
         .border_color(border)
         .font_weight(if kind == "tag" { FontWeight::NORMAL } else { FontWeight::SEMIBOLD })
         .bg(bg)
-        .text_color(p.text)
+        .text_color(ink)
         .text_size(px(12.))
         .when_some(mark, |d, m| d.child(m))
         .when(!shown.is_empty(), |d| d.child(shown))
@@ -228,8 +232,11 @@ pub fn ref_views(refs: &[gitcore::parse::RefLabel]) -> Vec<RefView<'_>> {
 
 /// A local branch's label. When its remote branch is on the same commit, the remote's icon goes in
 /// front of the name (`[icon | \u{2713} main]`), like Fork, rather than a second `origin/main` label.
-pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: bool) -> Div {
+pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: bool, dim: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
+    let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
+    let ink = if dim { p.faint } else { p.text };
+    let (lf, lb, rf, rb) = (fade(lf), fade(lb), fade(rf), fade(rb));
     div()
         .flex_none()
         .mr(px(4.))
@@ -242,7 +249,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
         .overflow_hidden()
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(p.text)
+        .text_color(ink)
         .when(remotes > 0, |d| {
             d.child(
                 div()
@@ -254,7 +261,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                     .bg(rf)
                     .border_r_1()
                     .border_color(rb)
-                    .children((0..remotes.min(3)).map(|_| icon(remote_icon(github), 13., p.text))),
+                    .children((0..remotes.min(3)).map(|_| icon(remote_icon(github), 13., ink))),
             )
         })
         .child(
@@ -265,7 +272,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                 .gap(px(4.))
                 .px(px(6.))
                 .bg(lf)
-                .when(current, |d| d.child(icon(Ico::Check, 14., p.text)))
+                .when(current, |d| d.child(icon(Ico::Check, 14., ink)))
                 .child(name.to_string()),
         )
 }
