@@ -371,13 +371,13 @@ impl GitTabs {
             };
             let (name, email) = (cfg_get("user.name"), cfg_get("user.email"));
             let who_txt = if name.is_empty() && email.is_empty() { crate::i18n::t("（git 沒有設定名稱和 email）").to_string() } else { format!("{name} <{email}>") };
-            let body = crate::i18n::tr("**{}**（{}）沒有符合任何身分的規則，會用 git 的全域設定提交：
+            let body = crate::i18n::tr("**{}**（{}）還沒選身分，會用 git 的全域設定提交：
 
 **{}**
 
 可以點工具列的身分按鈕把它指定給某個身分。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
             let go = std::rc::Rc::new(go);
-            self.confirm(crate::i18n::t("這個 repo 沒有對應的身分"), body, crate::i18n::t("照樣提交"), false, cx, move |this, _, cx| go(this, cx));
+            self.confirm(crate::i18n::t("這個 repo 還沒選身分"), body, crate::i18n::t("照樣提交"), false, cx, move |this, _, cx| go(this, cx));
         } else {
             go(self, cx);
         }

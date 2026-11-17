@@ -1,6 +1,7 @@
-//! Identity rules (ported from src/lib/identity.ts): which SSH key / name / email a repo uses.
+//! Identity helpers. Identities are picked by hand per repo; the old automatic rules are only
+//! matched here once, to pin the repos they covered (`match_identity`), and are then dropped.
 
-use gitcore::config::{Identity, Rule};
+use gitcore::config::Identity;
 use serde_json::Value;
 
 /// git@github.com:org/x.git, https://github.com/org/x, ssh://git@host/org/x -> host/org/x(.git)
@@ -89,28 +90,6 @@ pub fn match_identity<'a>(ids: &'a [Identity], repo_path: &str, remote_url: Opti
     hit
 }
 
-/// Index of the first rule with nothing filled in. Such a rule matches no repo and writes nothing
-/// to the gitconfig, so saving it would only look like a rule.
-pub fn empty_rule(id: &Identity) -> Option<usize> {
-    id.rules.iter().position(|r| r.v.trim().is_empty())
-}
-
-/// Rule that would match this remote's owner, e.g. github.com/acme/*. None for a local-path remote.
-pub fn rule_for_url(remote_url: &str) -> Option<String> {
-    let t = remote_url.trim();
-    let local = t.starts_with(['/', '\\', '.', '~']) || t.to_lowercase().starts_with("file:") || t.chars().nth(1) == Some(':') && t.chars().nth(2).is_some_and(|c| c == '\\' || c == '/');
-    if local {
-        return None;
-    }
-    let u = norm_url(t);
-    let u = u.trim_end_matches(".git");
-    let parts: Vec<&str> = u.split('/').collect();
-    if !parts[0].contains('.') {
-        return None;
-    }
-    Some(if parts.len() >= 3 { format!("{}/{}/*", parts[0], parts[1]) } else { u.to_string() })
-}
-
 pub fn new_identity(existing: &[Identity]) -> Identity {
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     Identity {
@@ -124,19 +103,8 @@ pub fn new_identity(existing: &[Identity]) -> Identity {
         user: String::new(),
         email: String::new(),
         host: "github.com".into(),
-        rules: vec![Rule { t: "remote".into(), v: String::new() }],
+        rules: vec![],
     }
-}
-
-/// includeIf condition -> our rule, when it is one we understand.
-pub fn rule_from_condition(c: &str) -> Option<Rule> {
-    let dir = c.strip_prefix("gitdir/i:").or_else(|| c.strip_prefix("gitdir:"));
-    if let Some(d) = dir {
-        return Some(Rule { t: "dir".into(), v: d.trim_end_matches('/').replace('/', "\\") });
-    }
-    let url = c.strip_prefix("hasconfig:remote.*.url:")?;
-    let n = norm_url(url);
-    Some(Rule { t: "remote".into(), v: n.strip_suffix("**").map(|x| format!("{x}*")).unwrap_or(n) })
 }
 
 fn norm_path(p: &str) -> String {
@@ -154,44 +122,36 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
     let text = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let (f_name, f_email) = (text(found, "name"), text(found, "email"));
     let mut ids: Vec<Identity> = Vec::new();
-    let mut by_file: Vec<(String, usize)> = Vec::new();
-    let add = |ids: &mut Vec<Identity>, existing: &[Identity], make: &dyn Fn(&mut Identity)| -> usize {
+    let mut seen: Vec<String> = Vec::new();
+    let add = |ids: &mut Vec<Identity>, existing: &[Identity], make: &dyn Fn(&mut Identity)| {
         let all: Vec<Identity> = existing.iter().cloned().chain(ids.iter().cloned()).collect();
         let mut id = new_identity(&all);
-        id.rules.clear();
         make(&mut id);
         ids.push(id);
-        ids.len() - 1
     };
+    // One identity per include file, however many conditions point at it.
     for inc in found.get("includes").and_then(Value::as_array).into_iter().flatten() {
-        let rule = rule_from_condition(&text(inc, "condition"));
         let path = text(inc, "path");
-        let slot = match by_file.iter().find(|(p, _)| *p == norm_path(&path)) {
-            Some((_, i)) => *i,
-            None => {
-                let file = file_name(&path);
-                let mut base = file.trim_end_matches(".gitconfig").trim_end_matches(".config").to_string();
-                if let Some(rest) = base.strip_prefix(".gitconfig") {
-                    base = rest.trim_start_matches(['-', '_', '.']).to_string();
-                }
-                let email = text(inc, "email");
-                if base.is_empty() {
-                    base = email.split('@').nth(1).unwrap_or("身分").to_string();
-                }
-                let (n, e, k) = (text(inc, "name"), email, text(inc, "key"));
-                let i = add(&mut ids, existing, &|id| {
-                    id.name = base.clone();
-                    id.user = if n.is_empty() { f_name.clone() } else { n.clone() };
-                    id.email = if e.is_empty() { f_email.clone() } else { e.clone() };
-                    id.key = k.clone();
-                });
-                by_file.push((norm_path(&path), i));
-                i
-            }
-        };
-        if let Some(r) = rule {
-            ids[slot].rules.push(r);
+        if seen.contains(&norm_path(&path)) {
+            continue;
         }
+        seen.push(norm_path(&path));
+        let file = file_name(&path);
+        let mut base = file.trim_end_matches(".gitconfig").trim_end_matches(".config").to_string();
+        if let Some(rest) = base.strip_prefix(".gitconfig") {
+            base = rest.trim_start_matches(['-', '_', '.']).to_string();
+        }
+        let email = text(inc, "email");
+        if base.is_empty() {
+            base = email.split('@').nth(1).unwrap_or("身分").to_string();
+        }
+        let (n, e, k) = (text(inc, "name"), email, text(inc, "key"));
+        add(&mut ids, existing, &|id| {
+            id.name = base.clone();
+            id.user = if n.is_empty() { f_name.clone() } else { n.clone() };
+            id.email = if e.is_empty() { f_email.clone() } else { e.clone() };
+            id.key = k.clone();
+        });
     }
     let used: Vec<String> = existing.iter().chain(ids.iter()).map(|i| norm_path(&i.key)).filter(|k| !k.is_empty()).collect();
     for k in found.get("keys").and_then(Value::as_array).into_iter().flatten() {
@@ -226,7 +186,6 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
             id.email = if comment_is_email { comment.clone() } else { f_email.clone() };
             id.key = path.clone();
             id.host = host.clone();
-            id.rules = vec![Rule { t: "remote".into(), v: String::new() }];
         });
     }
     ids
@@ -235,6 +194,7 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gitcore::config::Rule;
 
     fn id(name: &str, rules: &[(&str, &str)]) -> Identity {
         let mut i = new_identity(&[]);
@@ -248,8 +208,6 @@ mod tests {
         assert_eq!(norm_url("git@github.com:org/x.git"), "github.com/org/x.git");
         assert_eq!(norm_url("https://user@github.com/org/x"), "github.com/org/x");
         assert_eq!(norm_url("ssh://git@host/org/x"), "host/org/x");
-        assert_eq!(rule_for_url("git@github.com:acme/app.git").as_deref(), Some("github.com/acme/*"));
-        assert_eq!(rule_for_url("C:\\code\\repo"), None);
     }
 
     #[test]
@@ -261,14 +219,6 @@ mod tests {
         assert_eq!(match_identity(&ids, "d:\\work\\proj", None).unwrap().name, "B");
         assert_eq!(match_identity(&ids, "d:\\work\\proj", Some("git@github.com:acme/app.git")).unwrap().name, "B", "later identity wins");
         assert!(match_identity(&ids, "C:\\x", Some("git@github.com:other/app.git")).is_none());
-    }
-
-    #[test]
-    fn empty_rules_are_found() {
-        assert_eq!(empty_rule(&id("A", &[("remote", "github.com/acme/*"), ("dir", "  ")])), Some(1));
-        assert_eq!(empty_rule(&id("B", &[("remote", "")])), Some(0), "the placeholder a new identity starts with");
-        assert_eq!(empty_rule(&id("C", &[("remote", "github.com/acme/*")])), None);
-        assert_eq!(empty_rule(&id("D", &[])), None, "an identity without rules is pinned by hand");
     }
 
     #[test]
@@ -285,7 +235,7 @@ mod tests {
         });
         let ids = from_found(&v, &[]);
         assert_eq!(ids.len(), 2, "the work key is already used by the include");
-        assert_eq!(ids[0].rules[0].t, "dir");
+        assert!(ids[0].rules.is_empty());
         assert_eq!(ids[0].email, "w@corp.com");
         assert_eq!(ids[1].name, "預設 key");
     }

@@ -189,36 +189,26 @@ fn conflict_state_and_abort() {
 }
 
 #[test]
-fn identities_write_include_if_and_pin() {
+fn identities_are_pinned_per_repo_and_never_written_globally() {
     let _s = serial();
     let (d, ctx) = repo();
     let g = isolate().join("gitconfig");
+    let before = std::fs::read_to_string(&g).unwrap();
     let ids = json!([
-        {"id": "p", "name": "個人", "user": "Sam", "email": "sam@me.com", "key": "C:\\k\\id_p", "rules": [{"t": "remote", "v": "github.com/sam/*"}]},
-        {"id": "e", "name": "EMU", "user": "Sam", "email": "sam@corp.com", "key": "C:\\k\\id_e", "rules": [{"t": "dir", "v": "D:\\work"}]}
+        {"id": "p", "name": "個人", "user": "Sam", "email": "sam@me.com", "key": "C:\\k\\id_p"},
+        {"id": "e", "name": "EMU", "user": "Sam", "email": "sam@corp.com", "key": "C:\\k\\id_e"}
     ]);
-    call(&ctx, "identities_apply", json!({"identities": ids, "default": "p"}));
-    let text = std::fs::read_to_string(&g).unwrap();
-    assert!(text.contains("hasconfig:remote.*.url:git@github.com:sam/**"));
-    assert!(text.contains("gitdir/i:D:/work/"));
-    // A repo whose remote matches the "p" rule picks up p's email through the include.
-    git(d.path(), &["remote", "add", "origin", "git@github.com:sam/x.git"]);
-    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@me.com");
-    // Re-applying replaces our lines instead of piling them up.
-    call(&ctx, "identities_apply", json!({"identities": ids, "default": "p"}));
-    let again = std::fs::read_to_string(&g).unwrap();
-    assert_eq!(again.matches("git@github.com:sam/**").count(), 1);
-    // Pinning writes the repo's own config, which wins over the include.
+    call(&ctx, "identities_apply", json!({"identities": ids}));
+    assert_eq!(std::fs::read_to_string(&g).unwrap(), before, "saving identities leaves the global gitconfig alone");
+    // Pinning writes the repo's own config.
     call(&ctx, "identity_pin", json!({"repo": r(&d), "identity": ids[1]}));
     assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@corp.com");
     assert!(git(d.path(), &["config", "--local", "core.sshCommand"]).contains("C:/k/id_e"));
     call(&ctx, "identity_pin", json!({"repo": r(&d), "identity": null}));
-    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@me.com");
-    // Removing every identity leaves the global config as it was.
-    call(&ctx, "identities_apply", json!({"identities": [], "default": null}));
-    let after = std::fs::read_to_string(&g).unwrap();
-    assert!(!after.contains("includeIf"));
-    assert!(!after.contains("include"), "{after}");
+    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "test@example.com");
+    // The saved identities no longer carry rules.
+    let saved = std::fs::read_to_string(ctx.config_dir.join("config.json")).unwrap_or_default();
+    assert!(!saved.contains("rules"), "{saved}");
 }
 
 /// Puts the shared global gitconfig back when a test ends, also when it fails, so a fixture
@@ -300,33 +290,26 @@ fn tidy_takes_out_the_old_default_identity_includes_only() {
 }
 
 #[test]
-fn apply_cleans_up_lines_it_lost_track_of_and_writes_each_once() {
+fn apply_removes_every_include_older_versions_wrote_and_keeps_the_users_own() {
     let _s = serial();
     let (d, ctx) = repo();
     let _g = keep_global();
-    let (_, neighbour) = leave_old_includes(&ctx.config_dir);
-    git(d.path(), &["remote", "add", "origin", "git@github.com:sam/x.git"]);
-    // The same rule twice, which the settings screen allows.
-    let ids = json!([{"id": "p", "name": "個人", "user": "Sam", "email": "sam@me.com", "key": "C:\\k\\id_p",
-        "rules": [{"t": "remote", "v": "github.com/sam/*"}, {"t": "remote", "v": "github.com/sam/*"}, {"t": "dir", "v": "D:\\work"}]}]);
-    for round in 0..3 {
-        call(&ctx, "identities_apply", json!({"identities": ids}));
-        assert_eq!(global_all("includeIf.hasconfig:remote.*.url:git@github.com:sam/**.path").len(), 1, "round {round}");
-        assert_eq!(global_all("includeIf.gitdir/i:D:/work/.path").len(), 1, "round {round}");
-        assert_eq!(lines_into_identities(&ctx.config_dir), 5, "round {round}: four remote conditions and one folder, no include.path");
-        assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour.clone()], "round {round}");
-        assert_eq!(global_all(MINE_IF).len(), 1, "round {round}");
-        assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "sam@me.com", "round {round}");
-        let mut cfg = gitcore::config::load(&ctx.config_dir);
-        assert_eq!(cfg.managed.len(), 5, "round {round}: managed has no copies either");
-        // What the settings screen used to do: save its stale copy over `managed`.
-        cfg.managed.clear();
-        gitcore::config::save(&ctx.config_dir, &cfg).unwrap();
+    let (ours, neighbour) = leave_old_includes(&ctx.config_dir);
+    // Rules an older version wrote: several conditions pointing at one identity file.
+    for c in ["hasconfig:remote.*.url:git@github.com:sam/**", "gitdir/i:D:/work/"] {
+        git(d.path(), &["config", "--global", "--add", &format!("includeIf.{c}.path"), &ours]);
     }
-    call(&ctx, "identities_apply", json!({"identities": []}));
+    // A leftover `managed` that lost track of them must not matter.
+    let ids = json!([{"id": "p", "name": "個人", "user": "Sam", "email": "sam@me.com", "key": "C:\\k\\id_p"}]);
+    call(&ctx, "identities_apply", json!({"identities": ids}));
     assert_eq!(lines_into_identities(&ctx.config_dir), 0);
-    assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour]);
+    assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour.clone()]);
     assert_eq!(global_all(MINE_IF).len(), 1);
+    assert_eq!(git(d.path(), &["config", "user.email"]).trim(), "test@example.com");
+    assert!(!ctx.config_dir.join("identities").join("idpersonal.gitconfig").exists());
+    // Saving again changes nothing.
+    call(&ctx, "identities_apply", json!({"identities": ids}));
+    assert_eq!(global_all("include.path"), vec![MINE.to_string(), neighbour]);
 }
 
 #[test]

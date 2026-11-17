@@ -43,16 +43,14 @@ impl GitTabs {
     fn identity_menu(&self) -> Vec<MenuItem> {
         let Some(r) = self.repo() else { return vec![] };
         let w = self.identity_of(r);
-        // Only the identities: the one in use is checked, whether it was picked here or comes from
-        // a rule in the settings (then it says so). Picking one keeps it for this repo.
+        // Only the identities: the one pinned to this repo is checked. Picking one keeps it for this repo.
         let mut items = vec![MenuItem::header(crate::i18n::tr("這個 repo（{}）用哪個身分", &[], &[(r.name).to_string()]))];
         for id in &self.cfg.identities {
             let key = id.id.clone();
             let checked = w.id.as_ref().is_some_and(|x| x.id == id.id);
             items.push(
                 MenuItem::new(id.name.clone(), move |t, _, cx| t.set_pin(key.clone(), cx))
-                    .checked(checked)
-                    .hint(if checked && !w.pinned { crate::i18n::t("符合規則") } else { "" }),
+                    .checked(checked),
             );
         }
         items.push(MenuItem::sep());
@@ -165,7 +163,7 @@ impl GitTabs {
                 // The identity's name; icon only on a narrow window.
                 let label: String = match &who.id {
                     Some(id) if wide => id.name.clone(),
-                    None if wide => crate::i18n::t("沒有對應的身分").into(),
+                    None if wide => crate::i18n::t("還沒選身分").into(),
                     None => "?".into(),
                     _ => String::new(),
                 };

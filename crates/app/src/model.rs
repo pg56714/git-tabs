@@ -321,18 +321,11 @@ pub struct IdDraft {
     pub host: Entity<InputState>,
     pub user: Entity<InputState>,
     pub email: Entity<InputState>,
-    pub rules: Vec<RuleDraft>,
     pub test: Option<Result<SshResult, ()>>,
     pub testing: bool,
     pub kg: KeyGen,
     pub gen_path: Entity<InputState>,
     pub gen_pass: Entity<InputState>,
-}
-
-pub struct RuleDraft {
-    /// "remote" or "dir"
-    pub t: String,
-    pub v: Entity<InputState>,
 }
 
 pub struct SettingsModal {

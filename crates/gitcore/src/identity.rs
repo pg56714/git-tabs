@@ -1,9 +1,9 @@
 //! Identities: which SSH key / name / email a repo uses.
 //!
-//! Rules become `includeIf` entries in the global gitconfig, each pointing at a small
-//! config file this app writes, so plain `git` in a terminal picks the same identity.
-//! Every include that points into this app's `identities` folder counts as ours, listed in
-//! `managed` or not, so lines an older version left behind are cleaned up too.
+//! An identity is chosen by hand per repo and written into that repo's own config (`pin`), so
+//! plain `git` in a terminal uses it too. Older versions wrote `includeIf` rules into the global
+//! gitconfig; every include that points into this app's `identities` folder counts as ours,
+//! listed in `managed` or not, and `apply` removes them.
 
 use crate::config::{Identity, Managed};
 use crate::runner::{command, run};
@@ -115,113 +115,24 @@ pub fn ssh_command(key: &str) -> String {
     format!("ssh -i \"{}\" -o IdentitiesOnly=yes", slash(key.trim()))
 }
 
-fn identity_file(cfg_dir: &Path, id: &str) -> PathBuf {
-    let safe: String = id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
-    cfg_dir.join("identities").join(format!("{safe}.gitconfig"))
-}
-
-fn git_cfg(args: &[&str]) -> Result<(), String> {
-    let o = run(None, args, None, true);
-    if o.ok() { Ok(()) } else { Err(o.message()) }
-}
-
-/// includeIf conditions for one rule.
-pub fn conditions(t: &str, v: &str) -> Vec<String> {
-    let v = v.trim();
-    if v.is_empty() {
-        return vec![];
-    }
-    if t == "dir" {
-        let mut p = slash(v);
-        if !p.ends_with('/') {
-            p.push('/');
-        }
-        return vec![format!("gitdir/i:{p}")];
-    }
-    // "github.com/org/*" -> ssh and https URL globs
-    let v = v.trim_start_matches("https://").trim_start_matches("ssh://").trim_start_matches("git@");
-    let v = v.replacen(':', "/", 1);
-    let (host, rest) = v.split_once('/').unwrap_or((v.as_str(), "**"));
-    let rest = if rest.ends_with('*') && !rest.ends_with("**") { format!("{rest}*") } else { rest.to_string() };
-    vec![
-        format!("hasconfig:remote.*.url:git@{host}:{rest}"),
-        format!("hasconfig:remote.*.url:https://{host}/{rest}"),
-        // A user name in the URL (https://alice@host/...) is part of what git compares.
-        format!("hasconfig:remote.*.url:https://*@{host}/{rest}"),
-        format!("hasconfig:remote.*.url:ssh://git@{host}/{rest}"),
-    ]
-}
-
-/// Rewrites this app's part of the global gitconfig. Returns what was added.
-///
-/// Our part is what `old` lists plus every include that points into our identities folder,
-/// listed or not: `managed` has lost lines before, and older versions wrote an unconditional
-/// `include.path` for a default identity. Each key/value is written once, however many rules
-/// ask for it.
-pub fn apply(cfg_dir: &Path, ids: &[Identity], old: &[Managed]) -> Result<Vec<Managed>, String> {
+/// Takes this app's part out of the global gitconfig: what `old` lists plus every include that
+/// points into our identities folder, listed or not (`managed` has lost lines before). Returns
+/// what is now written by the app: nothing, since identities are pinned per repo.
+pub fn apply(cfg_dir: &Path, _ids: &[Identity], old: &[Managed]) -> Result<Vec<Managed>, String> {
     let dir = cfg_dir.join("identities");
     let home = home();
     let old: Vec<Managed> = old.iter().map(|m| Managed { key: canon(&m.key), value: m.value.clone() }).collect();
     let present = global_includes()?;
     let ours: Vec<Managed> = present.iter().filter(|m| old.contains(m) || points_into(&m.value, &dir, &home)).cloned().collect();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut files = Vec::new();
-    for id in ids {
-        let f = identity_file(cfg_dir, &id.id);
-        let fs = f.display().to_string();
-        // Starts empty, so a setting the identity no longer has does not stay behind.
-        std::fs::write(&f, "").map_err(|e| e.to_string())?;
-        if !id.user.trim().is_empty() {
-            git_cfg(&["config", "-f", &fs, "user.name", id.user.trim()])?;
-        }
-        if !id.email.trim().is_empty() {
-            git_cfg(&["config", "-f", &fs, "user.email", id.email.trim()])?;
-        }
-        if !id.key.trim().is_empty() {
-            git_cfg(&["config", "-f", &fs, "core.sshCommand", &ssh_command(&id.key)])?;
-        }
-        files.push((id, slash(&fs)));
-    }
-    let mut added: Vec<Managed> = Vec::new();
-    for (id, f) in &files {
-        for r in &id.rules {
-            for c in conditions(&r.t, &r.v) {
-                let m = Managed { key: format!("includeIf.{c}.path"), value: f.clone() };
-                // Two rules can come to the same condition; git needs the line once.
-                if !added.contains(&m) {
-                    added.push(m);
-                }
-            }
-        }
-    }
-    // New lines go in first and the old ones come out after, so a failure half way leaves every
-    // repo with an identity (the old one, or both) instead of none. A line that is already there
-    // once stays; one that is there twice is taken out and written again.
-    let canonical = |m: &Managed| Managed { key: canon(&m.key), value: m.value.clone() };
-    let copies = |m: &Managed| present.iter().filter(|p| **p == canonical(m)).count();
-    let (keep, write): (Vec<&Managed>, Vec<&Managed>) = added.iter().partition(|m| copies(m) == 1);
-    let keep: Vec<Managed> = keep.into_iter().map(canonical).collect();
-    for m in &write {
-        if copies(m) == 0 {
-            git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
-        }
-    }
-    let stale: Vec<Managed> = ours.iter().filter(|m| !keep.contains(m)).cloned().collect();
-    let dupes: Vec<Managed> = write.iter().filter(|m| copies(m) > 1).map(|m| (*m).clone()).collect();
-    remove(&stale)?;
-    for m in &dupes {
-        git_cfg(&["config", "--global", "--add", &m.key, &m.value])?;
-    }
-    // Files of identities that are gone.
+    // Identities are picked by hand now (pinned into each repo's own config), so nothing is
+    // written to the global gitconfig any more; only what older versions wrote goes.
+    remove(&ours)?;
     if let Ok(rd) = std::fs::read_dir(&dir) {
-        let wanted: Vec<PathBuf> = ids.iter().map(|i| identity_file(cfg_dir, &i.id)).collect();
         for e in rd.flatten() {
-            if !wanted.contains(&e.path()) {
-                let _ = std::fs::remove_file(e.path());
-            }
+            let _ = std::fs::remove_file(e.path());
         }
     }
-    Ok(added)
+    Ok(Vec::new())
 }
 
 /// Removes a key from the repo's own config. Git exits 5 when it was not set; that is not worth
@@ -438,15 +349,6 @@ pub fn detect(home: &Path, skip: &[String]) -> Found {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn rule_conditions() {
-        assert_eq!(conditions("dir", "D:\\work"), vec!["gitdir/i:D:/work/"]);
-        let c = conditions("remote", "github.com/acme/*");
-        assert_eq!(c[0], "hasconfig:remote.*.url:git@github.com:acme/**");
-        assert_eq!(c[1], "hasconfig:remote.*.url:https://github.com/acme/**");
-        assert!(conditions("remote", " ").is_empty());
-    }
 
     #[test]
     fn paths_into_our_folder_ignore_slashes_and_case() {

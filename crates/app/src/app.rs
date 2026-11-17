@@ -309,6 +309,7 @@ impl GitTabs {
             cx.notify();
         });
         this.offer_detected_identities(cx);
+        this.migrate_rules(cx);
         this.tidy_global_includes(cx);
         for i in 0..this.repos.len() {
             let p = this.repos[i].path.clone();
@@ -339,6 +340,52 @@ impl GitTabs {
                 }
             }
         });
+    }
+
+    /// Identities used to be picked by rules (includeIf in the global gitconfig). They are
+    /// picked by hand now, so once: pin every repo the old rules matched, write that into the
+    /// repo's own config, then take the rules and their global includeIf lines away.
+    fn migrate_rules(&mut self, cx: &mut Context<Self>) {
+        if !self.cfg.identities.iter().any(|i| !i.rules.is_empty()) {
+            return;
+        }
+        let ids = self.cfg.identities.clone();
+        let repos: Vec<String> = self.cfg.repos.iter().filter(|r| r.pin.is_none()).map(|r| r.path.clone()).collect();
+        let ctx = self.ctx.clone();
+        self.work(
+            cx,
+            move || {
+                let mut pins: Vec<(String, String)> = Vec::new();
+                for path in repos {
+                    let url = gitcore::ops::remote_url(Path::new(&path));
+                    if let Some(id) = crate::identity::match_identity(&ids, &path, url.as_deref()) {
+                        let _ = gitcore::dispatch(&ctx, "identity_pin", serde_json::json!({ "repo": path, "identity": id }));
+                        pins.push((path, id.id.clone()));
+                    }
+                }
+                pins
+            },
+            |this, pins, cx| {
+                for (path, id) in &pins {
+                    if let Some(e) = this.cfg.repos.iter_mut().find(|x| &x.path == path) {
+                        e.pin = Some(id.clone());
+                    }
+                }
+                for i in &mut this.cfg.identities {
+                    i.rules.clear();
+                }
+                this.save_config();
+                let (ctx, ids) = (this.ctx.clone(), this.cfg.identities.clone());
+                this.work(cx, move || drop(gitcore::dispatch(&ctx, "identities_apply", serde_json::json!({ "identities": ids }))), |this, _, cx| {
+                    this.pull_log();
+                    cx.notify();
+                });
+                if !pins.is_empty() {
+                    this.toast(crate::i18n::tr("身分改成手動選擇：{} 個 repo 已依舊規則固定好身分", &[], &[pins.len().to_string()]), ToastKind::Info, None, cx);
+                }
+                cx.notify();
+            },
+        );
     }
 
     /// Versions with a default identity wrote an unconditional include.path for it into the
@@ -1242,11 +1289,10 @@ impl GitTabs {
         self.cfg.repos.iter().find(|x| Path::new(&x.path) == r.path).and_then(|x| x.pin.clone())
     }
 
-    /// The identity git will use for this repo: a pin, else the first matching rule, else none.
+    /// The identity pinned to this repo by hand, if any.
     pub fn identity_of(&self, r: &RepoState) -> IdentityInfo {
-        let rule = crate::identity::match_identity(&self.cfg.identities, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).cloned();
         let pinned = self.pin_of(r).and_then(|pin| self.cfg.identities.iter().find(|i| i.id == pin).cloned());
-        IdentityInfo { pinned: pinned.is_some(), id: pinned.or(rule) }
+        IdentityInfo { id: pinned }
     }
 
     // ----- tabs and views -----
@@ -1378,8 +1424,6 @@ pub fn gated<T>(gate: &Gate, ticket: u64, f: impl FnOnce() -> T) -> T {
 
 pub struct IdentityInfo {
     pub id: Option<gitcore::config::Identity>,
-    /// Picked for this repo by hand, rather than matched by a rule.
-    pub pinned: bool,
 }
 
 pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {

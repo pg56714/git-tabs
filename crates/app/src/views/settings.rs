@@ -1,7 +1,6 @@
 //! The big dialogs: settings (SettingsModal.vue), add repo (AddRepoModal.vue) and blame
 //! (BlameModal.vue).
 
-use gitcore::config::Identity;
 use gpui_kit::component::input::Input;
 use gpui_kit::{
     AnyElement, ClickEvent, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _,
@@ -10,7 +9,6 @@ use gpui_kit::{
 
 use crate::app::GitTabs;
 use crate::format::{ago, base_name, date_time, short};
-use crate::identity::{match_identity, norm_url};
 use crate::model::*;
 use crate::ui::*;
 
@@ -53,23 +51,9 @@ impl GitTabs {
         div().px(px(8.)).py(px(6.)).rounded(px(6.)).bg(bg).text_color(fg).text_size(px(12.)).child(text).into_any_element()
     }
 
-    fn drafts_snapshot(&self, cx: &gpui_kit::App) -> Vec<Identity> {
-        let Some(Modal::Settings(m)) = &self.modal else { return vec![] };
-        m.ids
-            .iter()
-            .map(|d| {
-                let mut id = d.id.clone();
-                id.name = d.name.read(cx).value().to_string();
-                id.rules = d.rules.iter().map(|r| gitcore::config::Rule { t: r.t.clone(), v: r.v.read(cx).value().to_string() }).collect();
-                id
-            })
-            .collect()
-    }
-
     pub fn render_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         self.settings_take_pending(window, cx);
         let p = self.pal;
-        let snapshot = self.drafts_snapshot(cx);
         let Some(Modal::Settings(m)) = &self.modal else { return div().into_any_element() };
         let tab = m.tab;
         let tabs = seg(&p, &[("ids", crate::i18n::t("身分與 SSH key")), ("general", crate::i18n::t("一般"))], if tab == SettingsTab::Ids { "ids" } else { "general" }, |v| {
@@ -112,12 +96,12 @@ impl GitTabs {
             if let Some(n) = &m.notice {
                 body.push(self.info_line(0, n.clone()));
             }
-            body.push(sub(&p, crate::i18n::t("依照 remote 網址或資料夾自動選身分。儲存時會寫進 git 全域設定的 includeIf，所以在終端機執行的 git 也會用同一個身分。")).into_any_element());
+            body.push(sub(&p, crate::i18n::t("身分由你自己選：用工具列右上的身分按鈕，替每個 repo 選一個。選了就寫進那個 repo 自己的 git 設定，所以在終端機執行的 git 也會用同一個身分。")).into_any_element());
             if m.ids.is_empty() {
                 body.push(div().p(px(16.)).border_1().border_color(p.border).rounded(px(10.)).text_color(p.muted).text_center().child(crate::i18n::t("還沒有身分。按「＋ 新增身分」，填好 SSH key 和 email。")).into_any_element());
             }
             for (i, d) in m.ids.iter().enumerate() {
-                body.push(self.render_id_card(i, d, &snapshot, cx));
+                body.push(self.render_id_card(i, d, cx));
             }
             // ---- add / scan
             let scanning = m.scanning;
@@ -131,44 +115,6 @@ impl GitTabs {
                     .child(btn(&p, "id-scan", Bk::Normal, false, if scanning { crate::i18n::t("尋找中…") } else { crate::i18n::t("從這台電腦找") }).tooltip_text(crate::i18n::t("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf")).when(!scanning, |b| b.on_click(cx.listener(|this, _, _, cx| this.settings_scan(cx)))))
                     .into_any_element(),
             );
-            // ---- repos without a matching rule
-            if !snapshot.is_empty() {
-                let unmatched: Vec<usize> = self
-                    .repos
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, r)| self.pin_of(r).is_none() && match_identity(&snapshot, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).is_none())
-                    .map(|(i, _)| i)
-                    .collect();
-                for ri in &unmatched {
-                    let r = &self.repos[*ri];
-                    let url = norm_url(r.summary.as_ref().and_then(|s| s.remote_url.as_deref()).unwrap_or(""));
-                    let ri = *ri;
-                    let names: Vec<String> = snapshot.iter().map(|x| x.name.clone()).collect();
-                    body.push(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .px(px(8.))
-                            .py(px(4.))
-                            .rounded(px(6.))
-                            .text_size(px(12.))
-                            .bg(p.warn_bg)
-                            .text_color(p.warn)
-                            .child(div().child(crate::i18n::tr("{}（{}）{}", &[], &[(r.name).to_string(), (if url.is_empty() { crate::i18n::t("沒有 remote").into() } else { url }).to_string(), crate::i18n::t("沒有對應的身分").to_string()])))
-                            .child(div().flex_1())
-                            .child(btn(&p, SharedString::from(format!("assign-{ri}")), Bk::Normal, true, crate::i18n::t("指定給… ▾")).on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                                let items = names.iter().enumerate().map(|(k, n)| MenuItem::new(n.clone(), move |t, w, cx| t.settings_assign(ri, k, w, cx))).collect();
-                                this.open_menu(ev.position(), items, true, cx);
-                            })))
-                            .into_any_element(),
-                    );
-                }
-                if unmatched.is_empty() && !self.repos.is_empty() {
-                    body.push(self.info_line(0, crate::i18n::t("✓ 開著的 repo 都有對應的身分").into()));
-                }
-            }
         } else {
             let theme = m.theme.clone();
             let fetch = m.fetch.clone();
@@ -262,19 +208,12 @@ impl GitTabs {
         self.dialog(div().child(crate::i18n::t("設定")).into_any_element(), div().flex().flex_col().gap(px(10.)).children(body).into_any_element(), vec![cancel.into_any_element(), save.into_any_element()], 880., cx)
     }
 
-    fn render_id_card(&self, i: usize, d: &IdDraft, snapshot: &[Identity], cx: &mut Context<Self>) -> AnyElement {
+    fn render_id_card(&self, i: usize, d: &IdDraft, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
         let matched: Vec<String> = self
             .repos
             .iter()
-            .filter(|r| {
-                let pin = self.pin_of(r);
-                if let Some(pin) = pin {
-                    return pin == d.id.id;
-                }
-                let hit = match_identity(snapshot, &r.path.display().to_string(), r.summary.as_ref().and_then(|s| s.remote_url.as_deref())).map(|x| x.id.clone());
-                hit.or_else(|| Some(String::new()).filter(|_| false)).is_some_and(|x| x == d.id.id)
-            })
+            .filter(|r| self.pin_of(r).is_some_and(|pin| pin == d.id.id))
             .map(|r| r.name.clone())
             .collect();
         let row = |label: &str, content: AnyElement| self.labeled(label, content);
@@ -358,44 +297,7 @@ impl GitTabs {
         rows.push(row(crate::i18n::t("主機"), div().w(px(200.)).child(Input::new(&d.host)).into_any_element()));
         rows.push(row("user.name", Input::new(&d.user).into_any_element()));
         rows.push(row("user.email", Input::new(&d.email).into_any_element()));
-        rows.push(sub(&p, crate::i18n::t("什麼時候用這個身分（符合任一條）")).into_any_element());
-        for (j, ru) in d.rules.iter().enumerate() {
-            let remote = ru.t == "remote";
-            rows.push(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .child(btn(&p, SharedString::from(format!("rt-{i}-{j}")), Bk::Normal, true, if remote { crate::i18n::t("remote 網址符合 ▾") } else { crate::i18n::t("資料夾在底下 ▾") }).w(px(160.)).on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Settings(m)) = &mut this.modal
-                            && let Some(r) = m.ids.get_mut(i).and_then(|d| d.rules.get_mut(j))
-                        {
-                            r.t = if r.t == "remote" { "dir".into() } else { "remote".into() };
-                        }
-                        cx.notify();
-                    })))
-                    .child(div().flex_1().child(Input::new(&ru.v)))
-                    .child(btn(&p, SharedString::from(format!("rd-{i}-{j}")), Bk::Ghost, true, "×").tooltip_text(crate::i18n::t("刪除規則")).on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Settings(m)) = &mut this.modal
-                            && let Some(d) = m.ids.get_mut(i)
-                            && j < d.rules.len()
-                        {
-                            d.rules.remove(j);
-                        }
-                        cx.notify();
-                    })))
-                    .into_any_element(),
-            );
-        }
-        rows.push(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(btn(&p, SharedString::from(format!("ra-{i}")), Bk::Normal, true, crate::i18n::t("＋ 規則")).on_click(cx.listener(move |this, _, w, cx| this.settings_add_rule(i, w, cx))))
-                .child(sub(&p, crate::i18n::tr("目前對應：{}", &[], &[(if matched.is_empty() { crate::i18n::t("（沒有開著的 repo 符合）").to_string() } else { matched.join(crate::i18n::t("、")) }).to_string()])))
-                .into_any_element(),
-        );
+        rows.push(sub(&p, crate::i18n::tr("目前用在：{}", &[], &[(if matched.is_empty() { crate::i18n::t("（沒有開著的 repo 選用這個身分）").to_string() } else { matched.join(crate::i18n::t("、")) }).to_string()])).into_any_element());
         div().flex().flex_col().gap(px(8.)).p(px(12.)).border_1().border_color(p.border).rounded(px(10.)).children(rows).into_any_element()
     }
 

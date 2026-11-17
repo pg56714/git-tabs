@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 #[serde(default)]
 pub struct RepoEntry {
     pub path: String,
-    /// Identity id pinned to this repo, overriding the rules.
+    /// Identity id pinned to this repo by hand.
     pub pin: Option<String>,
 }
 
@@ -32,6 +32,8 @@ pub struct Identity {
     pub user: String,
     pub email: String,
     pub host: String,
+    /// Old automatic rules. Only read, so a saved config can be moved to pinned repos; never written.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<Rule>,
 }
 

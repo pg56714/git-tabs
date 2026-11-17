@@ -3,14 +3,14 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use gitcore::config::{Identity, Rule};
+use gitcore::config::Identity;
 use gitcore::ops;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::{AppContext as _, Context, PathPromptOptions, Window};
 use serde_json::json;
 
 use crate::app::GitTabs;
-use crate::identity::{empty_rule, from_found, new_identity, rule_for_url};
+use crate::identity::{from_found, new_identity};
 use crate::model::*;
 
 fn input(window: &mut Window, cx: &mut Context<GitTabs>, value: &str, placeholder: &str) -> gpui_kit::Entity<InputState> {
@@ -174,7 +174,6 @@ impl GitTabs {
     // ----- settings -----
 
     fn make_draft(&mut self, id: Identity, window: &mut Window, cx: &mut Context<Self>) -> IdDraft {
-        let rules = id.rules.iter().map(|r| RuleDraft { t: r.t.clone(), v: input(window, cx, &r.v, if r.t == "remote" { "github.com/your-org/*" } else { "D:\\work\\" }) }).collect();
         let slug: String = id.account.chars().chain(id.name.chars()).filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect::<String>().to_lowercase();
         let slug = if slug.is_empty() { id.id.clone() } else { slug };
         let home = self.home_dir();
@@ -186,7 +185,6 @@ impl GitTabs {
             email: input(window, cx, &id.email, "name@example.com"),
             gen_path: input(window, cx, &format!("{home}\\.ssh\\id_ed25519_{slug}"), ""),
             gen_pass: input(window, cx, "", crate::i18n::t("留空就不設密碼")),
-            rules,
             test: None,
             testing: false,
             kg: KeyGen::default(),
@@ -201,7 +199,7 @@ impl GitTabs {
     pub fn open_settings(&mut self, tab: SettingsTab, detected: Option<Vec<Identity>>, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let ids = detected.unwrap_or_else(|| self.cfg.identities.clone());
-        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱、email 和規則後按「儲存」才會生效；不需要的按垃圾桶刪掉。", &[], &[(ids.len()).to_string()]));
+        let notice = (!ids.is_empty() && self.cfg.identities.is_empty()).then(|| crate::i18n::tr("已從這台電腦找到 {} 個身分（~/.ssh 的 key 和現有的 git 設定）。確認名稱和 email 後按「儲存」才會生效；不需要的按垃圾桶刪掉。", &[], &[(ids.len()).to_string()]));
         let drafts: Vec<IdDraft> = ids.into_iter().map(|i| self.make_draft(i, window, cx)).collect();
         let git = input(window, cx, &self.cfg.git_path.clone(), crate::i18n::t("留空就用 PATH 裡的 git"));
         let clone = input(window, cx, &self.cfg.clone_dir.clone(), crate::i18n::t("可留空"));
@@ -240,16 +238,6 @@ impl GitTabs {
             && i < m.ids.len()
         {
             m.ids.remove(i);
-        }
-        cx.notify();
-    }
-
-    pub fn settings_add_rule(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let v = input(window, cx, "", "github.com/your-org/*");
-        if let Some(Modal::Settings(m)) = &mut self.modal
-            && let Some(d) = m.ids.get_mut(i)
-        {
-            d.rules.push(RuleDraft { t: "remote".into(), v });
         }
         cx.notify();
     }
@@ -393,7 +381,7 @@ impl GitTabs {
             id.host = d.host.read(cx).value().trim().to_string();
             id.user = d.user.read(cx).value().trim().to_string();
             id.email = d.email.read(cx).value().trim().to_string();
-            id.rules = d.rules.iter().map(|r| Rule { t: r.t.clone(), v: r.v.read(cx).value().trim().to_string() }).collect();
+            id.rules.clear();
             if id.name.is_empty() {
                 m.err = Some(crate::i18n::t("每個身分都要有名稱").into());
                 cx.notify();
@@ -401,13 +389,6 @@ impl GitTabs {
             }
             if !id.email.is_empty() && !(id.email.contains('@') && id.email.split('@').nth(1).is_some_and(|d| d.contains('.')) && !id.email.contains(char::is_whitespace)) {
                 m.err = Some(crate::i18n::tr("「{}」的 email 格式不對", &[], &[(id.name).to_string()]));
-                cx.notify();
-                return;
-            }
-            // An empty rule writes nothing to the gitconfig: it would only look like a rule.
-            if let Some(j) = empty_rule(&id) {
-                m.tab = SettingsTab::Ids;
-                m.err = Some(crate::i18n::tr("「{name}」的第 {n} 條規則是空的：填上 remote 網址或資料夾，不需要就按 × 刪掉", &[("name", id.name.clone()), ("n", (j + 1).to_string())], &[]));
                 cx.notify();
                 return;
             }
@@ -456,22 +437,5 @@ impl GitTabs {
             }
             cx.notify();
         });
-    }
-
-    /// The rule a fresh repo would get, for the "指定給…" helper in settings.
-    pub fn settings_assign(&mut self, repo_idx: usize, ident: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(r) = self.repos.get(repo_idx) else { return };
-        let rule = r.summary.as_ref().and_then(|s| s.remote_url.as_deref()).and_then(rule_for_url);
-        let (t, v) = match rule {
-            Some(v) => ("remote", v),
-            None => ("dir", r.path.display().to_string()),
-        };
-        let inp = input(window, cx, &v, "");
-        if let Some(Modal::Settings(m)) = &mut self.modal
-            && let Some(d) = m.ids.get_mut(ident)
-        {
-            d.rules.push(RuleDraft { t: t.into(), v: inp });
-        }
-        cx.notify();
     }
 }
