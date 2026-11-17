@@ -55,6 +55,10 @@ pub fn url(email: &str) -> Option<String> {
     if !e.contains('@') {
         return None;
     }
+    // GitHub itself: the committer of every merge made on the website is the "web-flow" account.
+    if e == "noreply@github.com" {
+        return Some("https://avatars.githubusercontent.com/u/19864447?s=64".into());
+    }
     if let Some(user) = e.strip_suffix("@users.noreply.github.com") {
         // "12345+name" carries the account number; an old "name" alone is the login.
         return Some(match user.split_once('+') {
@@ -143,7 +147,9 @@ impl Cache {
             None => {}
         }
         let f = self.file(&key);
-        let miss = f.with_extension("miss2");
+        // The number goes up whenever the lookup learns a new way to find a picture, so misses
+        // recorded by an older version are tried again instead of waiting out MISS_FOR.
+        let miss = f.with_extension("miss3");
         if f.is_file() {
             map.insert(key, State::Have(f.clone()));
             return Some(f);
@@ -309,6 +315,7 @@ mod tests {
     fn where_each_address_gets_its_picture() {
         assert_eq!(url("293473+sandersn@users.noreply.github.com").unwrap(), "https://avatars.githubusercontent.com/u/293473?s=64");
         assert_eq!(url("sandersn@users.noreply.github.com").unwrap(), "https://github.com/sandersn.png?size=64");
+        assert_eq!(url("noreply@github.com").unwrap(), "https://avatars.githubusercontent.com/u/19864447?s=64");
         assert_eq!(url("  MyEmailAddress@example.com ").unwrap(), "https://www.gravatar.com/avatar/0bc83cb571cd1c50ba6f3e8a78ef1346?s=64&d=404");
         assert!(url("nobody").is_none());
         assert!(url("me@host.local").is_none());
