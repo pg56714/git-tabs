@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.11.0 (2026-11-17)
+
+### Features
+
+- **repos:** pick an identity per repo in the add-repo dialog, fold the clone form away ([0103269](https://github.com/pg56714/git-tabs/commit/0103269cba88f462292b17dbf27b3ab72dc43486))
+
+### Fixes
+
+- **avatar:** show GitHub's own picture for the committer of merges made on github.com ([a292d12](https://github.com/pg56714/git-tabs/commit/a292d1231a02c3b317aaf082c16e10f6187f0cb4))
+
 ## v0.10.0 (2026-11-17)
 
 ### Features
