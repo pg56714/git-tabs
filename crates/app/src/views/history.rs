@@ -10,7 +10,7 @@ use gpui_kit::{
 };
 
 use crate::app::*;
-use crate::format::{ago, date_time, short};
+use crate::format::{date_time, short};
 use crate::graph::GraphRow;
 use crate::model::*;
 use crate::theme::lane_color;
@@ -356,7 +356,7 @@ impl GitTabs {
                                 )
                             })
                             .child(div().w(px(64.)).flex_none().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).font_family("Cascadia Mono").child(short(&c.sha)))
-                            .when(show_date, |d| d.child(div().w(px(120.)).flex_none().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(ago(c.time))))
+                            .when(show_date, |d| d.child(div().w(px(120.)).flex_none().whitespace_nowrap().text_size(px(12.)).text_color(if on { gpui_kit::white().opacity(0.85) } else { p.muted }).child(date_time(c.time))))
                             .into_any_element()
                     })
                     .collect()

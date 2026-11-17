@@ -169,6 +169,24 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool, dim: bool) -> Div
         _ => (lf, lb),
     };
     let (bg, border) = (fade(bg), fade(border));
+    if kind == "tag" {
+        // Two cells in one outline, as in Fork: the tag icon, a divider, the name.
+        return div()
+            .flex_none()
+            .mr(px(4.))
+            .h(px(18.))
+            .flex()
+            .items_center()
+            .rounded(px(5.))
+            .border(px(1.5))
+            .border_color(border)
+            .overflow_hidden()
+            .bg(bg)
+            .text_color(ink)
+            .text_size(px(12.))
+            .child(div().h_full().flex().items_center().px(px(4.)).border_r_1().border_color(border).child(icon(Ico::Tag, 12., ink2)))
+            .child(div().px(px(6.)).child(name.to_string()));
+    }
     let mark: Option<AnyElement> = match kind {
         "head" | "detached" => Some(icon(Ico::Check, 14., ink).into_any_element()),
         "remote" => Some(icon(remote_icon(github), 13., ink).into_any_element()),
@@ -237,16 +255,14 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
     let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
     let ink = if dim { p.faint } else { p.text };
     let (lf, lb, rf, rb) = (fade(lf), fade(lb), fade(rf), fade(rb));
+    // As in Fork: the remote's mark is a small box of its own in front of the branch label.
     div()
         .flex_none()
         .mr(px(4.))
         .h(px(18.))
         .flex()
         .items_center()
-        .rounded(px(5.))
-        .border(px(1.5))
-        .border_color(lb)
-        .overflow_hidden()
+        .gap(px(3.))
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(ink)
@@ -258,9 +274,10 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                     .items_center()
                     .gap(px(3.))
                     .px(px(4.))
-                    .bg(rf)
-                    .border_r_1()
+                    .rounded(px(5.))
+                    .border(px(1.5))
                     .border_color(rb)
+                    .bg(rf)
                     .children((0..remotes.min(3)).map(|_| icon(remote_icon(github), 13., ink))),
             )
         })
@@ -271,6 +288,9 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                 .items_center()
                 .gap(px(4.))
                 .px(px(6.))
+                .rounded(px(5.))
+                .border(px(1.5))
+                .border_color(lb)
                 .bg(lf)
                 .when(current, |d| d.child(icon(Ico::Check, 14., ink)))
                 .child(name.to_string()),
