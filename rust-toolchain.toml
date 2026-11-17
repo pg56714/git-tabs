@@ -1,0 +1,4 @@
+[toolchain]
+# Pinned so CI and every machine build with the same compiler; raise it on purpose, after a green build.
+channel = "1.99.1"
+profile = "minimal"

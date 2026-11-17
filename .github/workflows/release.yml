@@ -85,13 +85,15 @@ jobs:
             libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libssl-dev libzstd-dev \
             libgbm-dev libfuse2t64 patchelf
 
+      # The compiler is pinned in rust-toolchain.toml; this installs that same version.
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: "1.99.1"
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+        run: cargo install cargo-packager --version 0.11.8 --locked
 
       - name: Build
         run: |

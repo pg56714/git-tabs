@@ -141,6 +141,7 @@ pub struct GitTabs {
     ticks: u64,
     pub update: Option<gitcore::update::Release>,
     pub updating: bool,
+    pub checking: bool,
     _subs: Vec<Subscription>,
     diff_subs: Vec<Subscription>,
 }
@@ -292,6 +293,7 @@ impl GitTabs {
             ticks: 0,
             update: None,
             updating: false,
+            checking: false,
             _subs: subs,
             diff_subs,
         };
@@ -605,9 +607,9 @@ impl GitTabs {
         if self.avatars.take_changed() {
             cx.notify();
         }
-        // Once at start (after the window is up), then every 6 hours.
-        if self.ticks == 2 || self.ticks % (12 * 60 * 6) == 0 {
-            self.check_update(cx);
+        // Once at start, once the window is up; after that only when asked for in the settings.
+        if self.ticks == 2 {
+            self.check_update(false, cx);
         }
         if self.ticks % 6 == 0 {
             if let Some(r) = self.repo()

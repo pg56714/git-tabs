@@ -238,6 +238,20 @@ impl GitTabs {
                 ]),
             ));
             body.push(self.labeled(crate::i18n::t("Repo 資料夾"), Input::new(&m.clone).into_any_element()));
+            let checking = self.checking;
+            body.push(self.labeled(
+                crate::i18n::t("版本"),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(div().child(format!("git-tabs {}", env!("CARGO_PKG_VERSION"))))
+                    .child(
+                        btn(&p, "chk-update", Bk::Normal, true, if checking { crate::i18n::t("檢查中…") } else { crate::i18n::t("檢查更新") })
+                            .on_click(cx.listener(|this, _, _, cx| this.check_update(true, cx))),
+                    )
+                    .into_any_element(),
+            ));
             body.push(div().ml(px(120.)).child(sub(&p, crate::i18n::t("「加入 repo」會先掃描這裡，clone 也預設放這裡。"))).into_any_element());
             body.push(sub(&p, crate::i18n::tr("HTTPS 的 repo 用 Git Credential Manager 存帳號 token；網址帶帳號名稱（https://帳號@github.com/…）就能分開存。設定檔位置：app 的設定資料夾 config.json。目前開了 {} 個 repo：{}", &[], &[(self.repos.len()).to_string(), (self.repos.iter().map(|r| base_name(&r.path.display().to_string())).collect::<Vec<_>>().join(crate::i18n::t("、"))).to_string()])).into_any_element());
         }

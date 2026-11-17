@@ -10,20 +10,32 @@ use crate::ui::*;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 impl GitTabs {
-    /// Looks for a newer release in the background; says nothing when there is none or the
-    /// network is down.
-    pub fn check_update(&mut self, cx: &mut Context<Self>) {
-        if self.updating || self.update.is_some() {
+    /// Looks for a newer release in the background. At start it says nothing when there is none
+    /// or the network is down; when asked for (`manual`) it always answers.
+    pub fn check_update(&mut self, manual: bool, cx: &mut Context<Self>) {
+        if self.updating || self.checking {
             return;
         }
+        if self.update.is_some() {
+            if manual {
+                self.toast(crate::i18n::t("有新版本，請按上方的「立即更新」"), ToastKind::Info, None, cx);
+            }
+            return;
+        }
+        self.checking = true;
+        cx.notify();
         self.work(
             cx,
             || gitcore::update::check(VERSION),
-            |this, found, cx| {
-                if let Ok(Some(rel)) = found {
-                    this.update = Some(rel);
-                    cx.notify();
+            move |this, found, cx| {
+                this.checking = false;
+                match found {
+                    Ok(Some(rel)) => this.update = Some(rel),
+                    Ok(None) if manual => this.toast(crate::i18n::tr("已是最新版本（{}）", &[], &[VERSION.to_string()]), ToastKind::Ok, None, cx),
+                    Err(e) if manual => this.toast(crate::i18n::t("檢查更新失敗"), ToastKind::Err, Some(e), cx),
+                    _ => {}
                 }
+                cx.notify();
             },
         );
     }
