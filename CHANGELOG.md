@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.0 (2026-11-17)
+
+### Features
+
+- **settings:** language and appearance apply at once and say so; the rest says it needs Save ([7afd5f7](https://github.com/pg56714/git-tabs/commit/7afd5f7d48d098932d1e516321500396bc34eeea))
+
 ## v0.8.0 (2026-11-17)
 
 ### Features
