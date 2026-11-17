@@ -100,14 +100,14 @@ pub fn st_badge(p: &Pal, letter: char) -> Div {
         .child(if letter == '?' { 'A' } else { letter }.to_string())
 }
 
-/// Fill and outline of branch labels: a clear yellow for local branches, a pale tan for remote ones
-/// (as in Fork). `(local fill, local outline, remote fill, remote outline)`.
+/// Fill and outline of branch labels as Fork draws them: an orange outline, a near-white fill for local
+/// branches and a pale orange one for remote ones. `(local fill, local outline, remote fill, remote outline)`.
 pub fn ref_colors(p: &Pal) -> (Hsla, Hsla, Hsla, Hsla) {
     let hex = |h: u32| -> Hsla { gpui_kit::Rgba::from(gpui_kit::rgb(h)).into() };
     if p.panel.l < 0.5 {
-        (hex(0x4a3f12), hex(0xd2a62a), hex(0x2f2c26), hex(0x8f7f60))
+        (hex(0x3d3321), hex(0xe69a2e), hex(0x2f2a22), hex(0xb8863f))
     } else {
-        (hex(0xfff2b3), hex(0xe0a800), hex(0xf4eee2), hex(0x9a7b4f))
+        (hex(0xfffbf2), hex(0xf2a33a), hex(0xfdf0dc), hex(0xf2a33a))
     }
 }
 
@@ -166,7 +166,7 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool) -> Div {
         _ => (lf, lb),
     };
     let mark: Option<AnyElement> = match kind {
-        "head" | "detached" => Some(div().text_color(p.ok).font_weight(FontWeight::BOLD).child("\u{2713}").into_any_element()),
+        "head" | "detached" => Some(div().text_color(p.text).font_weight(FontWeight::BOLD).child("\u{2713}").into_any_element()),
         "remote" => Some(icon(remote_icon(github), 13., p.text).into_any_element()),
         "tag" => Some(icon(Ico::Tag, 12., p.muted).into_any_element()),
         _ => None,
@@ -265,7 +265,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                 .gap(px(4.))
                 .px(px(6.))
                 .bg(lf)
-                .when(current, |d| d.child(div().text_color(p.ok).font_weight(FontWeight::BOLD).child("\u{2713}")))
+                .when(current, |d| d.child(div().text_color(p.text).font_weight(FontWeight::BOLD).child("\u{2713}")))
                 .child(name.to_string()),
         )
 }
