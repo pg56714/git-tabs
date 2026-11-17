@@ -473,6 +473,17 @@ impl GitTabs {
         cx.notify();
     }
 
+    /// Light, dark or follow the system: applied and saved at once, like the language.
+    pub fn set_theme(&mut self, v: &str, cx: &mut Context<Self>) {
+        self.cfg.theme = v.to_string();
+        if let Some(Modal::Settings(m)) = &mut self.modal {
+            m.theme = v.to_string();
+        }
+        self.reapply_theme(cx);
+        self.save_config();
+        cx.notify();
+    }
+
     /// The window was moved, resized or maximized: remember it, and write it down once it rests.
     fn window_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (b, maximized) = match window.window_bounds() {

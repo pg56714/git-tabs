@@ -182,12 +182,7 @@ impl GitTabs {
                     .bg(if on { p.accent_bg } else { Hsla::transparent_black() })
                     .text_color(if on { p.accent_tx } else { p.muted })
                     .child(label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(Modal::Settings(m)) = &mut this.modal {
-                            m.theme = v.to_string();
-                        }
-                        cx.notify();
-                    }))
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_theme(v, cx)))
             };
             let fbtn = |id: String, label: &'static str, v: &'static str, cur: &str| {
                 let on = cur == v;
@@ -208,6 +203,7 @@ impl GitTabs {
             };
             let box_ = |c: Vec<AnyElement>| div().flex().child(div().flex().flex_none().border_1().border_color(p.border_strong).rounded(px(7.)).overflow_hidden().children(c)).into_any_element();
             let lang = self.lang.clone();
+            body.push(div().text_size(px(11.5)).text_color(p.faint).child(crate::i18n::t("語言和外觀：選了就立即生效")).into_any_element());
             let lbtn = |id: &'static str, label: &'static str, v: &'static str, cur: &str| {
                 let on = cur == v;
                 div()
@@ -225,6 +221,7 @@ impl GitTabs {
                 box_(vec![lbtn("lg-auto", crate::i18n::t("自動"), "auto", &lang).into_any_element(), lbtn("lg-zh", "繁體中文", "zh-TW", &lang).into_any_element(), lbtn("lg-en", "English", "en", &lang).into_any_element()]),
             ));
             body.push(self.labeled(crate::i18n::t("外觀"), box_(vec![tbtn("th-sys", crate::i18n::t("跟系統"), "system", &theme).into_any_element(), tbtn("th-light", crate::i18n::t("淺色"), "light", &theme).into_any_element(), tbtn("th-dark", crate::i18n::t("深色"), "dark", &theme).into_any_element()])));
+            body.push(div().mt(px(6.)).pt(px(10.)).border_t_1().border_color(p.border).text_size(px(11.5)).text_color(p.faint).child(crate::i18n::t("以下按「儲存」才會生效，按「取消」會放棄")).into_any_element());
             body.push(self.labeled(crate::i18n::t("git 路徑"), Input::new(&m.git).into_any_element()));
             body.push(div().ml(px(120.)).child(sub(&p, crate::i18n::tr("目前：{}", &[], &[(if self.git_version.is_empty() { crate::i18n::t("找不到 git") } else { &self.git_version }).to_string()]))).into_any_element());
             body.push(self.labeled(
@@ -238,7 +235,10 @@ impl GitTabs {
                 ]),
             ));
             body.push(self.labeled(crate::i18n::t("Repo 資料夾"), Input::new(&m.clone).into_any_element()));
+            body.push(div().ml(px(120.)).child(sub(&p, crate::i18n::t("「加入 repo」會先掃描這裡，clone 也預設放這裡。"))).into_any_element());
+            body.push(sub(&p, crate::i18n::tr("HTTPS 的 repo 用 Git Credential Manager 存帳號 token；網址帶帳號名稱（https://帳號@github.com/…）就能分開存。設定檔位置：app 的設定資料夾 config.json。目前開了 {} 個 repo：{}", &[], &[(self.repos.len()).to_string(), (self.repos.iter().map(|r| base_name(&r.path.display().to_string())).collect::<Vec<_>>().join(crate::i18n::t("、"))).to_string()])).into_any_element());
             let checking = self.checking;
+            body.push(div().mt(px(6.)).pt(px(10.)).border_t_1().border_color(p.border).into_any_element());
             body.push(self.labeled(
                 crate::i18n::t("版本"),
                 div()
@@ -252,8 +252,6 @@ impl GitTabs {
                     )
                     .into_any_element(),
             ));
-            body.push(div().ml(px(120.)).child(sub(&p, crate::i18n::t("「加入 repo」會先掃描這裡，clone 也預設放這裡。"))).into_any_element());
-            body.push(sub(&p, crate::i18n::tr("HTTPS 的 repo 用 Git Credential Manager 存帳號 token；網址帶帳號名稱（https://帳號@github.com/…）就能分開存。設定檔位置：app 的設定資料夾 config.json。目前開了 {} 個 repo：{}", &[], &[(self.repos.len()).to_string(), (self.repos.iter().map(|r| base_name(&r.path.display().to_string())).collect::<Vec<_>>().join(crate::i18n::t("、"))).to_string()])).into_any_element());
         }
         if let Some(e) = &m.err {
             body.push(div().text_size(px(12.)).text_color(p.danger).child(e.clone()).into_any_element());
