@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 gitcore.workspace = true
-gpui-kit = { version = "0.9.1", features = ["tree-sitter-rust", "tree-sitter-toml", "tree-sitter-markdown", "tree-sitter-javascript", "tree-sitter-typescript"] }
+gpui-kit = { version = "0.9.1", features = ["tree-sitter-rust", "tree-sitter-toml", "tree-sitter-markdown", "tree-sitter-javascript", "tree-sitter-typescript", "tree-sitter-tsx", "tree-sitter-python", "tree-sitter-bash", "tree-sitter-c", "tree-sitter-cpp", "tree-sitter-csharp", "tree-sitter-css", "tree-sitter-html", "tree-sitter-go", "tree-sitter-java", "tree-sitter-kotlin", "tree-sitter-lua", "tree-sitter-php", "tree-sitter-ruby", "tree-sitter-sql", "tree-sitter-swift", "tree-sitter-yaml"] }
 dirs = "6"
 sys-locale = "0.3"
 notify-debouncer-mini = "0.7"

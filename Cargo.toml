@@ -22,3 +22,8 @@ codegen-units = 16
 lto = "thin"
 opt-level = 3
 strip = true
+
+# gpui-component with one change: the diff's row height is 1.35x the font (1.6x upstream), as tight as Fork's.
+# Drop this when upstream makes the ratio configurable.
+[patch.crates-io]
+gpui-component = { path = "vendor/gpui-component" }
