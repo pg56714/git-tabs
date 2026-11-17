@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7.0 (2026-11-17)
+
+### Features
+
+- **ui:** syntax colours from GitHub's light and dark themes ([1380102](https://github.com/pg56714/git-tabs/commit/1380102f4054a563ecdde75ae8d6f04434b17863))
+- **history:** SHA row with copy and open-on-GitHub icons, as in Fork ([d1c12ae](https://github.com/pg56714/git-tabs/commit/d1c12ae2b074372635f7cf74d6809e9cfbdb2a56))
+- **ui:** fade a branch label with its row when the checked-out branch lacks the commit; softer added/removed line background ([9d3616d](https://github.com/pg56714/git-tabs/commit/9d3616dda91a729dfb3c90cd13a9d9ea277c9cdc))
+- **ui:** branch labels with an orange outline and near-white fill, as Fork draws them ([5375c85](https://github.com/pg56714/git-tabs/commit/5375c85fa2873a05e24c163b2c2ec47343303f3f))
+- **ui:** brighter red and green for added and removed lines, as Fork draws them ([6e80cd3](https://github.com/pg56714/git-tabs/commit/6e80cd338014b97eca96fd81b88ccd92e25f6e8d))
+- **ui:** syntax colours for more languages; tighter diff rows (vendored gpui-component, row height 1.35x) ([dcfa1f3](https://github.com/pg56714/git-tabs/commit/dcfa1f3199207e2941fea430d719aa4942d6406c))
+- **ui:** code font 12.5 -> 14px, closer to Fork's diff ([82b8c42](https://github.com/pg56714/git-tabs/commit/82b8c42103b72e5de9a2963a6f28589b2d111d8d))
+
+### Fixes
+
+- **ui:** use GitHub's current comment and entity colours ([d8f72e1](https://github.com/pg56714/git-tabs/commit/d8f72e106eefe1c91c283c8bf753d490f6708aa6))
+- **ui:** YAML highlighting: keys green, plain values uncoloured, as on GitHub ([fc42262](https://github.com/pg56714/git-tabs/commit/fc422624539ef5101c42bbc4b8008f647c342be4))
+- **ui:** tags back to blue; draw the current-branch check as an icon; bolder orange label outlines ([431b201](https://github.com/pg56714/git-tabs/commit/431b201fbd812423e3e10ea24c417d58abf116d0))
+
 ## v0.6.0 (2026-11-17)
 
 ### Features
