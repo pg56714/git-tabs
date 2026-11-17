@@ -97,7 +97,7 @@ pub fn apply(dark: bool, window: Option<&mut Window>, cx: &mut App) {
     t.font_family = SharedString::from("Segoe UI");
     t.font_size = px(13.);
     t.mono_font_family = SharedString::from("Cascadia Mono");
-    t.mono_font_size = px(12.5);
+    t.mono_font_size = px(14.);
     let k = &mut t.colors;
     k.background = p.panel;
     k.foreground = p.text;
