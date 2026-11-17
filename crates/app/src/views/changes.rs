@@ -72,17 +72,6 @@ impl GitTabs {
                 .into_any_element()
         });
 
-        if empty_status {
-            return div()
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_h_0()
-                .when_some(banner, |d, b| d.child(b))
-                .child(empty(&p, "✓", crate::i18n::t("沒有未提交的修改"), Some(crate::i18n::t("工作目錄是乾淨的"))))
-                .into_any_element();
-        }
-
         // ---- diff side
         let head_extra: Vec<AnyElement> = match (&sel, &sel_entry) {
             (Some(s), Some(e)) if e.conflicted => {
@@ -124,7 +113,12 @@ impl GitTabs {
                 .child(self.render_diff_hint(true))
                 .into_any_element()
         } else {
-            div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "", crate::i18n::t("選一個檔案"), None)).child(self.render_diff_hint(true)).into_any_element()
+            if empty_status {
+                // The panes stay where they are (as in Fork), so it is plain what a change would look like.
+                div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "✓", crate::i18n::t("沒有未提交的修改"), Some(crate::i18n::t("工作目錄是乾淨的")))).child(self.render_diff_hint(true)).into_any_element()
+            } else {
+                div().flex().flex_col().flex_1().min_w_0().child(empty(&p, "", crate::i18n::t("選一個檔案"), None)).child(self.render_diff_hint(true)).into_any_element()
+            }
         };
 
         // ---- left: lists + commit box
