@@ -1,4 +1,4 @@
-//! A file tree with status letters and reviewed marks (FileTree.vue).
+//! A file tree with status letters and reviewed marks.
 
 use std::collections::HashSet;
 

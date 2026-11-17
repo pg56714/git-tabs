@@ -1,4 +1,4 @@
-//! Rendering. `root` lays out the window the way the Vue build's App.vue does:
+//! Rendering. `root` lays out the window:
 //! tab bar, toolbar, a sidebar next to the content, and the command log at the bottom.
 
 mod changes;

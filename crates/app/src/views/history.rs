@@ -1,4 +1,4 @@
-//! The history view (HistoryView.vue): search, commit list with graph, commit details.
+//! The history view: search, commit list with graph, commit details.
 
 use std::sync::Arc;
 

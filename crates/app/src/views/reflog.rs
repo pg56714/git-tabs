@@ -1,4 +1,4 @@
-//! The Reflog list (ReflogView.vue).
+//! The Reflog list.
 
 use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _,

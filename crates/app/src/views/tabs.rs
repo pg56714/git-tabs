@@ -1,4 +1,4 @@
-//! The tab bar (TabBar.vue).
+//! The tab bar.
 
 use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render, ScrollEvent, SharedString,

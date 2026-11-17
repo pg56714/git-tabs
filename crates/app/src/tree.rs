@@ -1,4 +1,4 @@
-//! File tree rows (ported from src/lib/tree.ts).
+//! File tree rows.
 
 use std::collections::{BTreeMap, HashSet};
 

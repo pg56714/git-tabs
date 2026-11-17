@@ -1,4 +1,4 @@
-//! Small hand-built widgets that follow the Vue build's CSS (buttons, chips, badges).
+//! Small hand-built widgets for buttons, chips and badges.
 
 use gpui_kit::{
     AnyElement, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, Stateful,
@@ -379,7 +379,7 @@ pub fn mod_name() -> &'static str {
     if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
 }
 
-/// A 12x12 icon drawn from strokes, the way the Vue build draws its SVG icons, so it sits
+/// A 12x12 icon drawn from strokes, so it sits
 /// exactly in the middle of its box (font glyphs such as ＋ and ⌄ sit at different heights).
 pub fn stroke_icon(color: Hsla, strokes: &'static [&'static [(f32, f32)]]) -> impl IntoElement {
     use gpui_kit::{PathBuilder, canvas, point};

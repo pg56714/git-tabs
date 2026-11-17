@@ -1,4 +1,4 @@
-//! User-facing git actions (the Rust counterpart of src/actions.ts): confirm or ask where
+//! User-facing git actions: confirm or ask where
 //! needed, then run the operation and reload.
 
 use std::collections::HashSet;

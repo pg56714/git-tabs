@@ -1,4 +1,4 @@
-//! The toolbar under the tabs (Toolbar.vue).
+//! The toolbar under the tabs.
 
 use gpui_kit::{
     AnyElement, ClickEvent, Context, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _,

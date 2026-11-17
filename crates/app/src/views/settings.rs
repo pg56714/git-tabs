@@ -1,5 +1,4 @@
-//! The big dialogs: settings (SettingsModal.vue), add repo (AddRepoModal.vue) and blame
-//! (BlameModal.vue).
+//! The big dialogs: settings, add repo and blame.
 
 use gpui_kit::component::input::Input;
 use gpui_kit::{

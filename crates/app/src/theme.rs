@@ -1,4 +1,4 @@
-//! The colour palette of the Vue build (styles.css), applied to GPUI Kit's theme so its
+//! The colour palette, applied to GPUI Kit's theme so its
 //! components (diff, inputs, scrollbars) match the hand-built parts of the window.
 
 use gpui_kit::component::{Theme, ThemeMode};

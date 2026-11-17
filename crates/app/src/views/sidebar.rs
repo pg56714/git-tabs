@@ -1,4 +1,4 @@
-//! The left navigation: views, branches, remotes, tags, stashes, worktrees (Sidebar.vue).
+//! The left navigation: views, branches, remotes, tags, stashes, worktrees.
 
 use gpui_kit::{
     AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, SharedString,

@@ -1,4 +1,4 @@
-//! The "Changes" view (ChangesView.vue): file lists, review progress, commit box, diff.
+//! The "Changes" view: file lists, review progress, commit box, diff.
 
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::{

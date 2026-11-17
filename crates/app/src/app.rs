@@ -1,4 +1,4 @@
-//! The window's state and everything that loads data (the Rust counterpart of src/store.ts).
+//! The window's state and everything that loads data.
 //!
 //! Git work always runs on the background executor; results come back to the UI thread
 //! through [`GitTabs::work`]. Stale answers are dropped by comparing sequence numbers.

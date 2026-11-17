@@ -1,4 +1,4 @@
-//! Commit graph lanes (ported from src/lib/graph.ts).
+//! Commit graph lanes.
 //!
 //! Each column remembers the sha it is waiting for; a commit takes the column waiting for
 //! it, then hands that column to its first parent.

@@ -1,5 +1,4 @@
 //! The diff header and body shared by the changes, history and range views
-//! (DiffHead.vue and DiffView.vue).
 
 use gitcore::ops::LineAction;
 use gpui_kit::component::diff::{Diff, DiffLinePosition, DiffSide};

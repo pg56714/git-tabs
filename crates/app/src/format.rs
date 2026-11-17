@@ -1,4 +1,4 @@
-//! Small text helpers (ported from src/lib/format.ts).
+//! Small text helpers.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
