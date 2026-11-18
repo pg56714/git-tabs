@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.12.2 (2026-11-18)
+
+### Fixes
+
+- **history:** ask the system for the zone of each date, so macOS and Linux no longer show UTC and daylight saving is right ([1a223ae](https://github.com/pg56714/git-tabs/commit/1a223ae0a5389ee1ec3e6d7e78a25c04314754e2))
+- **history:** show commit dates in the local time zone, not 15 hours early ([082cbd8](https://github.com/pg56714/git-tabs/commit/082cbd8423fc452c2ecb0209763edc19b57f3f5a))
+
 ## v0.12.1 (2026-11-18)
 
 ### Fixes
