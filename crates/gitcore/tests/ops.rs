@@ -1036,41 +1036,73 @@ fn a_checkout_can_stash_or_discard_the_changes_in_its_way() {
     let (d, _ctx) = repo();
     let p = d.path();
     git(p, &["switch", "-q", "-c", "other"]);
-    std::fs::write(p.join("a.txt"), "other
-").unwrap();
+    std::fs::write(
+        p.join("a.txt"),
+        "other
+",
+    )
+    .unwrap();
     git(p, &["commit", "-q", "-am", "other"]);
     git(p, &["switch", "-q", "main"]);
 
     // An edit that the target branch also changes blocks a plain switch.
-    std::fs::write(p.join("a.txt"), "mine
-").unwrap();
-    std::fs::write(p.join("new.txt"), "untracked
-").unwrap();
+    std::fs::write(
+        p.join("a.txt"),
+        "mine
+",
+    )
+    .unwrap();
+    std::fs::write(
+        p.join("new.txt"),
+        "untracked
+",
+    )
+    .unwrap();
     assert!(gitcore::ops::with_changes(p, "keep", || gitcore::ops::switch(p, "other")).is_err());
 
     // Stash: the switch happens and the edits come back on top of it (here with a conflict, so
     // the stash stays and the user is told).
     let res = gitcore::ops::with_changes(p, "stash", || gitcore::ops::switch(p, "other"));
-    assert!(res.is_err(), "the edit conflicts with the other branch's, so it is not restored");
+    assert!(
+        res.as_ref()
+            .is_err_and(|e| e.starts_with(gitcore::ops::RESTORE_FAILED)),
+        "the edit conflicts with the other branch's, so it is not restored: {res:?}"
+    );
     assert!(git(p, &["stash", "list"]).contains("git-tabs: before switching"));
     git(p, &["reset", "-q", "--hard"]);
+    git(p, &["clean", "-fdq"]);
     git(p, &["stash", "drop", "-q"]);
 
     // Stash with a change that does not clash: restored after the switch.
     git(p, &["switch", "-q", "main"]);
-    std::fs::write(p.join("new.txt"), "untracked
-").unwrap();
+    std::fs::write(
+        p.join("new.txt"),
+        "untracked
+",
+    )
+    .unwrap();
     gitcore::ops::with_changes(p, "stash", || gitcore::ops::switch(p, "other")).unwrap();
     assert_eq!(git(p, &["branch", "--show-current"]).trim(), "other");
-    assert_eq!(std::fs::read_to_string(p.join("new.txt")).unwrap(), "untracked
-");
-    assert_eq!(git(p, &["stash", "list"]).trim(), "", "nothing is left in the stash");
+    assert_eq!(
+        std::fs::read_to_string(p.join("new.txt")).unwrap(),
+        "untracked
+"
+    );
+    assert_eq!(
+        git(p, &["stash", "list"]).trim(),
+        "",
+        "nothing is left in the stash"
+    );
 
     // Nothing to put away: an older stash of the user's must not be popped.
     git(p, &["switch", "-q", "main"]);
     std::fs::remove_file(p.join("new.txt")).unwrap();
-    std::fs::write(p.join("keep.txt"), "x
-").unwrap();
+    std::fs::write(
+        p.join("keep.txt"),
+        "x
+",
+    )
+    .unwrap();
     git(p, &["stash", "push", "-u", "-q", "-m", "users own"]);
     gitcore::ops::with_changes(p, "stash", || gitcore::ops::switch(p, "other")).unwrap();
     assert!(git(p, &["stash", "list"]).contains("users own"));
@@ -1078,9 +1110,69 @@ fn a_checkout_can_stash_or_discard_the_changes_in_its_way() {
 
     // Discard: tracked edits are thrown away, then the switch goes through.
     git(p, &["switch", "-q", "main"]);
-    std::fs::write(p.join("a.txt"), "mine
-").unwrap();
+    std::fs::write(
+        p.join("a.txt"),
+        "mine
+",
+    )
+    .unwrap();
     gitcore::ops::with_changes(p, "discard", || gitcore::ops::switch(p, "other")).unwrap();
     assert_eq!(git(p, &["branch", "--show-current"]).trim(), "other");
-    assert_eq!(std::fs::read_to_string(p.join("a.txt")).unwrap().trim(), "other");
+    assert_eq!(
+        std::fs::read_to_string(p.join("a.txt")).unwrap().trim(),
+        "other"
+    );
+}
+
+#[test]
+fn a_file_name_with_brackets_is_that_file_and_not_a_pattern() {
+    let _s = serial();
+    let (d, _ctx) = repo();
+    let p = d.path();
+    // `[id].txt` as a pattern would also match i.txt and d.txt.
+    for f in ["i.txt", "d.txt", "[id].txt"] {
+        std::fs::write(
+            p.join(f),
+            "one
+",
+        )
+        .unwrap();
+    }
+    git(p, &["add", "-A"]);
+    git(p, &["commit", "-q", "-m", "files"]);
+    for f in ["i.txt", "d.txt", "[id].txt"] {
+        std::fs::write(
+            p.join(f),
+            format!(
+                "{f} changed
+"
+            ),
+        )
+        .unwrap();
+    }
+    let diff = gitcore::ops::diff_file(p, "[id].txt", false, false).unwrap();
+    let text: String = diff
+        .hunks
+        .iter()
+        .flat_map(|h| h.lines.iter())
+        .map(|l| l.text.clone())
+        .collect();
+    assert!(text.contains("[id].txt changed"), "{text}");
+    assert!(
+        !text.contains("i.txt changed") && !text.contains("d.txt changed"),
+        "{text}"
+    );
+    let blame = gitcore::ops::blame(p, "[id].txt", None).unwrap();
+    assert_eq!(blame.len(), 1);
+    gitcore::ops::discard(p, &["[id].txt".to_string()]).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(p.join("[id].txt")).unwrap(),
+        "one
+"
+    );
+    assert_eq!(
+        std::fs::read_to_string(p.join("i.txt")).unwrap(),
+        "i.txt changed
+"
+    );
 }

@@ -278,6 +278,8 @@ impl GitTabs {
 
     /// Selection bar, hunk bar and the diff itself.
     pub fn render_diff_area(&mut self, mode: PaneMode, cx: &mut Context<Self>) -> AnyElement {
+        // Part of an untracked file cannot be discarded: git has nothing to go back to.
+        let untracked = mode == PaneMode::Unstaged && self.selected_is_untracked();
         let p = self.pal;
         let Some(r) = self.repo() else {
             return div().into_any_element();
@@ -352,18 +354,20 @@ impl GitTabs {
                             this.apply_selection(false, cx);
                         })),
                     )
-                    .child(
-                        btn(
-                            &p,
-                            "sel-discard",
-                            Bk::Normal,
-                            true,
-                            crate::i18n::t("Discard 選取的行"),
+                    .when(!untracked, |d| {
+                        d.child(
+                            btn(
+                                &p,
+                                "sel-discard",
+                                Bk::Normal,
+                                true,
+                                crate::i18n::t("Discard 選取的行"),
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.apply_selection(true, cx);
+                            })),
                         )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.apply_selection(true, cx);
-                        })),
-                    )
+                    })
                 })
                 .when(mode == PaneMode::Staged, |d| {
                     d.child(
@@ -466,18 +470,20 @@ impl GitTabs {
                         this.apply_hunk(cur, LineAction::Stage, cx)
                     })),
                 )
-                .child(
-                    btn(
-                        &p,
-                        "hunk-discard",
-                        Bk::Normal,
-                        true,
-                        crate::i18n::t("Discard 這段"),
+                .when(!untracked, |d| {
+                    d.child(
+                        btn(
+                            &p,
+                            "hunk-discard",
+                            Bk::Normal,
+                            true,
+                            crate::i18n::t("Discard 這段"),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.apply_hunk(cur, LineAction::Discard, cx)
+                        })),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.apply_hunk(cur, LineAction::Discard, cx)
-                    })),
-                )
+                })
             })
             .when(mode == PaneMode::Staged, |d| {
                 d.child(

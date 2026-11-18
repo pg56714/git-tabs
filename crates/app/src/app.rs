@@ -148,6 +148,18 @@ pub struct GitTabs {
     diff_subs: Vec<Subscription>,
 }
 
+/// The message for a repo whose folder is gone (an unplugged drive): its tab stays, with this on it.
+fn missing_or(path: &Path, other: String) -> String {
+    if path.is_dir() {
+        return other;
+    }
+    crate::i18n::tr(
+        "找不到資料夾 {}，磁碟可能沒接上。接回來之後按「重試」；不要了就關掉這個分頁",
+        &[],
+        &[path.display().to_string()],
+    )
+}
+
 impl GitTabs {
     /// Follows a diff view: redraws with it, and keeps the line selection made in it.
     fn watch_diff(diff: &gpui_kit::Entity<DiffState>, cx: &mut Context<Self>) -> Vec<Subscription> {
@@ -199,10 +211,15 @@ impl GitTabs {
         let repos: Vec<RepoState> = cfg
             .repos
             .iter()
-            .filter(|r| Path::new(&r.path).is_dir())
             .map(|r| RepoState::new(PathBuf::from(&r.path)))
             .collect();
-        let active = cfg.active.min(repos.len().saturating_sub(1));
+        // Open on a repo that is there: the one last shown may be on a drive that is unplugged.
+        let mut active = cfg.active.min(repos.len().saturating_sub(1));
+        if repos.get(active).is_some_and(|r| !r.path.is_dir())
+            && let Some(i) = repos.iter().position(|r| r.path.is_dir())
+        {
+            active = i;
+        }
         let dark = resolve_dark(&cfg.theme, window.appearance());
         theme::apply(dark, Some(window), cx);
         let prefs = load_prefs(&ctx.config_dir);
@@ -899,7 +916,7 @@ impl GitTabs {
         let p2 = p.clone();
         self.work(
             cx,
-            move || ops::summary(&p2),
+            move || ops::summary(&p2).map_err(|e| missing_or(&p2, e)),
             move |this, res, cx| {
                 if let Some(r) = this.repo_by_path(&p) {
                     match res {
@@ -942,7 +959,7 @@ impl GitTabs {
         let p2 = path.clone();
         self.work(
             cx,
-            move || ops::snapshot(&p2),
+            move || ops::snapshot(&p2).map_err(|e| missing_or(&p2, e)),
             move |this, res, cx| {
                 let mut reload_log = false;
                 let mut ok = false;

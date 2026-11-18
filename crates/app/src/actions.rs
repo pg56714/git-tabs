@@ -50,6 +50,28 @@ fn tag_name_check(v: &str) -> Option<String> {
         .then(|| crate::i18n::t("輸入 tag 名稱（不能有空白）").to_string())
 }
 
+/// `ops::with_changes`, with its two stash failures worded for the interface language.
+fn with_changes_job(
+    repo: &Path,
+    mode: &str,
+    job: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
+    ops::with_changes(repo, mode, job).map_err(|e| {
+        if let Some(why) = e.strip_prefix(ops::RESTORE_FAILED) {
+            crate::i18n::tr(
+                "已切換，但改動沒能還原（還留在 stash 裡，可以到 Stashes 再套用）：{}",
+                &[],
+                &[why.to_string()],
+            )
+        } else if let Some((first, why)) = e.split_once(ops::STASH_KEPT) {
+            let kept = crate::i18n::tr("（改動還在 stash 裡：{}）", &[], &[why.to_string()]);
+            format!("{first}\n{kept}")
+        } else {
+            e
+        }
+    })
+}
+
 fn clean(e: &str) -> String {
     e.trim_start_matches("Error: ").to_string()
 }
@@ -416,6 +438,15 @@ impl GitTabs {
         self.apply_lines(sel.path, action, pairs, shown, cx);
     }
 
+    /// Whether the file shown in the diff is one git does not track yet.
+    pub fn selected_is_untracked(&self) -> bool {
+        self.repo().is_some_and(|r| {
+            r.sel
+                .as_ref()
+                .is_some_and(|s| r.status.iter().any(|e| e.untracked && e.path == s.path))
+        })
+    }
+
     pub fn apply_lines(
         &mut self,
         file: String,
@@ -428,6 +459,15 @@ impl GitTabs {
             return;
         };
         if pairs.is_empty() {
+            return;
+        }
+        if action == LineAction::Discard && self.selected_is_untracked() {
+            self.toast(
+                crate::i18n::t("未追蹤的檔案不能只捨棄幾行，請捨棄整個檔案"),
+                ToastKind::Info,
+                None,
+                cx,
+            );
             return;
         }
         let n = pairs.len();
@@ -838,11 +878,13 @@ impl GitTabs {
         cx: &mut Context<Self>,
         run: impl Fn(&mut Self, &'static str, &mut Context<Self>) + 'static,
     ) {
+        // Files git does not track yet never stand in the way of a checkout, so they alone are no
+        // reason to ask.
         let n = self
             .repos
             .iter()
             .find(|r| r.path == path)
-            .map_or(0, |r| r.changes());
+            .map_or(0, |r| r.status.iter().filter(|e| !e.untracked).count());
         if n == 0 {
             run(self, "keep", cx);
             return;
@@ -862,7 +904,12 @@ impl GitTabs {
             ),
             vec![
                 choice("keep", crate::i18n::t("不動它們，直接切換"), false, false),
-                choice("stash", crate::i18n::t("Stash 起來，切換後再還原"), true, false),
+                choice(
+                    "stash",
+                    crate::i18n::t("Stash 起來，切換後再還原"),
+                    true,
+                    false,
+                ),
                 choice("discard", crate::i18n::t("捨棄這些修改"), false, true),
             ],
             cx,
@@ -886,7 +933,7 @@ impl GitTabs {
                 &p,
                 crate::i18n::t("切換 branch"),
                 Some(ok),
-                move |r| ops::with_changes(r, mode, || ops::switch(r, &n)),
+                move |r| with_changes_job(r, mode, || ops::switch(r, &n)),
                 cx,
             );
         });
@@ -1397,7 +1444,7 @@ impl GitTabs {
                 &p,
                 "Checkout",
                 None,
-                move |r| ops::with_changes(r, mode, || ops::simple(r, "checkout", &sha)),
+                move |r| with_changes_job(r, mode, || ops::simple(r, "checkout", &sha)),
                 cx,
             );
         };

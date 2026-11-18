@@ -174,7 +174,13 @@ pub fn diff_file(
     if untracked {
         return Ok(new_file_diff(&repo.join(path), path));
     }
-    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "-M"];
+    let mut args = vec![
+        "--literal-pathspecs",
+        "diff",
+        "--no-color",
+        "--no-ext-diff",
+        "-M",
+    ];
     if staged {
         args.push("--cached");
     }
@@ -304,7 +310,16 @@ pub fn commit_file_diff(
 ) -> Result<FileDiff, String> {
     let parent = first_parent(repo, sha);
     let base = parent.as_deref().unwrap_or(EMPTY_TREE);
-    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "-M", base, sha, "--"];
+    let mut args = vec![
+        "--literal-pathspecs",
+        "diff",
+        "--no-color",
+        "--no-ext-diff",
+        "-M",
+        base,
+        sha,
+        "--",
+    ];
     if let Some(o) = old_path {
         args.push(o);
     }
@@ -541,7 +556,10 @@ pub fn log(
     if let Some(p) = path {
         args.extend(["--follow".into(), "--".into(), p.into()]);
     }
-    let a: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut a: Vec<&str> = args.iter().map(String::as_str).collect();
+    if path.is_some() {
+        a.insert(0, "--literal-pathspecs");
+    }
     let o = run(Some(repo), &a, None, false);
     if !o.ok() {
         // An empty repo has no HEAD yet.
@@ -806,6 +824,12 @@ pub fn switch(repo: &Path, name: &str) -> Result<String, String> {
     Err(format!("找不到分支 {name}"))
 }
 
+/// Starts the error of a switch that worked but whose stash could not be put back; the caller
+/// words it for the user.
+pub const RESTORE_FAILED: &str = "restore-failed:";
+/// Between a failed job's error and why its stash could not be put back either.
+pub const STASH_KEPT: &str = "\nstash-kept:";
+
 /// Runs a checkout-like `job` with the uncommitted changes handled as asked: "keep" leaves them as
 /// they are (git refuses when they are in the way), "stash" puts them away and brings them back
 /// afterwards, "discard" throws the tracked ones away first.
@@ -831,11 +855,9 @@ pub fn with_changes(
             }
             match (out, write(repo, &["stash", "pop"])) {
                 (Ok(o), Ok(p)) => Ok(format!("{o}{p}")),
-                (Ok(_), Err(e)) => Err(format!(
-                    "已切換，但改動沒能還原（還留在 stash 裡，可以到 Stashes 再套用）：{e}"
-                )),
+                (Ok(_), Err(e)) => Err(format!("{RESTORE_FAILED}{e}")),
                 (Err(e), Ok(_)) => Err(e),
-                (Err(e), Err(p)) => Err(format!("{e}\n（改動還在 stash 裡：{p}）")),
+                (Err(e), Err(p)) => Err(format!("{e}{STASH_KEPT}{p}")),
             }
         }
         _ => job(),
@@ -980,10 +1002,10 @@ pub fn simple(repo: &Path, op: &str, arg: &str) -> Result<String, String> {
             } else {
                 "--theirs"
             };
-            write(repo, &["checkout", side, "--", arg])
-                .and_then(|_| write(repo, &["add", "--", arg]))
+            write(repo, &["--literal-pathspecs", "checkout", side, "--", arg])
+                .and_then(|_| write(repo, &["--literal-pathspecs", "add", "--", arg]))
         }
-        "mark-resolved" => write(repo, &["add", "--", arg]),
+        "mark-resolved" => write(repo, &["--literal-pathspecs", "add", "--", arg]),
         "stash-apply" => write(repo, &["stash", "apply", &format!("stash@{{{arg}}}")]),
         "stash-pop" => write(repo, &["stash", "pop", &format!("stash@{{{arg}}}")]),
         "stash-drop" => write(repo, &["stash", "drop", &format!("stash@{{{arg}}}")]),
@@ -1035,7 +1057,7 @@ pub struct BlameLine {
 }
 
 pub fn blame(repo: &Path, path: &str, rev: Option<&str>) -> Result<Vec<BlameLine>, String> {
-    let mut args = vec!["blame", "--line-porcelain"];
+    let mut args = vec!["--literal-pathspecs", "blame", "--line-porcelain"];
     if let Some(r) = rev {
         args.push(r);
     }
