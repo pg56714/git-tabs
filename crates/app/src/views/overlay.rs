@@ -343,48 +343,74 @@ impl GitTabs {
                 )
             }
             Some(Modal::Choice(m)) => {
-                let buttons: Vec<AnyElement> = m
+                let button = |c: &Choice| {
+                    let (v, pick) = (c.value.to_string(), m.on_pick.clone());
+                    let kind = if c.primary {
+                        Bk::Primary
+                    } else if c.danger {
+                        Bk::DangerGhost
+                    } else {
+                        Bk::Normal
+                    };
+                    btn(
+                        &p,
+                        SharedString::from(format!("ch-{}", c.value)),
+                        kind,
+                        false,
+                        c.label.clone(),
+                    )
+                    .on_click(cx.listener(move |this, _, w, cx| {
+                        this.close_modal(w, cx);
+                        pick(this, v.clone(), w, cx);
+                    }))
+                    .into_any_element()
+                };
+                // Left to right as the buttons stand: the riskiest first, the main one last. The
+                // lines under the question read the other way, the main choice first and the
+                // riskiest last.
+                let ordered: Vec<&Choice> = m
                     .choices
                     .iter()
-                    .map(|c| {
-                        let (v, pick) = (c.value.to_string(), m.on_pick.clone());
-                        let kind = if c.primary {
-                            Bk::Primary
-                        } else if c.danger {
-                            Bk::Danger
-                        } else {
-                            Bk::Normal
-                        };
-                        btn(
-                            &p,
-                            SharedString::from(format!("ch-{}", c.value)),
-                            kind,
-                            false,
-                            c.label.clone(),
-                        )
-                        .w_full()
-                        .justify_center()
-                        .py(px(8.))
-                        .h_auto()
-                        .on_click(cx.listener(move |this, _, w, cx| {
-                            this.close_modal(w, cx);
-                            pick(this, v.clone(), w, cx);
-                        }))
-                        .into_any_element()
-                    })
+                    .filter(|c| c.danger)
+                    .chain(m.choices.iter().filter(|c| !c.danger && !c.primary))
+                    .chain(m.choices.iter().filter(|c| !c.danger && c.primary))
                     .collect();
+                // What each button does, one line apiece, so the buttons can stay short.
+                let hints = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .children(ordered.iter().rev().map(|c| {
+                        div()
+                            .flex()
+                            .gap(px(10.))
+                            .text_size(px(12.5))
+                            .child(
+                                div()
+                                    .w(px(124.))
+                                    .whitespace_nowrap()
+                                    .flex_none()
+                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                    .text_color(if c.danger { p.danger } else { p.text })
+                                    .child(c.label.clone()),
+                            )
+                            .child(div().flex_1().text_color(p.muted).child(c.hint.clone()))
+                    }));
                 let body = div()
                     .flex()
                     .flex_col()
-                    .gap(px(10.))
+                    .gap(px(12.))
                     .child(div().child(m.body.clone()))
-                    .children(buttons)
+                    .child(hints)
                     .into_any_element();
+                // Cancel alone on the left, as the way out; the choices follow in the same order.
+                let mut foot: Vec<AnyElement> = vec![cancel, div().flex_1().into_any_element()];
+                foot.extend(ordered.iter().map(|c| button(c)));
                 self.dialog(
                     div().child(m.title.clone()).into_any_element(),
                     body,
-                    vec![cancel],
-                    540.,
+                    foot,
+                    460.,
                     cx,
                 )
             }

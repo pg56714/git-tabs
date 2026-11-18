@@ -714,14 +714,15 @@ impl GitTabs {
                         vec![
                             Choice {
                                 value: "rebase",
-                                label: crate::i18n::t("Rebase（把我的 commit 接在 remote 後面）")
-                                    .into(),
+                                label: "Rebase".into(),
+                                hint: crate::i18n::t("把我的 commit 接在 remote 後面").into(),
                                 primary: true,
                                 danger: false,
                             },
                             Choice {
                                 value: "merge",
-                                label: crate::i18n::t("Merge（多一個 merge commit）").into(),
+                                label: "Merge".into(),
+                                hint: crate::i18n::t("多一個 merge commit").into(),
                                 primary: false,
                                 danger: false,
                             },
@@ -889,9 +890,14 @@ impl GitTabs {
             run(self, "keep", cx);
             return;
         }
-        let choice = |value: &'static str, label: &str, primary: bool, danger: bool| Choice {
+        let choice = |value: &'static str,
+                      label: &str,
+                      hint: &str,
+                      primary: bool,
+                      danger: bool| Choice {
             value,
             label: label.into(),
+            hint: hint.into(),
             primary,
             danger,
         };
@@ -903,14 +909,27 @@ impl GitTabs {
                 &[n.to_string()],
             ),
             vec![
-                choice("keep", crate::i18n::t("不動它們，直接切換"), false, false),
+                choice(
+                    "keep",
+                    crate::i18n::t("直接切換"),
+                    crate::i18n::t("修改留在原處，一起帶過去（有衝突會失敗）"),
+                    false,
+                    false,
+                ),
                 choice(
                     "stash",
-                    crate::i18n::t("Stash 起來，切換後再還原"),
+                    crate::i18n::t("Stash 後切換"),
+                    crate::i18n::t("先收起修改，切過去再放回來"),
                     true,
                     false,
                 ),
-                choice("discard", crate::i18n::t("捨棄這些修改"), false, true),
+                choice(
+                    "discard",
+                    crate::i18n::t("捨棄修改"),
+                    crate::i18n::t("丟掉這些修改，無法復原"),
+                    false,
+                    true,
+                ),
             ],
             cx,
             move |this, pick, _, cx| {
@@ -1349,19 +1368,22 @@ impl GitTabs {
             vec![
                 Choice {
                     value: "soft",
-                    label: crate::i18n::t("soft：保留修改，而且保持已 stage").into(),
+                    label: "soft".into(),
+                    hint: crate::i18n::t("保留修改，而且保持已 stage").into(),
                     primary: false,
                     danger: false,
                 },
                 Choice {
                     value: "mixed",
-                    label: crate::i18n::t("mixed：保留修改，取消 stage").into(),
+                    label: "mixed".into(),
+                    hint: crate::i18n::t("保留修改，取消 stage").into(),
                     primary: true,
                     danger: false,
                 },
                 Choice {
                     value: "hard",
-                    label: crate::i18n::t("hard：丟掉所有修改（無法復原）").into(),
+                    label: "hard".into(),
+                    hint: crate::i18n::t("丟掉所有修改（無法復原）").into(),
                     primary: false,
                     danger: true,
                 },

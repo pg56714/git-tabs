@@ -345,7 +345,10 @@ pub type ChoiceDone = Rc<dyn Fn(&mut GitTabs, String, &mut Window, &mut Context<
 
 pub struct Choice {
     pub value: &'static str,
+    /// The button's text: short, so the buttons fit in one row.
     pub label: String,
+    /// One line under the question saying what the button does.
+    pub hint: String,
     pub primary: bool,
     pub danger: bool,
 }

@@ -13,6 +13,8 @@ pub enum Bk {
     Normal,
     Primary,
     Danger,
+    /// Red text and outline on no fill: a risky choice that must not outshine the main one.
+    DangerGhost,
     Ghost,
     On,
 }
@@ -29,6 +31,7 @@ pub fn btn(
         Bk::Normal => (p.panel, p.text, p.border_strong),
         Bk::Primary => (p.accent, gpui_kit::white(), Hsla::transparent_black()),
         Bk::Danger => (p.danger, gpui_kit::white(), Hsla::transparent_black()),
+        Bk::DangerGhost => (p.panel, p.danger, p.danger),
         Bk::Ghost => (Hsla::transparent_black(), p.text, Hsla::transparent_black()),
         Bk::On => (p.accent_bg, p.accent_tx, Hsla::transparent_black()),
     };
