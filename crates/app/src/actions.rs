@@ -830,16 +830,66 @@ impl GitTabs {
 
     // ----- branches, tags, stash -----
 
-    pub fn switch_branch(&mut self, path: &Path, name: &str, cx: &mut Context<Self>) {
-        let n = name.to_string();
-        let ok = crate::i18n::tr("已切換到 {name}", &[("name", (name).to_string())], &[]);
-        self.op(
-            path,
-            crate::i18n::t("切換 branch"),
-            Some(ok),
-            move |r| ops::switch(r, &n),
+    /// Asks what to do with the uncommitted changes before a checkout, as Fork does, then runs
+    /// `run` with the answer ("keep", "stash" or "discard"); with no changes it runs at once.
+    fn with_local_changes(
+        &mut self,
+        path: &Path,
+        cx: &mut Context<Self>,
+        run: impl Fn(&mut Self, &'static str, &mut Context<Self>) + 'static,
+    ) {
+        let n = self
+            .repos
+            .iter()
+            .find(|r| r.path == path)
+            .map_or(0, |r| r.changes());
+        if n == 0 {
+            run(self, "keep", cx);
+            return;
+        }
+        let choice = |value: &'static str, label: &str, primary: bool, danger: bool| Choice {
+            value,
+            label: label.into(),
+            primary,
+            danger,
+        };
+        self.choose(
+            crate::i18n::t("有還沒 commit 的修改"),
+            &crate::i18n::tr(
+                "目前有 {} 個檔案有修改。切換之前要怎麼處理它們？",
+                &[],
+                &[n.to_string()],
+            ),
+            vec![
+                choice("keep", crate::i18n::t("不動它們，直接切換"), false, false),
+                choice("stash", crate::i18n::t("Stash 起來，切換後再還原"), true, false),
+                choice("discard", crate::i18n::t("捨棄這些修改"), false, true),
+            ],
             cx,
+            move |this, pick, _, cx| {
+                let mode: &'static str = match pick.as_str() {
+                    "stash" => "stash",
+                    "discard" => "discard",
+                    _ => "keep",
+                };
+                run(this, mode, cx);
+            },
         );
+    }
+
+    pub fn switch_branch(&mut self, path: &Path, name: &str, cx: &mut Context<Self>) {
+        let (p, n) = (path.to_path_buf(), name.to_string());
+        self.with_local_changes(path, cx, move |this, mode, cx| {
+            let n = n.clone();
+            let ok = crate::i18n::tr("已切換到 {name}", &[("name", n.clone())], &[]);
+            this.op(
+                &p,
+                crate::i18n::t("切換 branch"),
+                Some(ok),
+                move |r| ops::with_changes(r, mode, || ops::switch(r, &n)),
+                cx,
+            );
+        });
     }
 
     pub fn new_branch(
@@ -1339,13 +1389,31 @@ impl GitTabs {
                 return;
             }
         }
+        let sha_for_text = sha.clone();
+        let has_changes = self.repos.iter().any(|r| r.path == path && r.changes() > 0);
+        let checkout = move |this: &mut Self, mode: &'static str, cx: &mut Context<Self>| {
+            let (p, sha) = (path.clone(), sha.clone());
+            this.op(
+                &p,
+                "Checkout",
+                None,
+                move |r| ops::with_changes(r, mode, || ops::simple(r, "checkout", &sha)),
+                cx,
+            );
+        };
+        if has_changes {
+            // The question about the changes also confirms the detached HEAD.
+            let p = self.active_path().unwrap_or_default();
+            self.with_local_changes(&p, cx, checkout);
+            return;
+        }
         self.confirm(
             crate::i18n::t("Checkout 這個 commit？"),
-            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回 branch 或從這裡開新 branch。", &[], &[(short(&sha)).to_string(), subject]),
+            crate::i18n::tr("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回 branch 或從這裡開新 branch。", &[], &[(short(&sha_for_text)).to_string(), subject]),
             "Checkout",
             false,
             cx,
-            move |this, _, cx| this.simple_op(&path, "checkout", sha.clone(), "Checkout", None, cx),
+            move |this, _, cx| checkout(this, "keep", cx),
         );
     }
 

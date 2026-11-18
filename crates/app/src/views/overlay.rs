@@ -363,7 +363,7 @@ impl GitTabs {
                             c.label.clone(),
                         )
                         .w_full()
-                        .justify_start()
+                        .justify_center()
                         .py(px(8.))
                         .h_auto()
                         .on_click(cx.listener(move |this, _, w, cx| {

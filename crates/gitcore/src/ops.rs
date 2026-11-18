@@ -806,6 +806,42 @@ pub fn switch(repo: &Path, name: &str) -> Result<String, String> {
     Err(format!("找不到分支 {name}"))
 }
 
+/// Runs a checkout-like `job` with the uncommitted changes handled as asked: "keep" leaves them as
+/// they are (git refuses when they are in the way), "stash" puts them away and brings them back
+/// afterwards, "discard" throws the tracked ones away first.
+pub fn with_changes(
+    repo: &Path,
+    mode: &str,
+    job: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
+    match mode {
+        "discard" => {
+            write(repo, &["reset", "--hard", "HEAD"])?;
+            job()
+        }
+        "stash" => {
+            let top = |r: &Path| read(r, &["rev-parse", "-q", "--verify", "refs/stash"]).ok();
+            let before = top(repo);
+            stash_push(repo, "git-tabs: before switching", true)?;
+            // Nothing was put away (only ignored files): popping would take someone else's stash.
+            let made = top(repo) != before;
+            let out = job();
+            if !made {
+                return out;
+            }
+            match (out, write(repo, &["stash", "pop"])) {
+                (Ok(o), Ok(p)) => Ok(format!("{o}{p}")),
+                (Ok(_), Err(e)) => Err(format!(
+                    "已切換，但改動沒能還原（還留在 stash 裡，可以到 Stashes 再套用）：{e}"
+                )),
+                (Err(e), Ok(_)) => Err(e),
+                (Err(e), Err(p)) => Err(format!("{e}\n（改動還在 stash 裡：{p}）")),
+            }
+        }
+        _ => job(),
+    }
+}
+
 pub fn create_branch(
     repo: &Path,
     name: &str,
