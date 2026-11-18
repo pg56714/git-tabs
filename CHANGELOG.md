@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.3 (2026-11-18)
+
+### Fixes
+
+- **diff:** leave the open diff alone when a refresh reloads the same content, so it stops jumping back to the first change every few seconds ([ec8eefc](https://github.com/pg56714/git-tabs/commit/ec8eefcd61f4856e858e55f11b8e96624d5ca563))
+
 ## v0.12.2 (2026-11-18)
 
 ### Fixes
