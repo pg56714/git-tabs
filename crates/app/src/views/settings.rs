@@ -498,7 +498,7 @@ impl GitTabs {
                         .child(crate::i18n::tr(
                             "帳號 {}",
                             &[],
-                            &[(d.id.account).to_string()],
+                            std::slice::from_ref(&(d.id.account)),
                         ))
                 } else {
                     div()
@@ -651,7 +651,7 @@ impl GitTabs {
                             crate::i18n::tr(
                                 "已產生 {}。把下面的公鑰加到這個帳號的 GitHub SSH keys：",
                                 &[],
-                                &[(d.kg.path).to_string()],
+                                std::slice::from_ref(&(d.kg.path)),
                             ),
                         )
                         .into_any_element(),
@@ -976,249 +976,256 @@ impl GitTabs {
         let dest_open = m.dest_open;
         let ids_clone = ids.clone();
 
-        let body = div()
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            .child(
-                div()
-                    .flex()
-                    .gap(px(6.))
-                    .items_center()
-                    .child(div().flex_1().child(Input::new(&m.scan_dir)))
-                    .child(
-                        btn(&p, "ar-scan", Bk::Normal, false, crate::i18n::t("掃描"))
-                            .on_click(cx.listener(|this, _, _, cx| this.add_repo_scan(cx))),
-                    )
-                    .child(
-                        btn(
-                            &p,
-                            "ar-browse",
-                            Bk::Normal,
-                            false,
-                            crate::i18n::t("選擇資料夾"),
-                        )
-                        .on_click(cx.listener(|this, _, w, cx| this.add_repo_browse(w, cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .items_center()
-                    .when(!fresh.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .id("ar-all")
-                                .px(px(4.))
-                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .cursor_pointer()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(check_box(&p, all_picked))
-                                .child(crate::i18n::t("全選"))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(Modal::AddRepo(m)) = &mut this.modal {
-                                        if all_picked {
-                                            m.picked.clear();
-                                        } else {
-                                            m.picked = fresh2.iter().cloned().collect();
-                                        }
-                                    }
-                                    cx.notify();
-                                })),
-                        )
-                    })
-                    .child(div().flex_1().min_w_0().child(sub(&p, summary)))
-                    .when(!ids.is_empty() && !fresh.is_empty(), |d| {
-                        d.child(
-                            btn(&p, "ar-bulk", Bk::Normal, true, format!("{bulk_label} ▾"))
-                                .flex_none()
-                                .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                                    let items = pin_items(&ids_bulk, bulk_targets.clone());
-                                    this.open_menu(ev.position(), items, true, cx);
-                                })),
-                        )
-                    }),
-            )
-            .child(
-                div()
-                    .id("ar-list")
-                    .max_h(px(260.))
-                    .overflow_y_scroll()
-                    .border_1()
-                    .border_color(p.border)
-                    .rounded(px(8.))
-                    .p(px(6.))
-                    .children(rows)
-                    .when(fresh.is_empty(), |d| {
-                        d.child(sub(&p, crate::i18n::t("（都已經開了）")))
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        btn(
-                            &p,
-                            "ar-one",
-                            Bk::Normal,
-                            true,
-                            crate::i18n::t("選擇單一 repo 資料夾"),
-                        )
-                        .px(px(16.))
-                        .on_click(cx.listener(|this, _, _, cx| this.add_repo_pick_one(cx))),
-                    )
-                    .child(
-                        btn(
-                            &p,
-                            "ar-clone-toggle",
-                            if clone_open { Bk::On } else { Bk::Normal },
-                            true,
-                            if clone_open {
-                                crate::i18n::t("Clone 新的 repo ▴")
-                            } else {
-                                crate::i18n::t("Clone 新的 repo ▾")
-                            },
-                        )
-                        .px(px(16.))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(Modal::AddRepo(m)) = &mut this.modal {
-                                m.clone_open = !m.clone_open;
-                            }
-                            cx.notify();
-                        })),
-                    ),
-            )
-            .when(clone_open, |d| {
-                d.child(
+        let body =
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(10.))
+                .child(
                     div()
                         .flex()
-                        .flex_col()
                         .gap(px(6.))
-                        .p(px(10.))
+                        .items_center()
+                        .child(div().flex_1().child(Input::new(&m.scan_dir)))
+                        .child(
+                            btn(&p, "ar-scan", Bk::Normal, false, crate::i18n::t("掃描"))
+                                .on_click(cx.listener(|this, _, _, cx| this.add_repo_scan(cx))),
+                        )
+                        .child(
+                            btn(
+                                &p,
+                                "ar-browse",
+                                Bk::Normal,
+                                false,
+                                crate::i18n::t("選擇資料夾"),
+                            )
+                            .on_click(cx.listener(|this, _, w, cx| this.add_repo_browse(w, cx))),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .when(!fresh.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .id("ar-all")
+                                    .px(px(4.))
+                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(check_box(&p, all_picked))
+                                    .child(crate::i18n::t("全選"))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if let Some(Modal::AddRepo(m)) = &mut this.modal {
+                                            if all_picked {
+                                                m.picked.clear();
+                                            } else {
+                                                m.picked = fresh2.iter().cloned().collect();
+                                            }
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                        })
+                        .child(div().flex_1().min_w_0().child(sub(&p, summary)))
+                        .when(!ids.is_empty() && !fresh.is_empty(), |d| {
+                            d.child(
+                                btn(&p, "ar-bulk", Bk::Normal, true, format!("{bulk_label} ▾"))
+                                    .flex_none()
+                                    .on_click(cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                                        let items = pin_items(&ids_bulk, bulk_targets.clone());
+                                        this.open_menu(ev.position(), items, true, cx);
+                                    })),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .id("ar-list")
+                        .max_h(px(260.))
+                        .overflow_y_scroll()
                         .border_1()
                         .border_color(p.border)
                         .rounded(px(8.))
+                        .p(px(6.))
+                        .children(rows)
+                        .when(fresh.is_empty(), |d| {
+                            d.child(sub(&p, crate::i18n::t("（都已經開了）")))
+                        }),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
                         .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(div().flex_1().child(Input::new(&m.url)))
-                                .when(!ids_clone.is_empty(), |d| {
-                                    d.child(
-                                        btn(
-                                            &p,
-                                            "ar-clone-pin",
-                                            if clone_pin_label.is_some() {
-                                                Bk::Normal
-                                            } else {
-                                                Bk::Ghost
-                                            },
-                                            false,
-                                            format!(
-                                                "{} ▾",
-                                                clone_pin_label.clone().unwrap_or_else(|| {
-                                                    crate::i18n::t("之後再選").to_string()
-                                                })
-                                            ),
-                                        )
-                                        .flex_none()
-                                        .on_click(
-                                            cx.listener(move |this, ev: &ClickEvent, _, cx| {
-                                                let mut items = vec![MenuItem::new(
-                                                    crate::i18n::t("之後再選"),
-                                                    |t, _, cx| {
-                                                        if let Some(Modal::AddRepo(m)) =
-                                                            &mut t.modal
-                                                        {
-                                                            m.clone_pin.clear();
-                                                        }
-                                                        cx.notify();
-                                                    },
-                                                )];
-                                                for (id, name) in ids_clone.clone() {
-                                                    items.push(MenuItem::new(
-                                                        name,
-                                                        move |t, _, cx| {
+                            btn(
+                                &p,
+                                "ar-one",
+                                Bk::Normal,
+                                true,
+                                crate::i18n::t("選擇單一 repo 資料夾"),
+                            )
+                            .px(px(16.))
+                            .on_click(cx.listener(|this, _, _, cx| this.add_repo_pick_one(cx))),
+                        )
+                        .child(
+                            btn(
+                                &p,
+                                "ar-clone-toggle",
+                                if clone_open { Bk::On } else { Bk::Normal },
+                                true,
+                                if clone_open {
+                                    crate::i18n::t("Clone 新的 repo ▴")
+                                } else {
+                                    crate::i18n::t("Clone 新的 repo ▾")
+                                },
+                            )
+                            .px(px(16.))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(Modal::AddRepo(m)) = &mut this.modal {
+                                    m.clone_open = !m.clone_open;
+                                }
+                                cx.notify();
+                            })),
+                        ),
+                )
+                .when(clone_open, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.))
+                            .p(px(10.))
+                            .border_1()
+                            .border_color(p.border)
+                            .rounded(px(8.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(div().flex_1().child(Input::new(&m.url)))
+                                    .when(!ids_clone.is_empty(), |d| {
+                                        d.child(
+                                            btn(
+                                                &p,
+                                                "ar-clone-pin",
+                                                if clone_pin_label.is_some() {
+                                                    Bk::Normal
+                                                } else {
+                                                    Bk::Ghost
+                                                },
+                                                false,
+                                                format!(
+                                                    "{} ▾",
+                                                    clone_pin_label.clone().unwrap_or_else(|| {
+                                                        crate::i18n::t("之後再選").to_string()
+                                                    })
+                                                ),
+                                            )
+                                            .flex_none()
+                                            .on_click(
+                                                cx.listener(move |this, ev: &ClickEvent, _, cx| {
+                                                    let mut items = vec![MenuItem::new(
+                                                        crate::i18n::t("之後再選"),
+                                                        |t, _, cx| {
                                                             if let Some(Modal::AddRepo(m)) =
                                                                 &mut t.modal
                                                             {
-                                                                m.clone_pin = id.clone();
+                                                                m.clone_pin.clear();
                                                             }
                                                             cx.notify();
                                                         },
-                                                    ));
+                                                    )];
+                                                    for (id, name) in ids_clone.clone() {
+                                                        items.push(MenuItem::new(
+                                                            name,
+                                                            move |t, _, cx| {
+                                                                if let Some(Modal::AddRepo(m)) =
+                                                                    &mut t.modal
+                                                                {
+                                                                    m.clone_pin = id.clone();
+                                                                }
+                                                                cx.notify();
+                                                            },
+                                                        ));
+                                                    }
+                                                    this.open_menu(ev.position(), items, true, cx);
+                                                }),
+                                            ),
+                                        )
+                                    })
+                                    .child(dim(
+                                        btn(&p, "ar-clone", Bk::Primary, false, "Clone")
+                                            .flex_none()
+                                            .min_w(px(96.))
+                                            .when(!busy, |b| {
+                                                b.on_click(cx.listener(|this, _, _, cx| {
+                                                    this.add_repo_clone(cx)
+                                                }))
+                                            }),
+                                        busy,
+                                    )),
+                            )
+                            .child(if dest_open {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(div().flex_1().child(Input::new(&m.clone_to)))
+                                    .child(sub(
+                                        &p,
+                                        crate::i18n::tr(
+                                            "留空就放在 {}",
+                                            &[],
+                                            std::slice::from_ref(&default_dest),
+                                        ),
+                                    ))
+                                    .into_any_element()
+                            } else {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(sub(
+                                        &p,
+                                        crate::i18n::tr(
+                                            "會放在 {}",
+                                            &[],
+                                            std::slice::from_ref(&default_dest),
+                                        ),
+                                    ))
+                                    .child(
+                                        btn(
+                                            &p,
+                                            "ar-dest",
+                                            Bk::Normal,
+                                            true,
+                                            crate::i18n::t("更改存放位置"),
+                                        )
+                                        .min_w(px(72.))
+                                        .px(px(16.))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| {
+                                                if let Some(Modal::AddRepo(m)) = &mut this.modal {
+                                                    m.dest_open = true;
                                                 }
-                                                this.open_menu(ev.position(), items, true, cx);
+                                                cx.notify();
                                             }),
                                         ),
                                     )
-                                })
-                                .child(dim(
-                                    btn(&p, "ar-clone", Bk::Primary, false, "Clone")
-                                        .flex_none()
-                                        .min_w(px(96.))
-                                        .when(!busy, |b| {
-                                            b.on_click(
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.add_repo_clone(cx)
-                                                }),
-                                            )
-                                        }),
-                                    busy,
-                                )),
-                        )
-                        .child(if dest_open {
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(div().flex_1().child(Input::new(&m.clone_to)))
-                                .child(sub(
-                                    &p,
-                                    crate::i18n::tr("留空就放在 {}", &[], &[default_dest.clone()]),
-                                ))
-                                .into_any_element()
-                        } else {
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(sub(
-                                    &p,
-                                    crate::i18n::tr("會放在 {}", &[], &[default_dest.clone()]),
-                                ))
-                                .child(
-                                    btn(
-                                        &p,
-                                        "ar-dest",
-                                        Bk::Normal,
-                                        true,
-                                        crate::i18n::t("更改存放位置"),
-                                    )
-                                    .min_w(px(72.))
-                                    .px(px(16.))
-                                    .on_click(cx.listener(
-                                        |this, _, _, cx| {
-                                            if let Some(Modal::AddRepo(m)) = &mut this.modal {
-                                                m.dest_open = true;
-                                            }
-                                            cx.notify();
-                                        },
-                                    )),
-                                )
-                                .into_any_element()
-                        }),
-                )
-            })
-            .when_some(m.err.clone(), |d, e| {
-                d.child(div().text_size(px(12.)).text_color(p.danger).child(e))
-            });
+                                    .into_any_element()
+                            }),
+                    )
+                })
+                .when_some(m.err.clone(), |d, e| {
+                    d.child(div().text_size(px(12.)).text_color(p.danger).child(e))
+                });
         let cancel = btn(&p, "ar-cancel", Bk::Normal, false, crate::i18n::t("取消"))
             .on_click(cx.listener(|this, _, w, cx| this.close_modal(w, cx)));
         let add = dim(

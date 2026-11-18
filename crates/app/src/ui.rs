@@ -129,7 +129,7 @@ pub fn st_badge(p: &Pal, letter: char) -> Div {
 /// Fill and outline of branch labels as Fork draws them: an orange outline, a near-white fill for local
 /// branches and a pale orange one for remote ones. `(local fill, local outline, remote fill, remote outline)`.
 pub fn ref_colors(p: &Pal) -> (Hsla, Hsla, Hsla, Hsla) {
-    let hex = |h: u32| -> Hsla { gpui_kit::Rgba::from(gpui_kit::rgb(h)).into() };
+    let hex = |h: u32| -> Hsla { gpui_kit::rgb(h).into() };
     if p.panel.l < 0.5 {
         (hex(0x3d3321), hex(0xe69a2e), hex(0x2f2a22), hex(0xb8863f))
     } else {
@@ -461,22 +461,22 @@ pub fn rich(p: &Pal, s: &str) -> AnyElement {
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '*' && chars.get(i + 1) == Some(&'*') {
-            if let Some(end) = (i + 2..chars.len().saturating_sub(1))
+        if chars[i] == '*'
+            && chars.get(i + 1) == Some(&'*')
+            && let Some(end) = (i + 2..chars.len().saturating_sub(1))
                 .find(|&j| chars[j] == '*' && chars[j + 1] == '*')
-            {
-                let start = out.len();
-                out.extend(&chars[i + 2..end]);
-                hl.push((
-                    start..out.len(),
-                    HighlightStyle {
-                        font_weight: Some(FontWeight::BOLD),
-                        ..Default::default()
-                    },
-                ));
-                i = end + 2;
-                continue;
-            }
+        {
+            let start = out.len();
+            out.extend(&chars[i + 2..end]);
+            hl.push((
+                start..out.len(),
+                HighlightStyle {
+                    font_weight: Some(FontWeight::BOLD),
+                    ..Default::default()
+                },
+            ));
+            i = end + 2;
+            continue;
         }
         if chars[i] == '`'
             && let Some(end) = (i + 1..chars.len()).find(|&j| chars[j] == '`')

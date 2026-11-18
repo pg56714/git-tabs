@@ -221,7 +221,7 @@ impl Cache {
             let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
             let mut got = (me.fetch)(&url, &tmp, None) && ok(&tmp);
             if !got && let Some((slug, api)) = hint {
-                got = me.from_github(&slug, &api, &f, &tmp);
+                got = me.fetch_github(&slug, &api, &f, &tmp);
             }
             let got = got && std::fs::rename(&tmp, &f).is_ok();
             let _ = std::fs::remove_file(&tmp);
@@ -242,7 +242,7 @@ impl Cache {
     /// GitHub's answer for a commit: the account behind its author, and that account's picture.
     /// Tries the accounts the GitHub CLI knows (the one that read this repo last time first),
     /// since a private repo only answers to an account that can see it, and then no login.
-    fn from_github(&self, slug: &str, api: &str, f: &Path, tmp: &Path) -> bool {
+    fn fetch_github(&self, slug: &str, api: &str, f: &Path, tmp: &Path) -> bool {
         let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
         let json = f.with_extension("json");
         let known = self.known.get_or_init(|| (self.accounts)());

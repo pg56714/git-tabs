@@ -2,10 +2,10 @@
 //! components (diff, inputs, scrollbars) match the hand-built parts of the window.
 
 use gpui_kit::component::{Theme, ThemeMode};
-use gpui_kit::{App, Hsla, Rgba, SharedString, Window, px, rgb};
+use gpui_kit::{App, Hsla, SharedString, Window, px, rgb};
 
 fn c(hex: u32) -> Hsla {
-    Rgba::from(rgb(hex)).into()
+    rgb(hex).into()
 }
 
 /// One theme's colours, named after the CSS variables they come from.

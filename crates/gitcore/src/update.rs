@@ -420,7 +420,7 @@ mod tests {
         std::fs::write(&served, "<html>Not Found</html>").unwrap();
         let target = d.path().join("git-tabs.AppImage");
         fake_program(&target, "OLD");
-        let rel = release(&url(d.path()).replace("file:///", "file:///"));
+        let rel = release(&url(d.path()));
         let mut rel = rel;
         for a in &mut rel.assets {
             a.browser_download_url = url(&served);

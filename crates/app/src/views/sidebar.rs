@@ -19,6 +19,9 @@ const STEP: f32 = 14.;
 /// The room a fold arrow takes before an icon (its width and the gap after it).
 const CHEV: f32 = 18.;
 
+/// A remote's name, its URL and its branches (name without the remote, sha).
+type RemoteGroup = (String, String, Vec<(String, String)>);
+
 /// The fold arrow of a section, a folder or a remote.
 fn chevron(p: &crate::theme::Pal, closed: bool) -> gpui_kit::Svg {
     icon(
@@ -69,6 +72,7 @@ impl GitTabs {
         .into_any_element()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn nav_item(
         &self,
         id: &'static str,
@@ -385,7 +389,7 @@ impl GitTabs {
 
         // ---- remotes
         // Every remote with its branches; a remote just added has none yet and is listed all the same.
-        let mut groups: Vec<(String, String, Vec<(String, String)>)> = refs
+        let mut groups: Vec<RemoteGroup> = refs
             .iter()
             .flat_map(|x| x.remote_list.iter())
             .map(|r| (r.name.clone(), r.url.clone(), Vec::new()))

@@ -1094,11 +1094,11 @@ pub fn blame(repo: &Path, path: &str, rev: Option<&str>) -> Result<Vec<BlameLine
             cur.summary = a.into();
         } else if cur.sha.is_empty() {
             let mut p = l.split(' ');
-            if let (Some(sha), Some(_), Some(n)) = (p.next(), p.next(), p.next()) {
-                if sha.len() >= 40 {
-                    cur.sha = sha.into();
-                    cur.line = n.parse().unwrap_or(0);
-                }
+            if let (Some(sha), Some(_), Some(n)) = (p.next(), p.next(), p.next())
+                && sha.len() >= 40
+            {
+                cur.sha = sha.into();
+                cur.line = n.parse().unwrap_or(0);
             }
         }
     }

@@ -224,10 +224,7 @@ Use the identity button in the toolbar to assign it an identity.",
         "把我的 commit 接在 remote 後面",
         "Put my commits on top of the remote",
     ),
-    (
-        "多一個 merge commit",
-        "Adds a merge commit",
-    ),
+    ("多一個 merge commit", "Adds a merge commit"),
     ("已 push {name}", "Pushed {name}"),
     ("強制 Push？", "Force push?"),
     (
@@ -288,10 +285,7 @@ Use the identity button in the toolbar to assign it an identity.",
         "保留修改，而且保持已 stage",
         "Keep the changes, still staged",
     ),
-    (
-        "保留修改，取消 stage",
-        "Keep the changes, unstaged",
-    ),
+    ("保留修改，取消 stage", "Keep the changes, unstaged"),
     (
         "丟掉所有修改（無法復原）",
         "Throw all changes away (cannot be undone)",

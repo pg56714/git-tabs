@@ -85,7 +85,7 @@ impl GitTabs {
         let mut items = vec![MenuItem::header(crate::i18n::tr(
             "這個 repo（{}）用哪個 identity",
             &[],
-            &[(r.name).to_string()],
+            std::slice::from_ref(&(r.name)),
         ))];
         for id in &self.cfg.identities {
             let key = id.id.clone();

@@ -75,6 +75,9 @@ pub struct Gate {
     cv: Condvar,
 }
 
+/// Work to run once a repo's refresh has finished.
+type AfterRefresh = Box<dyn FnOnce(&mut GitTabs, &mut Context<GitTabs>)>;
+
 pub struct GitTabs {
     pub ctx: Arc<Ctx>,
     pub avatars: Arc<gitcore::avatar::Cache>,
@@ -134,7 +137,7 @@ pub struct GitTabs {
     commit_diffs: VecDeque<(String, FileDiff)>,
     inflight: HashSet<PathBuf>,
     again: HashSet<PathBuf>,
-    after_refresh: HashMap<PathBuf, Vec<Box<dyn FnOnce(&mut GitTabs, &mut Context<GitTabs>)>>>,
+    after_refresh: HashMap<PathBuf, Vec<AfterRefresh>>,
     diff_seq: u64,
     /// Which diff the shared view shows now: repo, file key and content fingerprint.
     diff_shown: Option<(PathBuf, String, String)>,
@@ -175,15 +178,14 @@ impl GitTabs {
                     DiffEvent::SelectionChanged(Some(r)) | DiffEvent::SelectionEnded(r) => {
                         this.stored_sel = Some(r.clone())
                     }
-                    DiffEvent::SelectionChanged(None) => {
+                    DiffEvent::SelectionChanged(None)
                         // Pressing the selection bar itself must not lose the pick.
                         if this
                             .bar_press
                             .is_none_or(|t| t.elapsed() > Duration::from_millis(800))
-                        {
+                        => {
                             this.stored_sel = None;
                         }
-                    }
                     _ => {}
                 }
                 cx.notify();
@@ -867,7 +869,7 @@ impl GitTabs {
         if self.ticks == 2 {
             self.check_update(false, cx);
         }
-        if self.ticks % 6 == 0 {
+        if self.ticks.is_multiple_of(6) {
             if let Some(r) = self.repo()
                 && r.busy.is_none()
                 && r.queued == 0
@@ -882,14 +884,14 @@ impl GitTabs {
                 .filter(|(i, _)| *i != self.active)
                 .map(|(_, r)| r.path.clone())
                 .collect();
-            if self.ticks % 36 == 0 {
+            if self.ticks.is_multiple_of(36) {
                 for p in others {
                     self.refresh_summary(&p, cx);
                 }
             }
         }
         let m = self.cfg.fetch_minutes as u64;
-        if m > 0 && self.ticks % (m * 12) == 0 {
+        if m > 0 && self.ticks.is_multiple_of(m * 12) {
             self.fetch_all(true, cx);
         }
     }

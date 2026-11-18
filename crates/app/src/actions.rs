@@ -675,7 +675,7 @@ impl GitTabs {
                 &[("name", (name).to_string())],
                 &[],
             )),
-            |r| ops::fetch(r),
+            ops::fetch,
             cx,
         );
     }
@@ -890,17 +890,14 @@ impl GitTabs {
             run(self, "keep", cx);
             return;
         }
-        let choice = |value: &'static str,
-                      label: &str,
-                      hint: &str,
-                      primary: bool,
-                      danger: bool| Choice {
-            value,
-            label: label.into(),
-            hint: hint.into(),
-            primary,
-            danger,
-        };
+        let choice =
+            |value: &'static str, label: &str, hint: &str, primary: bool, danger: bool| Choice {
+                value,
+                label: label.into(),
+                hint: hint.into(),
+                primary,
+                danger,
+            };
         self.choose(
             crate::i18n::t("有還沒 commit 的修改"),
             &crate::i18n::tr(
@@ -1819,7 +1816,7 @@ impl GitTabs {
         let msg = crate::i18n::tr(
             "{name} 改用 {}",
             &[("name", (name).to_string())],
-            &[(ident.name).to_string()],
+            std::slice::from_ref(&(ident.name)),
         );
         let v = json!({ "repo": path.display().to_string(), "identity": ident });
         self.op_with(
@@ -1964,7 +1961,7 @@ impl GitTabs {
                 FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr(
                     "留空就用 {}-<branch>",
                     &[],
-                    &[base.clone()],
+                    std::slice::from_ref(&base),
                 )),
                 FieldSpec::checkbox("open", crate::i18n::t("建好就開成新分頁"), true),
             ],

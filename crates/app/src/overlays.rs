@@ -291,7 +291,7 @@ impl GitTabs {
         let mut v: Vec<PaletteItem> = Vec::new();
         for (i, r) in self.repos.iter().enumerate() {
             v.push(item(
-                crate::i18n::tr("切換到 {}", &[], &[(r.name).to_string()]),
+                crate::i18n::tr("切換到 {}", &[], std::slice::from_ref(&(r.name))),
                 "repo",
                 move |t, _, cx| t.switch_tab(i, cx),
             ));
@@ -366,7 +366,7 @@ impl GitTabs {
             {
                 let (path, name) = (p.clone(), b.name.clone());
                 v.push(item(
-                    crate::i18n::tr("切換 branch：{}", &[], &[(b.name).to_string()]),
+                    crate::i18n::tr("切換 branch：{}", &[], std::slice::from_ref(&(b.name))),
                     n.clone(),
                     move |t, _, cx| t.switch_branch(&path, &name, cx),
                 ));
