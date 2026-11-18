@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.0 (2026-11-18)
+
+### Features
+
+- **dialogs:** lay the choice buttons out in one row with a line saying what each does, cancel on the left and the riskiest choice outlined in red ([97941d5](https://github.com/pg56714/git-tabs/commit/97941d54a734498e5847c47efcfaf859975566a2))
+
 ## v0.12.3 (2026-11-18)
 
 ### Fixes
