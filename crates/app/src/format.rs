@@ -60,12 +60,16 @@ fn local_offset_secs() -> i64 {
     #[cfg(windows)]
     {
         unsafe extern "C" {
+            fn _tzset();
             fn _get_timezone(seconds: *mut i32) -> i32;
             fn _get_dstbias(seconds: *mut i32) -> i32;
         }
         let (mut tz, mut dst) = (0i32, 0i32);
-        // SAFETY: both functions only write one i32 through the pointer we pass.
+        // SAFETY: both getters only write one i32 through the pointer we pass. `_tzset` must run
+        // first: a Rust program never initialises the C runtime's zone, which then stays at its
+        // built-in US Pacific default (UTC-7), and every date came out 15 hours early.
         unsafe {
+            _tzset();
             _get_timezone(&mut tz);
             _get_dstbias(&mut dst);
         }
