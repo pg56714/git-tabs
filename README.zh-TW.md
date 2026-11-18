@@ -59,6 +59,8 @@ gh attestation verify <file> --repo pg56714/git-tabs
 - 各個面板之間的分隔線可以拖曳調整，大小會記住；視窗的大小和位置也會記住。分頁很多時，用滑鼠滾輪就能左右捲動。
 - **指令面板**（`Ctrl+K`）、會改變東西的 git 指令都記在指令紀錄裡、深色／淺色主題。
 
+在 macOS 上，指令面板和 commit 的快捷鍵用 `Cmd` 而不是 `Ctrl`（`Cmd+K`、`Cmd+Enter`）。
+
 ## 身分怎麼運作
 
 每個 repo 自己選身分（工具列的身分按鈕）。選了之後，會把 `user.name`、`user.email` 和 `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes` 寫進那個 repo 自己的 `.git/config`，所以在終端機直接下 `git`，用的也是和 app 一樣的身分。

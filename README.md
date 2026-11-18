@@ -59,6 +59,8 @@ gh attestation verify <file> --repo pg56714/git-tabs
 - Panes can be resized by dragging the dividers; their sizes are remembered, and so are the window's size and place. Lots of tabs scroll sideways with the mouse wheel.
 - **Command palette** (`Ctrl+K`), command log of every git command that changed something, light/dark theme.
 
+On macOS, the command palette and commit shortcuts use `Cmd` instead of `Ctrl` (`Cmd+K`, `Cmd+Enter`).
+
 ## How identities work
 
 You choose an identity for each repo (the identity button in the toolbar). Choosing writes `user.name`, `user.email` and `core.sshCommand = ssh -i "<key>" -o IdentitiesOnly=yes` into that repo's own `.git/config`, so plain `git` in a terminal uses the same identity as the app.
