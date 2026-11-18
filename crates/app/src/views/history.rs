@@ -113,11 +113,6 @@ fn graph_cell(row: GraphRow, width: f32, bg: Hsla, dot: bool) -> impl IntoElemen
 }
 
 impl GitTabs {
-    /// Whether the open repo's remote is on github.com: remote branches then carry GitHub's mark.
-    pub fn on_github(&self) -> bool {
-        self.repo().and_then(|r| r.summary.as_ref()).and_then(|s| s.remote_url.as_deref()).is_some_and(|u| u.contains("github.com"))
-    }
-
     pub fn pick_commit(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo_mut() else { return };
         r.sel_commit = Some(sha);
@@ -160,7 +155,6 @@ impl GitTabs {
     pub fn render_history(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let _ = window;
         let p = self.pal;
-        let gh = self.on_github();
         let Some(r) = self.repo() else { return div().into_any_element() };
         let commits: Arc<Vec<Commit>> = r.commits.clone();
         let graph = r.graph.clone();
@@ -319,11 +313,11 @@ impl GitTabs {
                                                 let id = format!("pill-{ix}-{k}");
                                                 match v {
                                                     RefView::Branch { name, current, remotes } => {
-                                                        make(ref_group(&p, name, current, remotes, gh, dim), id, name.to_string(), if current { "head" } else { "branch" })
+                                                        make(ref_group(&p, name, current, remotes, dim), id, name.to_string(), if current { "head" } else { "branch" })
                                                     }
-                                                    RefView::Remote(name) => make(ref_pill(&p, name, "remote", gh, dim), id, name.to_string(), "remote"),
-                                                    RefView::Detached => ref_pill(&p, "", "detached", gh, dim).into_any_element(),
-                                                    RefView::Tag(name) => ref_pill(&p, name, "tag", gh, dim).into_any_element(),
+                                                    RefView::Remote(name) => make(ref_pill(&p, name, "remote", dim), id, name.to_string(), "remote"),
+                                                    RefView::Detached => ref_pill(&p, "", "detached", dim).into_any_element(),
+                                                    RefView::Tag(name) => ref_pill(&p, name, "tag", dim).into_any_element(),
                                                 }
                                             })
                                             .collect::<Vec<AnyElement>>()
@@ -546,12 +540,11 @@ impl GitTabs {
                     .text_size(px(12.))
                     .text_color(p.muted)
                     .when(!d.refs.is_empty(), |c| c.child(kv("REFS", div().flex().flex_wrap().text_color(p.text).children({
-                        let gh = self.on_github();
                         ref_views(&d.refs).into_iter().map(move |v| match v {
-                            RefView::Branch { name, current, remotes } => ref_group(&p, name, current, remotes, gh, false),
-                            RefView::Remote(name) => ref_pill(&p, name, "remote", gh, false),
-                            RefView::Detached => ref_pill(&p, "", "detached", gh, false),
-                            RefView::Tag(name) => ref_pill(&p, name, "tag", gh, false),
+                            RefView::Branch { name, current, remotes } => ref_group(&p, name, current, remotes, false),
+                            RefView::Remote(name) => ref_pill(&p, name, "remote", false),
+                            RefView::Detached => ref_pill(&p, "", "detached", false),
+                            RefView::Tag(name) => ref_pill(&p, name, "tag", false),
                         })
                     }).into_any_element())))
                     .child(kv(

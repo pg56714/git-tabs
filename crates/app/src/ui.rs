@@ -152,13 +152,13 @@ pub fn check_box(p: &Pal, on: bool) -> gpui_kit::Svg {
     icon(if on { Ico::SquareCheck } else { Ico::Square }, 15., if on { p.accent } else { p.muted })
 }
 
-/// A remote's icon: GitHub's mark when the repo's remote is on github.com, else a cloud.
-pub fn remote_icon(github: bool) -> Ico {
-    if github { Ico::Github } else { Ico::Cloud }
+/// A remote's icon: a cloud for every host, as Fork draws it.
+pub fn remote_icon() -> Ico {
+    Ico::Cloud
 }
 
 /// `.ref` pill: branch, remote, tag, head, detached.
-pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool, dim: bool) -> Div {
+pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
     // A commit the checked-out branch does not have: its labels fade with its text, as in Fork.
     let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
@@ -189,7 +189,7 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, github: bool, dim: bool) -> Div
     }
     let mark: Option<AnyElement> = match kind {
         "head" | "detached" => Some(icon(Ico::Check, 14., ink).into_any_element()),
-        "remote" => Some(icon(remote_icon(github), 13., ink).into_any_element()),
+        "remote" => Some(icon(remote_icon(), 13., ink).into_any_element()),
         "tag" => Some(icon(Ico::Tag, 12., ink2).into_any_element()),
         _ => None,
     };
@@ -250,7 +250,7 @@ pub fn ref_views(refs: &[gitcore::parse::RefLabel]) -> Vec<RefView<'_>> {
 
 /// A local branch's label. When its remote branch is on the same commit, the remote's icon goes in
 /// front of the name (`[icon | \u{2713} main]`), like Fork, rather than a second `origin/main` label.
-pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: bool, dim: bool) -> Div {
+pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, dim: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
     let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
     let ink = if dim { p.faint } else { p.text };
@@ -278,7 +278,7 @@ pub fn ref_group(p: &Pal, name: &str, current: bool, remotes: usize, github: boo
                     .border(px(1.5))
                     .border_color(rb)
                     .bg(rf)
-                    .children((0..remotes.min(3)).map(|_| icon(remote_icon(github), 13., ink))),
+                    .children((0..remotes.min(3)).map(|_| icon(remote_icon(), 13., ink))),
             )
         })
         .child(

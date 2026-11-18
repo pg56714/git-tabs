@@ -280,7 +280,7 @@ impl GitTabs {
                             }),
                         )
                         .child(chevron(&p, gclosed))
-                        .child(icon(remote_icon(url.contains("github.com")), 14., p.text))
+                        .child(icon(remote_icon(), 14., p.text))
                         .child(div().child(remote.clone()))
                         .into_any_element(),
                 );
