@@ -136,6 +136,8 @@ pub struct GitTabs {
     again: HashSet<PathBuf>,
     after_refresh: HashMap<PathBuf, Vec<Box<dyn FnOnce(&mut GitTabs, &mut Context<GitTabs>)>>>,
     diff_seq: u64,
+    /// Which diff the shared view shows now: repo, file key and content fingerprint.
+    diff_shown: Option<(PathBuf, String, String)>,
     gate: Arc<Gate>,
     gate_next: u64,
     watcher: Option<Debouncer<RecommendedWatcher>>,
@@ -328,6 +330,7 @@ impl GitTabs {
             again: HashSet::new(),
             after_refresh: HashMap::new(),
             diff_seq: 0,
+            diff_shown: None,
             gate: Arc::new(Gate {
                 turn: Mutex::new(0),
                 cv: Condvar::new(),
@@ -1492,6 +1495,7 @@ impl GitTabs {
         let Some(sel) = r.sel.clone() else {
             r.diff = None;
             r.diff_for.clear();
+            self.diff_shown = None;
             self.diff.update(cx, |d, cx| d.set_files([], cx));
             return;
         };
@@ -1590,9 +1594,21 @@ impl GitTabs {
         d: FileDiff,
         cx: &mut Context<Self>,
     ) {
+        let hash = diff_hash(&d);
+        // The periodic refresh reloads the open file's diff every few seconds. Installing the same
+        // diff again resets the list and re-scrolls it to the first change, which looked like the
+        // diff jumping by itself, and dropped the selected lines; leave it alone.
+        let shown = (repo.to_path_buf(), key.clone(), hash.clone());
+        if self.diff_shown.as_ref() == Some(&shown) {
+            if let Some(r) = self.repo_mut() {
+                r.diff = Some(d);
+                r.diff_for = key;
+            }
+            return;
+        }
+        self.diff_shown = Some(shown);
         let files = DiffFile::parse(&crate::diffmap::to_patch(&d)).unwrap_or_default();
         // A file marked as reviewed that changed since gets unmarked.
-        let hash = diff_hash(&d);
         if let Some(r) = self.repos.iter().find(|r| r.path == repo)
             && let Some(k) = self.seen_key(r, sel.list, &sel.path)
             && self.seen.get(&k).is_some_and(|h| *h != hash)
@@ -1772,6 +1788,7 @@ impl GitTabs {
                 self.load_diff(cx);
             }
         }
+        self.diff_shown = None;
         self.diff.update(cx, |d, cx| d.set_files([], cx));
         cx.notify();
     }
