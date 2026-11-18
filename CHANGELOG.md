@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.12.0 (2026-11-18)
+
+### Features
+
+- **branches:** ask what to do with uncommitted changes before a checkout, as Fork does ([7271a0f](https://github.com/pg56714/git-tabs/commit/7271a0f1f750bd0494629dc29582f71186ffdf31))
+
+### Fixes
+
+- **tabs:** leave the branch name out of the tab so the repo's name is never pushed out ([2a2022f](https://github.com/pg56714/git-tabs/commit/2a2022f7c0b7d266ebe1087433ea0737f665af8e))
+
+### Other
+
+- cargo fmt, and let the i18n literal test look past rustfmt's line breaks ([b129cc3](https://github.com/pg56714/git-tabs/commit/b129cc363c98abb62537335525db0e02ed08b808))
+
 ## v0.11.1 (2026-11-18)
 
 ### Fixes
