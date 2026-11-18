@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.1 (2026-11-18)
+
+### Fixes
+
+- **ui:** draw every remote with a cloud, as Fork does, instead of guessing GitHub from the URL ([c1a2b02](https://github.com/pg56714/git-tabs/commit/c1a2b0239fbd2ba6f31068f7909984a2f6b747c5))
+
 ## v0.11.0 (2026-11-17)
 
 ### Features
