@@ -34,7 +34,7 @@ pub fn ago_at(unix: i64, now: i64) -> String {
 
 /// Local time as "YYYY/MM/DD HH:MM".
 pub fn date_time(unix: i64) -> String {
-    let (y, mo, d, h, mi) = civil(unix + local_offset_secs());
+    let (y, mo, d, h, mi) = civil(unix + local_offset_secs(unix));
     format!("{y}/{mo:02}/{d:02} {h:02}:{mi:02}")
 }
 
@@ -55,32 +55,59 @@ fn civil(t: i64) -> (i64, u32, u32, u32, u32) {
     (y, m, d, (rem / 3600) as u32, ((rem % 3600) / 60) as u32)
 }
 
-/// Offset of the local time zone from UTC, in seconds.
-fn local_offset_secs() -> i64 {
+/// Days since 1970-01-01 of a calendar date (the inverse of `civil`).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+/// Offset of the local time zone from UTC at `unix`, in seconds, daylight saving included.
+///
+/// Asked of the C runtime's `localtime`, which reads the system zone itself. Reading its zone
+/// variables directly gets the runtime's built-in US Pacific default, because a Rust program
+/// never initialises them, and every date then came out hours off.
+fn local_offset_secs(unix: i64) -> i64 {
+    // The nine ints every C `struct tm` starts with; the fields after them differ per platform
+    // and are not read, but the room is reserved because the callee writes them.
+    #[repr(C)]
+    #[derive(Default)]
+    struct Tm {
+        sec: i32,
+        min: i32,
+        hour: i32,
+        mday: i32,
+        mon: i32,
+        year: i32,
+        wday: i32,
+        yday: i32,
+        isdst: i32,
+        _rest: [i64; 4],
+    }
+    unsafe extern "C" {
+        #[cfg(windows)]
+        fn _localtime64_s(out: *mut Tm, t: *const i64) -> i32;
+        #[cfg(not(windows))]
+        fn localtime_r(t: *const i64, out: *mut Tm) -> *mut Tm;
+    }
+    let mut tm = Tm::default();
+    // SAFETY: `tm` is at least as large as the platform's `struct tm`, and both calls only
+    // write into it through the pointer we pass.
     #[cfg(windows)]
-    {
-        unsafe extern "C" {
-            fn _tzset();
-            fn _get_timezone(seconds: *mut i32) -> i32;
-            fn _get_dstbias(seconds: *mut i32) -> i32;
-        }
-        let (mut tz, mut dst) = (0i32, 0i32);
-        // SAFETY: both getters only write one i32 through the pointer we pass. `_tzset` must run
-        // first: a Rust program never initialises the C runtime's zone, which then stays at its
-        // built-in US Pacific default (UTC-7), and every date came out 15 hours early.
-        unsafe {
-            _tzset();
-            _get_timezone(&mut tz);
-            _get_dstbias(&mut dst);
-        }
-        // _get_timezone is seconds west of UTC. A summer hour of error on a minute-level
-        // timestamp is hidden by the relative "ago" form, so daylight saving is not tracked.
-        -(tz as i64) - dst as i64
-    }
+    let ok = unsafe { _localtime64_s(&mut tm, &unix) } == 0;
     #[cfg(not(windows))]
-    {
-        0
+    let ok = !unsafe { localtime_r(&unix, &mut tm) }.is_null();
+    if !ok {
+        return 0;
     }
+    let local = days_from_civil(tm.year as i64 + 1900, tm.mon as i64 + 1, tm.mday as i64) * 86400
+        + tm.hour as i64 * 3600
+        + tm.min as i64 * 60
+        + tm.sec as i64;
+    local - unix
 }
 
 pub fn short(sha: &str) -> String {
@@ -185,5 +212,20 @@ mod tests {
         assert_eq!(short("abcdef0123"), "abcdef0");
         assert!(fuzzy("push my", "Push my-repo"));
         assert!(!fuzzy("pull my", "Push my-repo"));
+    }
+
+    #[test]
+    fn calendar_round_trips() {
+        for t in [0i64, 1794972822, 951782400, -86400] {
+            let (y, m, d, _, _) = civil(t);
+            assert_eq!(days_from_civil(y, m as i64, d as i64), t.div_euclid(86400));
+        }
+    }
+
+    #[test]
+    fn local_offset_is_a_real_zone() {
+        // A whole number of minutes within the range of zones in use.
+        let o = local_offset_secs(1794972822);
+        assert!(o % 60 == 0 && (-12 * 3600..=14 * 3600).contains(&o), "{o}");
     }
 }
