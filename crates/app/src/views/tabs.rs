@@ -98,15 +98,17 @@ impl GitTabs {
                 } else {
                     None
                 };
-                let branch = r.summary.as_ref().map(|s| {
-                    let mut t = s.branch.clone().unwrap_or_else(|| "(detached)".into());
+                // Only how far the branch is from its remote; the branch's own name is in the
+                // toolbar, and a long one would push the repo's name out of the tab.
+                let branch = r.summary.as_ref().and_then(|s| {
+                    let mut t = Vec::new();
                     if s.ahead > 0 {
-                        t.push_str(&format!(" ↑{}", s.ahead));
+                        t.push(format!("↑{}", s.ahead));
                     }
                     if s.behind > 0 {
-                        t.push_str(&format!(" ↓{}", s.behind));
+                        t.push(format!("↓{}", s.behind));
                     }
-                    t
+                    (!t.is_empty()).then(|| t.join(" "))
                 });
                 let name = r.name.clone();
                 div()
