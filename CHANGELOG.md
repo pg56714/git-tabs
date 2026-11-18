@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.1 (2026-11-18)
+
+### Fixes
+
+- take file names literally, keep missing repos as tabs, and tighten the line-discard and checkout prompts ([b9562ff](https://github.com/pg56714/git-tabs/commit/b9562ffdd69c3c7a8d1f24d6ea74c38f5a890a0a))
+
 ## v0.12.0 (2026-11-18)
 
 ### Features
