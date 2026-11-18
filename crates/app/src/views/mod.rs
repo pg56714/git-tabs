@@ -41,8 +41,9 @@ pub fn bind_keys(cx: &mut gpui_kit::App) {
         KeyBinding::new("f5", Refresh, Some("GitTabs")),
         KeyBinding::new(key("r"), Refresh, Some("GitTabs")),
         KeyBinding::new(key("k"), OpenPalette, Some("GitTabs")),
-        KeyBinding::new(key("tab"), NextTab, Some("GitTabs")),
-        KeyBinding::new(key("shift-tab"), PreviousTab, Some("GitTabs")),
+        // Ctrl on every platform: Cmd+Tab is the macOS app switcher and never reaches the app.
+        KeyBinding::new("ctrl-tab", NextTab, Some("GitTabs")),
+        KeyBinding::new("ctrl-shift-tab", PreviousTab, Some("GitTabs")),
         KeyBinding::new("escape", CloseOverlay, Some("GitTabs")),
         KeyBinding::new(key("enter"), Commit, Some("CommitBox")),
         KeyBinding::new(key("shift-enter"), CommitAndPush, Some("CommitBox")),
@@ -319,12 +320,13 @@ pub fn root(
                 }
             }),
         )
-        // The tab row is the title bar: it drags the window, and the window buttons sit at its right.
+        // The tab row is the title bar: it drags the window, and the window buttons sit at its right
+        // (on macOS they sit at its left, so the tabs start after them).
         .child(
             gpui_kit::component::TitleBar::new()
                 .interactive_children()
                 .bg(p.bg)
-                .pl(px(6.))
+                .pl(px(if cfg!(target_os = "macos") { 80. } else { 6. }))
                 .child(this.render_tabs(window, cx)),
         )
         .children(this.render_update_bar(cx))
