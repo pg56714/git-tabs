@@ -1,8 +1,8 @@
 //! The Reflog list.
 
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::*;
@@ -12,7 +12,9 @@ use crate::ui::*;
 impl GitTabs {
     pub fn render_reflog(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let p = self.pal;
-        let Some(r) = self.repo() else { return div().into_any_element() };
+        let Some(r) = self.repo() else {
+            return div().into_any_element();
+        };
         let rows = r.reflog.clone();
         div()
             .flex()

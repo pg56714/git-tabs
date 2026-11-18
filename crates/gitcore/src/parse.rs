@@ -60,7 +60,14 @@ pub fn parse_status(out: &str) -> (BranchInfo, Vec<StatusEntry>) {
                 let f: Vec<&str> = rec.splitn(9, ' ').collect();
                 if f.len() == 9 {
                     let (x, y) = xy(f[1]);
-                    files.push(StatusEntry { path: f[8].into(), orig_path: None, x, y, untracked: false, conflicted: false });
+                    files.push(StatusEntry {
+                        path: f[8].into(),
+                        orig_path: None,
+                        x,
+                        y,
+                        untracked: false,
+                        conflicted: false,
+                    });
                 }
             }
             b'2' => {
@@ -68,17 +75,38 @@ pub fn parse_status(out: &str) -> (BranchInfo, Vec<StatusEntry>) {
                 let orig = it.next().map(str::to_string);
                 if f.len() == 10 {
                     let (x, y) = xy(f[1]);
-                    files.push(StatusEntry { path: f[9].into(), orig_path: orig, x, y, untracked: false, conflicted: false });
+                    files.push(StatusEntry {
+                        path: f[9].into(),
+                        orig_path: orig,
+                        x,
+                        y,
+                        untracked: false,
+                        conflicted: false,
+                    });
                 }
             }
             b'u' => {
                 let f: Vec<&str> = rec.splitn(11, ' ').collect();
                 if f.len() == 11 {
                     let (x, y) = xy(f[1]);
-                    files.push(StatusEntry { path: f[10].into(), orig_path: None, x, y, untracked: false, conflicted: true });
+                    files.push(StatusEntry {
+                        path: f[10].into(),
+                        orig_path: None,
+                        x,
+                        y,
+                        untracked: false,
+                        conflicted: true,
+                    });
                 }
             }
-            b'?' => files.push(StatusEntry { path: rec[2..].into(), orig_path: None, x: '.', y: '?', untracked: true, conflicted: false }),
+            b'?' => files.push(StatusEntry {
+                path: rec[2..].into(),
+                orig_path: None,
+                x: '.',
+                y: '?',
+                untracked: true,
+                conflicted: false,
+            }),
             _ => {}
         }
     }
@@ -128,7 +156,10 @@ impl FileDiff {
         let mut h: u32 = 2166136261;
         for hk in &self.hunks {
             for l in &hk.lines {
-                for b in std::iter::once(l.t as u8).chain(l.text.bytes()).chain(std::iter::once(if l.cr { 13 } else { 10 })) {
+                for b in std::iter::once(l.t as u8)
+                    .chain(l.text.bytes())
+                    .chain(std::iter::once(if l.cr { 13 } else { 10 }))
+                {
                     h = (h ^ b as u32).wrapping_mul(16777619);
                 }
             }
@@ -173,7 +204,14 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
         if !in_hunk || line.starts_with("@@ ") {
             if line.starts_with("@@ ") {
                 if let Some((a, b, c, d)) = parse_hunk_header(line) {
-                    f.hunks.push(Hunk { header: line.into(), old_start: a, old_lines: b, new_start: c, new_lines: d, lines: vec![] });
+                    f.hunks.push(Hunk {
+                        header: line.into(),
+                        old_start: a,
+                        old_lines: b,
+                        new_start: c,
+                        new_lines: d,
+                        lines: vec![],
+                    });
                     in_hunk = true;
                 }
             } else if let Some(p) = line.strip_prefix("--- ") {
@@ -201,7 +239,12 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
         match line.as_bytes().first() {
             Some(b'+') | Some(b'-') | Some(b' ') => {
                 // A CRLF file's lines end in `\r` inside the diff; keep track of it on the side.
-                h.lines.push(DiffLine { t: line.as_bytes()[0] as char, text: line[1..].to_string(), no_eol: false, cr: raw.ends_with('\r') });
+                h.lines.push(DiffLine {
+                    t: line.as_bytes()[0] as char,
+                    text: line[1..].to_string(),
+                    no_eol: false,
+                    cr: raw.ends_with('\r'),
+                });
             }
             Some(b'\\') => {
                 if let Some(l) = h.lines.last_mut() {
@@ -214,7 +257,12 @@ pub fn parse_diff(out: &str) -> Vec<FileDiff> {
                 let used_old = h.lines.iter().filter(|l| l.t != '+').count() as u32;
                 let used_new = h.lines.iter().filter(|l| l.t != '-').count() as u32;
                 if used_old < h.old_lines || used_new < h.new_lines {
-                    h.lines.push(DiffLine { t: ' ', text: String::new(), no_eol: false, cr: false });
+                    h.lines.push(DiffLine {
+                        t: ' ',
+                        text: String::new(),
+                        no_eol: false,
+                        cr: false,
+                    });
                 }
             }
             _ => in_hunk = false,
@@ -261,16 +309,31 @@ pub fn parse_decorations(d: &str) -> Vec<RefLabel> {
     let mut out = Vec::new();
     for part in d.split(", ").map(str::trim).filter(|s| !s.is_empty()) {
         if let Some(b) = part.strip_prefix("HEAD -> ") {
-            out.push(RefLabel { name: b.trim_start_matches("refs/heads/").into(), kind: "head" });
+            out.push(RefLabel {
+                name: b.trim_start_matches("refs/heads/").into(),
+                kind: "head",
+            });
         } else if part == "HEAD" {
-            out.push(RefLabel { name: "HEAD".into(), kind: "detached" });
+            out.push(RefLabel {
+                name: "HEAD".into(),
+                kind: "detached",
+            });
         } else if let Some(t) = part.strip_prefix("tag: ") {
-            out.push(RefLabel { name: t.trim_start_matches("refs/tags/").into(), kind: "tag" });
+            out.push(RefLabel {
+                name: t.trim_start_matches("refs/tags/").into(),
+                kind: "tag",
+            });
         } else if let Some(b) = part.strip_prefix("refs/heads/") {
-            out.push(RefLabel { name: b.into(), kind: "branch" });
+            out.push(RefLabel {
+                name: b.into(),
+                kind: "branch",
+            });
         } else if let Some(r) = part.strip_prefix("refs/remotes/") {
             if !r.ends_with("/HEAD") {
-                out.push(RefLabel { name: r.into(), kind: "remote" });
+                out.push(RefLabel {
+                    name: r.into(),
+                    kind: "remote",
+                });
             }
         } else if let Some(s) = part.strip_prefix("refs/stash") {
             let _ = s;
@@ -290,7 +353,11 @@ pub fn parse_log(out: &str) -> Vec<Commit> {
             }
             Some(Commit {
                 sha: f[0].into(),
-                parents: f[1].split(' ').filter(|s| !s.is_empty()).map(String::from).collect(),
+                parents: f[1]
+                    .split(' ')
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect(),
                 author: f[2].into(),
                 email: f[3].into(),
                 time: f[4].parse().unwrap_or(0),
@@ -320,10 +387,22 @@ pub fn parse_name_status(out: &str) -> Vec<ChangedFile> {
         if status == 'R' || status == 'C' {
             let old = it.next().unwrap_or_default().to_string();
             let new = it.next().unwrap_or_default().to_string();
-            v.push(ChangedFile { path: new, old_path: Some(old), status, add: None, del: None });
+            v.push(ChangedFile {
+                path: new,
+                old_path: Some(old),
+                status,
+                add: None,
+                del: None,
+            });
         } else {
             let p = it.next().unwrap_or_default().to_string();
-            v.push(ChangedFile { path: p, old_path: None, status, add: None, del: None });
+            v.push(ChangedFile {
+                path: p,
+                old_path: None,
+                status,
+                add: None,
+                del: None,
+            });
         }
     }
     v
@@ -332,7 +411,11 @@ pub fn parse_name_status(out: &str) -> Vec<ChangedFile> {
 /// Fills add/del counts from `--numstat -z` output (binary files stay None).
 pub fn apply_numstat(files: &mut [ChangedFile], out: &str) {
     // Index by path once: a commit touching thousands of files must not be O(n²).
-    let index: std::collections::HashMap<String, usize> = files.iter().enumerate().map(|(k, f)| (f.path.clone(), k)).collect();
+    let index: std::collections::HashMap<String, usize> = files
+        .iter()
+        .enumerate()
+        .map(|(k, f)| (f.path.clone(), k))
+        .collect();
     let mut it = out.split('\0');
     let mut i = 0;
     while let Some(rec) = it.next() {
@@ -340,14 +423,21 @@ pub fn apply_numstat(files: &mut [ChangedFile], out: &str) {
             continue;
         }
         let mut f = rec.splitn(3, '\t');
-        let (a, d, p) = (f.next().unwrap_or(""), f.next().unwrap_or(""), f.next().unwrap_or(""));
+        let (a, d, p) = (
+            f.next().unwrap_or(""),
+            f.next().unwrap_or(""),
+            f.next().unwrap_or(""),
+        );
         let path = if p.is_empty() {
             let _old = it.next();
             it.next().unwrap_or_default().to_string()
         } else {
             p.to_string()
         };
-        let idx = index.get(&path).copied().or_else(|| (i < files.len()).then_some(i));
+        let idx = index
+            .get(&path)
+            .copied()
+            .or_else(|| (i < files.len()).then_some(i));
         if let Some(k) = idx {
             files[k].add = a.parse().ok();
             files[k].del = d.parse().ok();
@@ -408,15 +498,40 @@ pub fn parse_refs(out: &str) -> Refs {
         let time = f[5].parse().unwrap_or(0);
         if let Some(n) = refname.strip_prefix("refs/heads/") {
             let (ahead, behind, gone) = parse_track(f[3]);
-            r.branches.push(Branch { name: n.into(), sha, upstream: (!f[2].is_empty()).then(|| f[2].into()), ahead, behind, gone, current: f[4] == "*", time });
+            r.branches.push(Branch {
+                name: n.into(),
+                sha,
+                upstream: (!f[2].is_empty()).then(|| f[2].into()),
+                ahead,
+                behind,
+                gone,
+                current: f[4] == "*",
+                time,
+            });
         } else if let Some(n) = refname.strip_prefix("refs/remotes/") {
             if !n.ends_with("/HEAD") {
-                r.remotes.push(Branch { name: n.into(), sha, upstream: None, ahead: 0, behind: 0, gone: false, current: false, time });
+                r.remotes.push(Branch {
+                    name: n.into(),
+                    sha,
+                    upstream: None,
+                    ahead: 0,
+                    behind: 0,
+                    gone: false,
+                    current: false,
+                    time,
+                });
             }
         } else if let Some(n) = refname.strip_prefix("refs/tags/") {
             // Annotated tags point at a tag object; show the commit it tags.
             let peeled = f.get(6).copied().unwrap_or("");
-            r.tags.push(Tag { name: n.into(), sha: if peeled.is_empty() { sha } else { peeled.into() } });
+            r.tags.push(Tag {
+                name: n.into(),
+                sha: if peeled.is_empty() {
+                    sha
+                } else {
+                    peeled.into()
+                },
+            });
         }
     }
     // Newest version first, as Fork lists them: v0.10.0 before v0.9.0, v0.5.0 before v0.1.0.
@@ -470,7 +585,12 @@ pub struct Worktree {
 pub fn parse_worktrees(out: &str) -> Vec<Worktree> {
     let mut v = Vec::new();
     for block in out.replace("\r\n", "\n").split("\n\n") {
-        let mut w = Worktree { path: String::new(), head: String::new(), branch: None, bare: false };
+        let mut w = Worktree {
+            path: String::new(),
+            head: String::new(),
+            branch: None,
+            bare: false,
+        };
         for l in block.lines() {
             if let Some(p) = l.strip_prefix("worktree ") {
                 w.path = p.into();
@@ -500,8 +620,17 @@ pub fn parse_stashes(out: &str) -> Vec<Stash> {
     out.lines()
         .filter_map(|l| {
             let f: Vec<&str> = l.splitn(3, '\x1f').collect();
-            let idx = f.first()?.strip_prefix("stash@{")?.strip_suffix('}')?.parse().ok()?;
-            Some(Stash { index: idx, sha: f.get(1)?.to_string(), message: f.get(2).unwrap_or(&"").to_string() })
+            let idx = f
+                .first()?
+                .strip_prefix("stash@{")?
+                .strip_suffix('}')?
+                .parse()
+                .ok()?;
+            Some(Stash {
+                index: idx,
+                sha: f.get(1)?.to_string(),
+                message: f.get(2).unwrap_or(&"").to_string(),
+            })
         })
         .collect()
 }
@@ -518,7 +647,12 @@ pub fn parse_reflog(out: &str) -> Vec<ReflogEntry> {
     out.lines()
         .filter_map(|l| {
             let f: Vec<&str> = l.splitn(4, '\x1f').collect();
-            (f.len() == 4).then(|| ReflogEntry { selector: f[0].into(), sha: f[1].into(), time: f[2].parse().unwrap_or(0), message: f[3].into() })
+            (f.len() == 4).then(|| ReflogEntry {
+                selector: f[0].into(),
+                sha: f[1].into(),
+                time: f[2].parse().unwrap_or(0),
+                message: f[3].into(),
+            })
         })
         .collect()
 }
@@ -527,10 +661,19 @@ pub fn parse_reflog(out: &str) -> Vec<ReflogEntry> {
 mod tests {
     #[test]
     fn tags_list_newest_first() {
-        let out = ["v0.1.0", "v0.10.0", "v0.2.0", "v0.1.2", "v0.9.0", "v0.1.1"].map(|n| format!("refs/tags/{n}abc0
-")).concat();
+        let out = ["v0.1.0", "v0.10.0", "v0.2.0", "v0.1.2", "v0.9.0", "v0.1.1"]
+            .map(|n| {
+                format!(
+                    "refs/tags/{n}abc0
+"
+                )
+            })
+            .concat();
         let names: Vec<String> = parse_refs(&out).tags.into_iter().map(|t| t.name).collect();
-        assert_eq!(names, ["v0.10.0", "v0.9.0", "v0.2.0", "v0.1.2", "v0.1.1", "v0.1.0"]);
+        assert_eq!(
+            names,
+            ["v0.10.0", "v0.9.0", "v0.2.0", "v0.1.2", "v0.1.1", "v0.1.0"]
+        );
     }
 
     use super::*;
@@ -566,15 +709,28 @@ u UU N... 100644 100644 100644 100644 h1 h2 h3 conf.txt\0\
 
     #[test]
     fn decorations() {
-        let r = parse_decorations("HEAD -> refs/heads/feat/x, refs/remotes/origin/feat/x, refs/remotes/origin/HEAD, tag: refs/tags/v1, refs/heads/main");
+        let r = parse_decorations(
+            "HEAD -> refs/heads/feat/x, refs/remotes/origin/feat/x, refs/remotes/origin/HEAD, tag: refs/tags/v1, refs/heads/main",
+        );
         let k: Vec<_> = r.iter().map(|x| (x.name.as_str(), x.kind)).collect();
-        assert_eq!(k, vec![("feat/x", "head"), ("origin/feat/x", "remote"), ("v1", "tag"), ("main", "branch")]);
+        assert_eq!(
+            k,
+            vec![
+                ("feat/x", "head"),
+                ("origin/feat/x", "remote"),
+                ("v1", "tag"),
+                ("main", "branch")
+            ]
+        );
     }
 
     #[test]
     fn name_status_and_numstat() {
         let mut f = parse_name_status("M\0a.rs\0R087\0old.rs\0new.rs\0A\0img.png\0");
-        apply_numstat(&mut f, "3\t1\ta.rs\x002\t2\t\0old.rs\0new.rs\0-\t-\timg.png\0");
+        apply_numstat(
+            &mut f,
+            "3\t1\ta.rs\x002\t2\t\0old.rs\0new.rs\0-\t-\timg.png\0",
+        );
         assert_eq!(f[1].path, "new.rs");
         assert_eq!((f[0].add, f[0].del), (Some(3), Some(1)));
         assert_eq!((f[1].add, f[1].del), (Some(2), Some(2)));

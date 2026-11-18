@@ -15,7 +15,9 @@ pub fn is_en() -> bool {
 
 /// What the system language says: Chinese variants get Traditional Chinese, everything else English.
 pub fn detect() -> bool {
-    sys_locale::get_locale().map(|l| !l.to_lowercase().starts_with("zh")).unwrap_or(false)
+    sys_locale::get_locale()
+        .map(|l| !l.to_lowercase().starts_with("zh"))
+        .unwrap_or(false)
 }
 
 /// `setting` is "auto", "zh-TW" or "en".
@@ -38,7 +40,11 @@ fn table() -> &'static HashMap<&'static str, &'static str> {
 pub use gitcore::ops::{CONFLICT_HEADER, CONFLICT_HEADER_REBASE};
 
 pub fn t(s: &'static str) -> &'static str {
-    if is_en() { table().get(s).copied().unwrap_or(s) } else { s }
+    if is_en() {
+        table().get(s).copied().unwrap_or(s)
+    } else {
+        s
+    }
 }
 
 /// A template with `{name}` and `{}` holes, translated and filled.
@@ -74,41 +80,74 @@ pub fn tr(tmpl: &'static str, named: &[(&str, String)], pos: &[String]) -> Strin
 
 const TABLE: &[(&str, &str)] = &[
     ("輸入 branch 名稱", "Enter a branch name"),
-    ("Branch 名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元", "A branch name cannot contain spaces or any of ~ ^ : ? * [ \\"),
-    ("輸入 tag 名稱（不能有空白）", "Enter a tag name (no spaces)"),
+    (
+        "Branch 名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元",
+        "A branch name cannot contain spaces or any of ~ ^ : ? * [ \\",
+    ),
+    (
+        "輸入 tag 名稱（不能有空白）",
+        "Enter a tag name (no spaces)",
+    ),
     ("{label}完成", "{label} done"),
-    ("{label}有 {n} 個 conflict 要解決", "{label} stopped with {n} conflicts to resolve"),
+    (
+        "{label}有 {n} 個 conflict 要解決",
+        "{label} stopped with {n} conflicts to resolve",
+    ),
     ("{label}失敗", "{label} failed"),
     ("取消 Stage", "Unstage"),
     ("`{}` 的修改", "the changes to `{}`"),
     ("{} 個檔案的修改", "the changes to {} files"),
-    ("\n其中 {untracked} 個是新檔案，會直接**刪除**。", "\n{untracked} of them are new files and will be **deleted**."),
+    (
+        "\n其中 {untracked} 個是新檔案，會直接**刪除**。",
+        "\n{untracked} of them are new files and will be **deleted**.",
+    ),
     ("Discard 修改？", "Discard changes?"),
-    ("{what}會被丟掉，**無法復原**。{extra}", "{what} will be thrown away and **cannot be recovered**.{extra}"),
+    (
+        "{what}會被丟掉，**無法復原**。{extra}",
+        "{what} will be thrown away and **cannot be recovered**.{extra}",
+    ),
     ("Discard", "Discard"),
     ("已 Discard", "Discarded"),
-    ("選取的範圍沒有異動的行", "No changed lines in the selection"),
+    (
+        "選取的範圍沒有異動的行",
+        "No changed lines in the selection",
+    ),
     ("Stage 選取的行", "Stage selected lines"),
     ("取消 Stage 選取的行", "Unstage selected lines"),
     ("Discard 選取的行", "Discard selected lines"),
     ("Discard 選取的行？", "Discard the selected lines?"),
-    ("`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。", "The {n} selected changed lines in `{file}` will be thrown away and **cannot be recovered**."),
-    ("先解決 conflict 的檔案", "Resolve the conflicted files first"),
-    ("先 Stage 要 commit 的檔案", "Stage the files to commit first"),
+    (
+        "`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。",
+        "The {n} selected changed lines in `{file}` will be thrown away and **cannot be recovered**.",
+    ),
+    (
+        "先解決 conflict 的檔案",
+        "Resolve the conflicted files first",
+    ),
+    (
+        "先 Stage 要 commit 的檔案",
+        "Stage the files to commit first",
+    ),
     ("輸入 commit 標題", "Enter a commit title"),
     ("{}：{subj}", "{}: {subj}"),
     ("已 amend", "Amended"),
     ("已 commit", "Committed"),
-    ("**{}**（{}）還沒選 identity，會用 git 的全域設定 commit：
+    (
+        "**{}**（{}）還沒選 identity，會用 git 的全域設定 commit：
 
 **{}**
 
-可以點工具列的 identity 按鈕把它指定給某個 identity。", "**{}** ({}) has no identity yet; it will commit with git's global settings:
+可以點工具列的 identity 按鈕把它指定給某個 identity。",
+        "**{}** ({}) has no identity yet; it will commit with git's global settings:
 
 **{}**
 
-Use the identity button in the toolbar to assign it an identity."),
-    ("（git 沒有設定名稱和 email）", "(git has no name or email set)"),
+Use the identity button in the toolbar to assign it an identity.",
+    ),
+    (
+        "（git 沒有設定名稱和 email）",
+        "(git has no name or email set)",
+    ),
     ("沒有 remote", "no remote"),
     ("Revert 這個 commit", "Revert this commit"),
     ("選取的設為", "Set selected to"),
@@ -120,21 +159,45 @@ Use the identity button in the toolbar to assign it an identity."),
     ("留空就放在 {}", "Leave empty to use {}"),
     ("會放在 {}", "Goes to {}"),
     ("還沒選 identity", "no identity yet"),
-    ("Identity 由你自己選：用工具列右上的 identity 按鈕，替每個 repo 選一個。選了就寫進那個 repo 自己的 git 設定，所以在終端機執行的 git 也會用同一個 identity。", "Pick the identity yourself: use the identity button in the toolbar to choose one for each repo. The choice is written into that repo's own git config, so git run in a terminal uses the same identity."),
+    (
+        "Identity 由你自己選：用工具列右上的 identity 按鈕，替每個 repo 選一個。選了就寫進那個 repo 自己的 git 設定，所以在終端機執行的 git 也會用同一個 identity。",
+        "Pick the identity yourself: use the identity button in the toolbar to choose one for each repo. The choice is written into that repo's own git config, so git run in a terminal uses the same identity.",
+    ),
     ("目前用在：{}", "Used by: {}"),
-    ("（沒有開著的 repo 選用這個 identity）", "(no open repo uses this identity)"),
-    ("Identity 改成手動選擇：{} 個 repo 已依舊規則固定好 identity", "Identities are chosen by hand now: {} repos were pinned to the identity their old rules gave them"),
+    (
+        "（沒有開著的 repo 選用這個 identity）",
+        "(no open repo uses this identity)",
+    ),
+    (
+        "Identity 改成手動選擇：{} 個 repo 已依舊規則固定好 identity",
+        "Identities are chosen by hand now: {} repos were pinned to the identity their old rules gave them",
+    ),
     ("這個 repo 還沒選 identity", "This repo has no identity yet"),
     ("照樣 commit", "Commit anyway"),
     ("已 fetch {name}", "Fetched {name}"),
     ("已 pull {name}", "Pulled {name}"),
-    ("本地和 remote 各有新的 commit", "Local and remote both have new commits"),
-    ("沒辦法直接快轉。要用哪種方式 Merge remote 的修改？", "A fast-forward is not possible. How should the remote changes be merged?"),
-    ("Rebase（把我的 commit 接在 remote 後面）", "Rebase (put my commits on top of the remote)"),
-    ("Merge（多一個 merge commit）", "Merge (adds a merge commit)"),
+    (
+        "本地和 remote 各有新的 commit",
+        "Local and remote both have new commits",
+    ),
+    (
+        "沒辦法直接快轉。要用哪種方式 Merge remote 的修改？",
+        "A fast-forward is not possible. How should the remote changes be merged?",
+    ),
+    (
+        "Rebase（把我的 commit 接在 remote 後面）",
+        "Rebase (put my commits on top of the remote)",
+    ),
+    (
+        "Merge（多一個 merge commit）",
+        "Merge (adds a merge commit)",
+    ),
     ("已 push {name}", "Pushed {name}"),
     ("強制 Push？", "Force push?"),
-    ("會用 `--force-with-lease` 覆蓋 remote 的 **{branch}**。如果 remote 有你還沒拿到的 commit，git 會拒絕，不會蓋掉別人的東西。", "This overwrites **{branch}** on the remote with `--force-with-lease`. If the remote has commits you do not have yet, git refuses, so nobody else's work is lost."),
+    (
+        "會用 `--force-with-lease` 覆蓋 remote 的 **{branch}**。如果 remote 有你還沒拿到的 commit，git 會拒絕，不會蓋掉別人的東西。",
+        "This overwrites **{branch}** on the remote with `--force-with-lease`. If the remote has commits you do not have yet, git refuses, so nobody else's work is lost.",
+    ),
     ("強制 Push", "Force push"),
     ("{name} 已 Sync{}{}", "{name} is in sync{}{}"),
     ("，拉下 {b}", ", pulled {b}"),
@@ -149,32 +212,65 @@ Use the identity button in the toolbar to assign it an identity."),
     ("建立", "Create"),
     ("已建立 {name}", "Created {name}"),
     ("建立 branch", "Create branch"),
-    ("刪除本地 branch **{name}**{}。", "Delete the local branch **{name}**{}."),
+    (
+        "刪除本地 branch **{name}**{}。",
+        "Delete the local branch **{name}**{}.",
+    ),
     ("（remote 的 {u} 不會被刪）", " (the remote {u} is kept)"),
     ("刪除 branch？", "Delete branch?"),
     ("刪除", "Delete"),
     ("刪除 branch", "Delete branch"),
     ("已刪除 {n2}", "Deleted {n2}"),
     ("Branch 還沒 Merge", "Branch is not merged"),
-    ("**{n2}** 有還沒 Merge 的 commit，強制刪除後只能從 Reflog 找回。", "**{n2}** has commits that are not merged; after a forced delete they can only be found in the Reflog."),
+    (
+        "**{n2}** 有還沒 Merge 的 commit，強制刪除後只能從 Reflog 找回。",
+        "**{n2}** has commits that are not merged; after a forced delete they can only be found in the Reflog.",
+    ),
     ("強制刪除", "Force delete"),
     ("已刪除 {n3}", "Deleted {n3}"),
-    ("把 **{name}** merge 進目前的 **{cur}**？", "Merge **{name}** into the current branch **{cur}**?"),
+    (
+        "把 **{name}** merge 進目前的 **{cur}**？",
+        "Merge **{name}** into the current branch **{cur}**?",
+    ),
     ("已把 {name} merge 進 {cur}", "Merged {name} into {cur}"),
-    ("把目前的 **{cur}** rebase 到 **{name}** 上？已經 push 過的 commit 會被改寫。", "Rebase the current branch **{cur}** onto **{name}**? Commits that were already pushed will be rewritten."),
+    (
+        "把目前的 **{cur}** rebase 到 **{name}** 上？已經 push 過的 commit 會被改寫。",
+        "Rebase the current branch **{cur}** onto **{name}**? Commits that were already pushed will be rewritten.",
+    ),
     ("已 cherry-pick {}", "Cherry-picked {}"),
-    ("新增一個 commit 來抵銷 `{}` 的修改？", "Add a commit that undoes the changes of `{}`?"),
+    (
+        "新增一個 commit 來抵銷 `{}` 的修改？",
+        "Add a commit that undoes the changes of `{}`?",
+    ),
     ("已 revert {}", "Reverted {}"),
     ("Reset {branch} 到 {}", "Reset {branch} to {}"),
-    ("選擇怎麼處理目前的修改：", "Choose what to do with the current changes:"),
-    ("soft：保留修改，而且保持已 stage", "soft: keep the changes, still staged"),
-    ("mixed：保留修改，取消 stage", "mixed: keep the changes, unstaged"),
-    ("hard：丟掉所有修改（無法復原）", "hard: throw all changes away (cannot be undone)"),
+    (
+        "選擇怎麼處理目前的修改：",
+        "Choose what to do with the current changes:",
+    ),
+    (
+        "soft：保留修改，而且保持已 stage",
+        "soft: keep the changes, still staged",
+    ),
+    (
+        "mixed：保留修改，取消 stage",
+        "mixed: keep the changes, unstaged",
+    ),
+    (
+        "hard：丟掉所有修改（無法復原）",
+        "hard: throw all changes away (cannot be undone)",
+    ),
     ("已 reset --{mode} 到 {}", "Reset --{mode} to {}"),
     ("確定 hard reset？", "Really hard reset?"),
-    ("所有還沒 commit 的修改都會消失，**無法復原**。", "Every uncommitted change will be lost and **cannot be recovered**."),
+    (
+        "所有還沒 commit 的修改都會消失，**無法復原**。",
+        "Every uncommitted change will be lost and **cannot be recovered**.",
+    ),
     ("Checkout 這個 commit？", "Check out this commit?"),
-    ("會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回 branch 或從這裡開新 branch。", "This puts you in a detached HEAD at `{}` ({}). To keep working, switch back to a branch or start a new branch from here."),
+    (
+        "會進入 detached HEAD 狀態，停在 `{}`（{}）。之後要繼續工作，請切回 branch 或從這裡開新 branch。",
+        "This puts you in a detached HEAD at `{}` ({}). To keep working, switch back to a branch or start a new branch from here.",
+    ),
     ("在 {} 加 Tag", "Tag {}"),
     ("說明（可留空）", "Message (optional)"),
     ("確定", "OK"),
@@ -190,7 +286,10 @@ Use the identity button in the toolbar to assign it an identity."),
     ("刪除 stash", "Delete stash"),
     ("已刪除 stash", "Stash deleted"),
     ("中止 {state}？", "Abort {state}?"),
-    ("會回到開始之前的狀態，解到一半的 conflict 會被丟掉。", "This returns to the state before it started; conflicts resolved so far are dropped."),
+    (
+        "會回到開始之前的狀態，解到一半的 conflict 會被丟掉。",
+        "This returns to the state before it started; conflicts resolved so far are dropped.",
+    ),
     ("中止", "Abort"),
     ("已中止 {state}", "Aborted {state}"),
     ("繼續", "Continue"),
@@ -205,16 +304,28 @@ Use the identity button in the toolbar to assign it an identity."),
     ("打不開終端機", "Could not open a terminal"),
     ("打不開檔案", "Could not open the file"),
     ("已複製 {what}", "Copied {what}"),
-    ("這個 commit 不在目前載入的 history 裡", "This commit is not in the loaded history"),
+    (
+        "這個 commit 不在目前載入的 history 裡",
+        "This commit is not in the loaded history",
+    ),
     ("移除 worktree？", "Remove worktree?"),
-    ("移除 `{wt}`。branch 本身會保留。有 changes 時 git 會拒絕。", "Removes `{wt}`. The branch itself is kept. git refuses if there are uncommitted changes."),
+    (
+        "移除 `{wt}`。branch 本身會保留。有 changes 時 git 會拒絕。",
+        "Removes `{wt}`. The branch itself is kept. git refuses if there are uncommitted changes.",
+    ),
     ("移除", "Remove"),
     ("移除 worktree", "Remove worktree"),
     ("不是 git repo", "Not a git repo"),
     ("已加入 {added} 個 repo", "Added {added} repos"),
     ("Commit 標題", "Commit title"),
-    ("搜尋 commit 訊息，或貼上 SHA", "Search commit messages, or paste a SHA"),
-    ("找不到 git，請到設定填 git 路徑", "git was not found; set its path in Settings"),
+    (
+        "搜尋 commit 訊息，或貼上 SHA",
+        "Search commit messages, or paste a SHA",
+    ),
+    (
+        "找不到 git，請到設定填 git 路徑",
+        "git was not found; set its path in Settings",
+    ),
     ("讀不到 history", "Could not read the history"),
     ("讀不到 commit", "Could not read the commit"),
     ("比較失敗", "Comparison failed"),
@@ -227,30 +338,66 @@ Use the identity button in the toolbar to assign it an identity."),
     ("2 分鐘前", "2 min ago"),
     ("2 小時前", "2 h ago"),
     ("3 天前", "3 d ago"),
-    ("輸入或選擇要掃描的資料夾", "Type or choose a folder to scan"),
+    (
+        "輸入或選擇要掃描的資料夾",
+        "Type or choose a folder to scan",
+    ),
     ("存放位置", "Destination"),
-    ("先輸入或選擇要掃描的資料夾", "Type or choose a folder to scan first"),
-    ("這個資料夾底下沒有找到 git repo", "No git repo found under this folder"),
+    (
+        "先輸入或選擇要掃描的資料夾",
+        "Type or choose a folder to scan first",
+    ),
+    (
+        "這個資料夾底下沒有找到 git repo",
+        "No git repo found under this folder",
+    ),
     ("選擇要掃描的資料夾", "Choose a folder to scan"),
     ("選擇 repo 資料夾", "Choose a repo folder"),
     ("輸入 repo 網址", "Enter the repo URL"),
     ("已 clone {}", "Cloned {}"),
     ("例如：個人 GitHub", "e.g. Personal GitHub"),
     ("留空就不設密碼", "Leave empty for no passphrase"),
-    ("已從這台電腦找到 {} 個 identity（~/.ssh 的 key 和現有的 git 設定）。確認名稱和 email 後按「儲存」才會生效；不需要的按垃圾桶刪掉。", "Found {} identities on this computer (keys in ~/.ssh and your git settings). Check the names and emails, then press Save to apply them; remove any you do not need with the bin button."),
+    (
+        "已從這台電腦找到 {} 個 identity（~/.ssh 的 key 和現有的 git 設定）。確認名稱和 email 後按「儲存」才會生效；不需要的按垃圾桶刪掉。",
+        "Found {} identities on this computer (keys in ~/.ssh and your git settings). Check the names and emails, then press Save to apply them; remove any you do not need with the bin button.",
+    ),
     ("留空就用 PATH 裡的 git", "Leave empty to use git from PATH"),
     ("可留空", "Optional"),
-    ("找到 {n} 個新的 identity，確認後按儲存", "Found {n} new identities; check them and press Save"),
-    ("沒有找到新的 SSH key 或 identity 設定", "No new SSH keys or identity settings found"),
-    ("讀不到這台電腦的設定", "Could not read this computer's settings"),
-    ("選擇 SSH 私鑰（不是 .pub）", "Choose an SSH private key (not .pub)"),
+    (
+        "找到 {n} 個新的 identity，確認後按儲存",
+        "Found {n} new identities; check them and press Save",
+    ),
+    (
+        "沒有找到新的 SSH key 或 identity 設定",
+        "No new SSH keys or identity settings found",
+    ),
+    (
+        "讀不到這台電腦的設定",
+        "Could not read this computer's settings",
+    ),
+    (
+        "選擇 SSH 私鑰（不是 .pub）",
+        "Choose an SSH private key (not .pub)",
+    ),
     ("先填 SSH key 的路徑", "Enter the SSH key path first"),
-    ("先填 user.email，會寫進 key 的註解", "Enter user.email first; it goes into the key comment"),
+    (
+        "先填 user.email，會寫進 key 的註解",
+        "Enter user.email first; it goes into the key comment",
+    ),
     ("每個 identity 都要有名稱", "Every identity needs a name"),
-    ("「{}」的 email 格式不對", "The email of \"{}\" is not valid"),
-    ("已從全域 git 設定移除 {} 行舊版留下的 include.path", "Removed {} include.path lines that an older version left in the global git config"),
+    (
+        "「{}」的 email 格式不對",
+        "The email of \"{}\" is not valid",
+    ),
+    (
+        "已從全域 git 設定移除 {} 行舊版留下的 include.path",
+        "Removed {} include.path lines that an older version left in the global git config",
+    ),
     ("設定已儲存", "Settings saved"),
-    ("輸入指令、repo、branch 或 commit（例如：push my-repo）", "Type a command, repo, branch or commit (e.g. push my-repo)"),
+    (
+        "輸入指令、repo、branch 或 commit（例如：push my-repo）",
+        "Type a command, repo, branch or commit (e.g. push my-repo)",
+    ),
     ("切換到 {}", "Switch to {}"),
     ("看 changes", "Show uncommitted changes"),
     ("檢視", "View"),
@@ -270,8 +417,14 @@ Use the identity button in the toolbar to assign it an identity."),
     ("切換深淺色", "Toggle light/dark"),
     ("外觀", "Appearance"),
     ("正在 {state_name}", "{state_name} in progress"),
-    ("還有 {conflicts} 個 conflict 的檔案。解決後按「繼續」。", "{conflicts} files still have conflicts. Press Continue once they are resolved."),
-    ("Conflict 都解決了，按「繼續」完成。", "All conflicts are resolved; press Continue to finish."),
+    (
+        "還有 {conflicts} 個 conflict 的檔案。解決後按「繼續」。",
+        "{conflicts} files still have conflicts. Press Continue once they are resolved.",
+    ),
+    (
+        "Conflict 都解決了，按「繼續」完成。",
+        "All conflicts are resolved; press Continue to finish.",
+    ),
     ("中止 {state_name}", "Abort {state_name}"),
     ("沒有 changes", "No uncommitted changes"),
     ("工作目錄是乾淨的", "The working tree is clean"),
@@ -280,21 +433,33 @@ Use the identity button in the toolbar to assign it an identity."),
     ("用編輯器開啟", "Open in editor"),
     ("Stage 檔案", "Stage file"),
     ("選一個檔案", "Pick a file"),
-    ("Reviewed {seen_n} / {total} 個檔案", "Reviewed {seen_n} / {total} files"),
+    (
+        "Reviewed {seen_n} / {total} 個檔案",
+        "Reviewed {seen_n} / {total} files",
+    ),
     ("未暫存", "Unstaged"),
     ("全部 Stage", "Stage all"),
     ("（沒有）", "(none)"),
     ("已暫存", "Staged"),
     ("全部取消", "Unstage all"),
-    ("（沒有。按 Stage 把要 commit 的檔案放進來）", "(none. Press Stage to add files to commit)"),
-    ("Amend（改寫上一個 commit）", "Amend (rewrite the last commit)"),
+    (
+        "（沒有。按 Stage 把要 commit 的檔案放進來）",
+        "(none. Press Stage to add files to commit)",
+    ),
+    (
+        "Amend（改寫上一個 commit）",
+        "Amend (rewrite the last commit)",
+    ),
     ("Commit 並 Push", "Commit & Push"),
     ("在檔案總管顯示資料夾", "Show folder in file manager"),
     ("這個檔案的 history", "History of this file"),
     ("Blame（逐行看是誰改的）", "Blame (who changed each line)"),
     ("複製路徑", "Copy path"),
     ("路徑", "path"),
-    ("看完勾起來，會跳到下一個沒看的檔案（Enter）", "Tick when done; jumps to the next unreviewed file (Enter)"),
+    (
+        "看完勾起來，會跳到下一個沒看的檔案（Enter）",
+        "Tick when done; jumps to the next unreviewed file (Enter)",
+    ),
     ("單欄", "Unified"),
     ("並排", "Split"),
     ("自動換行", "Wrap lines"),
@@ -302,9 +467,15 @@ Use the identity button in the toolbar to assign it an identity."),
     ("更多", "More"),
     ("選一個檔案來看修改", "Pick a file to see its changes"),
     ("載入中", "Loading"),
-    ("二進位檔案，無法顯示文字差異", "Binary file; no text diff to show"),
+    (
+        "二進位檔案，無法顯示文字差異",
+        "Binary file; no text diff to show",
+    ),
     ("沒有內容差異", "No content changes"),
-    ("可能只改了檔案權限，或是空檔案", "Maybe only the file mode changed, or the file is empty"),
+    (
+        "可能只改了檔案權限，或是空檔案",
+        "Maybe only the file mode changed, or the file is empty",
+    ),
     ("已選 {n} 行", "{n} lines selected"),
     ("清除選取", "Clear selection"),
     ("上一段改動 (←)", "Previous hunk (←)"),
@@ -317,12 +488,18 @@ Use the identity button in the toolbar to assign it an identity."),
     ("上/下一段改動", "previous/next hunk"),
     ("Reviewed", "Reviewed"),
     ("全選", "Select all"),
-    ("在差異裡點行號選取單行，拖曳或 Shift 選多行", "Click a line number in the diff to pick a line; drag or Shift-click for several"),
+    (
+        "在差異裡點行號選取單行，拖曳或 Shift 選多行",
+        "Click a line number in the diff to pick a line; drag or Shift-click for several",
+    ),
     ("刪除這個新檔案", "Delete this new file"),
     ("Discard 修改", "Discard changes"),
     ("Checkout 這個 commit", "Check out this commit"),
     ("從這裡開新 branch", "New branch from here"),
-    ("Cherry-pick 到目前 branch", "Cherry-pick onto the current branch"),
+    (
+        "Cherry-pick 到目前 branch",
+        "Cherry-pick onto the current branch",
+    ),
     ("Reset {branch} 到這裡", "Reset {branch} to here"),
     ("在這個 commit 加 Tag", "Add a tag to this commit"),
     ("複製 SHA", "Copy SHA"),
@@ -339,7 +516,10 @@ Use the identity button in the toolbar to assign it an identity."),
     ("Reset 到這裡", "Reset to here"),
     ("沒有檔案變更", "No file changes"),
     ("重試", "Retry"),
-    ("每個 repo 一個分頁。先加入你的 repo。", "One tab per repo. Add your repos first."),
+    (
+        "每個 repo 一個分頁。先加入你的 repo。",
+        "One tab per repo. Add your repos first.",
+    ),
     ("＋ 加入 repo", "＋ Add repo"),
     ("之後可以用", "Later, press"),
     ("搜尋所有指令", "to search every command"),
@@ -348,34 +528,67 @@ Use the identity button in the toolbar to assign it an identity."),
     ("（沒有輸出）", "(no output)"),
     ("（空）", "(empty)"),
     ("{} Command log", "{} Command log"),
-    ("還沒有執行任何會改變東西的指令", "No command that changes anything has run yet"),
+    (
+        "還沒有執行任何會改變東西的指令",
+        "No command that changes anything has run yet",
+    ),
     ("{n} 筆", "{n} entries"),
-    ("HEAD 的移動紀錄。不小心 reset、rebase 或刪掉 branch 時，可以從這裡找回 commit。", "Where HEAD has been. If you reset, rebase or delete a branch by mistake, you can get commits back from here."),
+    (
+        "HEAD 的移動紀錄。不小心 reset、rebase 或刪掉 branch 時，可以從這裡找回 commit。",
+        "Where HEAD has been. If you reset, rebase or delete a branch by mistake, you can get commits back from here.",
+    ),
     ("從這裡開 branch", "Branch from here"),
     ("Reset 到這裡", "Reset to here"),
     ("沒有紀錄", "No entries"),
     ("一般", "General"),
-    ("還沒有 identity。按「＋ 新增 identity」，填好 SSH key 和 email。", "No identities yet. Press \"＋ New identity\" and fill in the SSH key and email."),
+    (
+        "還沒有 identity。按「＋ 新增 identity」，填好 SSH key 和 email。",
+        "No identities yet. Press \"＋ New identity\" and fill in the SSH key and email.",
+    ),
     ("＋ 新增 identity", "＋ New identity"),
     ("尋找中", "Searching"),
     ("從這台電腦找", "Find on this computer"),
-    ("找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf", "Looks at keys in ~/.ssh, ~/.ssh/config and git's includeIf"),
+    (
+        "找 ~/.ssh 的 key、~/.ssh/config 和 git 的 includeIf",
+        "Looks at keys in ~/.ssh, ~/.ssh/config and git's includeIf",
+    ),
     ("{}（{}）{}", "{} ({}) {}"),
     ("新 identity {}", "New identity {}"),
-    ("@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@", "@@ Conflict: red is mine (HEAD), green is theirs @@"),
-    ("@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@", "@@ Conflict (rebasing): red is theirs (upstream), green is mine (the commit being replayed) @@"),
-    ("已更新，但無法重新啟動，請手動開啟", "Updated, but it could not restart. Please open it yourself"),
+    (
+        "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@",
+        "@@ Conflict: red is mine (HEAD), green is theirs @@",
+    ),
+    (
+        "@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@",
+        "@@ Conflict (rebasing): red is theirs (upstream), green is mine (the commit being replayed) @@",
+    ),
+    (
+        "已更新，但無法重新啟動，請手動開啟",
+        "Updated, but it could not restart. Please open it yourself",
+    ),
     ("已開啟下載頁面", "Opened the download page"),
     ("更新失敗", "Update failed"),
-    ("有新版本 {v}（目前 {cur}）", "Version {v} is out (you have {cur})"),
+    (
+        "有新版本 {v}（目前 {cur}）",
+        "Version {v} is out (you have {cur})",
+    ),
     ("更新中", "Updating"),
     ("立即更新", "Update now"),
-    ("有新版本，請按上方的「立即更新」", "A new version is available. Press \"Update now\" at the top"),
+    (
+        "有新版本，請按上方的「立即更新」",
+        "A new version is available. Press \"Update now\" at the top",
+    ),
     ("已是最新版本（{}）", "You are up to date ({})"),
     ("檢查更新失敗", "Could not check for updates"),
     ("版本", "Version"),
-    ("語言和外觀：選了就立即生效", "Language and appearance take effect as soon as you pick them"),
-    ("以下按「儲存」才會生效，按「取消」會放棄", "The settings below apply on Save; Cancel discards them"),
+    (
+        "語言和外觀：選了就立即生效",
+        "Language and appearance take effect as soon as you pick them",
+    ),
+    (
+        "以下按「儲存」才會生效，按「取消」會放棄",
+        "The settings below apply on Save; Cancel discards them",
+    ),
     ("加入 repo", "Add a repo"),
     ("所有分頁", "All tabs"),
     ("已經在這個 branch 上", "Already on this branch"),
@@ -396,14 +609,23 @@ Use the identity button in the toolbar to assign it an identity."),
     ("30 分", "30 min"),
     ("1 小時", "1 hour"),
     ("Repo 資料夾", "Repo folder"),
-    ("「加入 repo」會先掃描這裡，clone 也預設放這裡。", "\"Add repo\" scans here first, and clone puts new repos here."),
-    ("HTTPS 的 repo 用 Git Credential Manager 存帳號 token；網址帶帳號名稱（https://帳號@github.com/…）就能分開存。設定檔位置：app 的設定資料夾 config.json。目前開了 {} 個 repo：{}", "HTTPS repos keep their tokens in Git Credential Manager; put the account name in the URL (https://account@github.com/…) to keep them apart. Settings live in config.json in the app's settings folder. {} repos are open: {}"),
+    (
+        "「加入 repo」會先掃描這裡，clone 也預設放這裡。",
+        "\"Add repo\" scans here first, and clone puts new repos here.",
+    ),
+    (
+        "HTTPS 的 repo 用 Git Credential Manager 存帳號 token；網址帶帳號名稱（https://帳號@github.com/…）就能分開存。設定檔位置：app 的設定資料夾 config.json。目前開了 {} 個 repo：{}",
+        "HTTPS repos keep their tokens in Git Credential Manager; put the account name in the URL (https://account@github.com/…) to keep them apart. Settings live in config.json in the app's settings folder. {} repos are open: {}",
+    ),
     ("、", ", "),
     ("儲存中", "Saving"),
     ("儲存", "Save"),
     ("✓ 已驗證", "✓ Verified"),
     ("帳號 {}", "account {}"),
-    ("還沒驗證這把 key 對應哪個帳號", "This key has not been verified against an account yet"),
+    (
+        "還沒驗證這把 key 對應哪個帳號",
+        "This key has not been verified against an account yet",
+    ),
     ("刪除這個 identity", "Delete this identity"),
     ("顏色", "Color"),
     ("選擇檔案", "Choose a file"),
@@ -413,17 +635,29 @@ Use the identity button in the toolbar to assign it an identity."),
     ("存到", "Save to"),
     ("密碼（可留空）", "Passphrase (optional)"),
     ("產生 ed25519 key", "Generate ed25519 key"),
-    ("私鑰只會留在這台電腦。已經存在的檔案不會被覆蓋。", "The private key stays on this computer. Existing files are never overwritten."),
-    ("已產生 {}。把下面的公鑰加到這個帳號的 GitHub SSH keys：", "Generated {}. Add the public key below to this account's GitHub SSH keys:"),
+    (
+        "私鑰只會留在這台電腦。已經存在的檔案不會被覆蓋。",
+        "The private key stays on this computer. Existing files are never overwritten.",
+    ),
+    (
+        "已產生 {}。把下面的公鑰加到這個帳號的 GitHub SSH keys：",
+        "Generated {}. Add the public key below to this account's GitHub SSH keys:",
+    ),
     ("複製公鑰", "Copy public key"),
     ("公鑰", "public key"),
-    ("打開 GitHub 新增 SSH key 頁面", "Open GitHub's new SSH key page"),
+    (
+        "打開 GitHub 新增 SSH key 頁面",
+        "Open GitHub's new SSH key page",
+    ),
     ("貼好之後按「測試連線」", "Then press \"Test connection\""),
     ("Host", "Host"),
     ("{}（{}）", "{} ({})"),
     ("掃描", "Scan"),
     ("選擇資料夾", "Choose folder"),
-    ("在這個資料夾底下找到 {} 個 repo，其中 {} 個還沒開{}", "Found {} repos under this folder, {} not open yet{}"),
+    (
+        "在這個資料夾底下找到 {} 個 repo，其中 {} 個還沒開{}",
+        "Found {} repos under this folder, {} not open yet{}",
+    ),
     ("，已選 {n_picked} 個", ", {n_picked} selected"),
     ("（都已經開了）", "(all are already open)"),
     ("或", "or"),
@@ -451,25 +685,49 @@ Use the identity button in the toolbar to assign it an identity."),
     ("移除 worktree", "Remove worktree"),
     ("新增 worktree", "New worktree"),
     ("Filter", "Filter"),
-    ("二進位檔案，沒有文字可以顯示", "A binary file: no text to show"),
-    ("檔案太大（{} MB），不在這裡顯示", "The file is too large ({} MB) to show here"),
+    (
+        "二進位檔案，沒有文字可以顯示",
+        "A binary file: no text to show",
+    ),
+    (
+        "檔案太大（{} MB），不在這裡顯示",
+        "The file is too large ({} MB) to show here",
+    ),
     ("{} 行", "{} line(s)"),
-    ("展開這次 merge 帶進來的 commit", "Show the commits this merge brought in"),
-    ("收合這次 merge 帶進來的 commit", "Fold away the commits this merge brought in"),
+    (
+        "展開這次 merge 帶進來的 commit",
+        "Show the commits this merge brought in",
+    ),
+    (
+        "收合這次 merge 帶進來的 commit",
+        "Fold away the commits this merge brought in",
+    ),
     ("修改 commit 訊息", "Edit commit message"),
     ("併入上一個 commit", "Squash into the previous commit"),
     ("丟掉這個 commit", "Drop this commit"),
-    ("改 {} 的訊息（之後的 commit 會跟著重寫）", "Message of {} (later commits are rewritten too)"),
+    (
+        "改 {} 的訊息（之後的 commit 會跟著重寫）",
+        "Message of {} (later commits are rewritten too)",
+    ),
     ("訊息", "Message"),
     ("改寫", "Rewrite"),
     ("改 commit 訊息", "Edit commit message"),
-    ("已改寫訊息。這條 branch push 過的話，下次要強制 push", "Message rewritten. If this branch was pushed, the next push must be forced"),
-    ("把 `{}` 併進它前面那個 commit，兩邊的訊息都留著。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", "Folds `{}` into the commit before it and keeps both messages.\n\nThe commits after it are rewritten too; if they were pushed, the next push must be forced."),
+    (
+        "已改寫訊息。這條 branch push 過的話，下次要強制 push",
+        "Message rewritten. If this branch was pushed, the next push must be forced",
+    ),
+    (
+        "把 `{}` 併進它前面那個 commit，兩邊的訊息都留著。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。",
+        "Folds `{}` into the commit before it and keeps both messages.\n\nThe commits after it are rewritten too; if they were pushed, the next push must be forced.",
+    ),
     ("併入上一個 commit？", "Squash into the previous commit?"),
     ("併入", "Squash"),
     ("併入上一個 commit", "Squash into the previous commit"),
     ("已併入上一個 commit", "Squashed into the previous commit"),
-    ("`{}`（{}）會從這條 branch 消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", "`{}` ({}) disappears from this branch, and so does what it changed.\n\nThe commits after it are rewritten too; if they were pushed, the next push must be forced."),
+    (
+        "`{}`（{}）會從這條 branch 消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。",
+        "`{}` ({}) disappears from this branch, and so does what it changed.\n\nThe commits after it are rewritten too; if they were pushed, the next push must be forced.",
+    ),
     ("丟掉這個 commit？", "Drop this commit?"),
     ("丟掉", "Drop"),
     ("丟掉 commit", "Drop commit"),
@@ -479,7 +737,10 @@ Use the identity button in the toolbar to assign it an identity."),
     ("還沒取回", "not fetched yet"),
     ("不是記錄的 commit", "not at the recorded commit"),
     ("有 conflict", "in conflict"),
-    ("Update（取回，並切到記錄的 commit）", "Update (fetch, and check out the recorded commit)"),
+    (
+        "Update（取回，並切到記錄的 commit）",
+        "Update (fetch, and check out the recorded commit)",
+    ),
     ("已更新 {rel}", "Updated {rel}"),
     ("更新 submodule", "Update submodule"),
     ("Pop（套用後刪除）", "Pop (apply, then drop)"),
@@ -492,7 +753,10 @@ Use the identity button in the toolbar to assign it an identity."),
     ("重新命名 branch", "Rename branch"),
     ("刪除 remote branch", "Delete on the remote"),
     ("刪除 remote branch？", "Delete the remote branch?"),
-    ("從 remote 刪除 **{full}**，其他人之後也拿不到它。本地的 branch 不受影響。", "Deletes **{full}** on the remote; nobody can fetch it afterwards. Local branches are not touched."),
+    (
+        "從 remote 刪除 **{full}**，其他人之後也拿不到它。本地的 branch 不受影響。",
+        "Deletes **{full}** on the remote; nobody can fetch it afterwards. Local branches are not touched.",
+    ),
     ("已從 remote 刪除 {full}", "Deleted {full} on the remote"),
     ("刪除 remote branch", "Delete remote branch"),
     ("新增 remote", "Add remote"),
@@ -502,14 +766,20 @@ Use the identity button in the toolbar to assign it an identity."),
     ("{name} 的網址", "URL of {name}"),
     ("已更新 {name} 的網址", "URL of {name} updated"),
     ("改 remote 網址", "Change remote URL"),
-    ("移除 **{name}** 和它在本地的 remote branch 紀錄。remote 上的東西不會被刪。", "Removes **{name}** and its remote-tracking branches here. Nothing is deleted on the remote itself."),
+    (
+        "移除 **{name}** 和它在本地的 remote branch 紀錄。remote 上的東西不會被刪。",
+        "Removes **{name}** and its remote-tracking branches here. Nothing is deleted on the remote itself.",
+    ),
     ("移除 remote？", "Remove remote?"),
     ("已移除 {name}", "Removed {name}"),
     ("移除 remote", "Remove remote"),
     ("修改 remote 網址", "Change remote URL"),
     ("複製網址", "Copy URL"),
     ("移除 {name}", "Remove {name}"),
-    ("輸入 remote 名稱（不能有空白或斜線）", "Enter a remote name (no spaces or slashes)"),
+    (
+        "輸入 remote 名稱（不能有空白或斜線）",
+        "Enter a remote name (no spaces or slashes)",
+    ),
     ("輸入網址", "Enter a URL"),
     ("要放哪個 branch", "Branch"),
     ("資料夾", "Folder"),
@@ -518,25 +788,43 @@ Use the identity button in the toolbar to assign it an identity."),
     ("已建立 worktree {dir}", "Worktree created in {dir}"),
     ("建立 worktree", "Create worktree"),
     ("切換到這個 branch", "Switch to this branch"),
-    ("把目前的 branch rebase 到這裡", "Rebase the current branch onto this"),
+    (
+        "把目前的 branch rebase 到這裡",
+        "Rebase the current branch onto this",
+    ),
     ("Branch 名稱", "branch name"),
     ("刪除 branch", "Delete branch"),
     ("關閉分頁", "Close tab"),
     ("本地 branch", "Local branches"),
-    ("Remote（切換會建立本地 branch）", "Remote (switching creates a local branch)"),
+    (
+        "Remote（切換會建立本地 branch）",
+        "Remote (switching creates a local branch)",
+    ),
     ("新增 branch", "New branch"),
-    ("這個 repo（{}）用哪個 identity", "Which identity does this repo ({}) use"),
+    (
+        "這個 repo（{}）用哪個 identity",
+        "Which identity does this repo ({}) use",
+    ),
     ("未設定", "not set"),
     ("{}　{}", "{}  {}"),
     ("管理 identity", "Manage identities"),
     ("Pull（只快轉）", "Pull (fast-forward only)"),
     ("Pull（merge）", "Pull (merge)"),
-    ("強制 Push（--force-with-lease）", "Force push (--force-with-lease)"),
+    (
+        "強制 Push（--force-with-lease）",
+        "Force push (--force-with-lease)",
+    ),
     ("{b} 執行中", "{b} running"),
-    ("切換這個 repo 用的 identity", "Change the identity this repo uses"),
+    (
+        "切換這個 repo 用的 identity",
+        "Change the identity this repo uses",
+    ),
     (" 設定 identity", " Set up identity"),
     ("設定 SSH key 和 identity", "Set up SSH keys and identities"),
-    ("搜尋指令、repo、branch、commit", "Search commands, repos, branches, commits"),
+    (
+        "搜尋指令、repo、branch、commit",
+        "Search commands, repos, branches, commits",
+    ),
     ("外觀：淺色", "Appearance: light"),
     ("外觀：深色", "Appearance: dark"),
     ("外觀：跟系統", "Appearance: system"),
@@ -621,21 +909,34 @@ mod tests {
                             }
                         }
                         if !TABLE.iter().any(|(zh, _)| *zh == lit) {
-                            missing.push(format!("{}: {lit:?}", p.file_name().unwrap().to_string_lossy()));
+                            missing.push(format!(
+                                "{}: {lit:?}",
+                                p.file_name().unwrap().to_string_lossy()
+                            ));
                         }
                     }
                 }
             }
         }
-        assert!(missing.is_empty(), "no English text for:\n{}", missing.join("\n"));
+        assert!(
+            missing.is_empty(),
+            "no English text for:\n{}",
+            missing.join("\n")
+        );
     }
 
     #[test]
     fn templates_are_filled_in_both_languages() {
         set_from_setting("zh-TW");
-        assert_eq!(tr("已 fetch {name}", &[("name", "r".into())], &[]), "已 fetch r");
+        assert_eq!(
+            tr("已 fetch {name}", &[("name", "r".into())], &[]),
+            "已 fetch r"
+        );
         set_from_setting("en");
-        assert_eq!(tr("已 fetch {name}", &[("name", "r".into())], &[]), "Fetched r");
+        assert_eq!(
+            tr("已 fetch {name}", &[("name", "r".into())], &[]),
+            "Fetched r"
+        );
         assert_eq!(tr("{} 分鐘前", &[], &["5".into()]), "5 min ago");
         set_from_setting("zh-TW");
     }
@@ -643,7 +944,9 @@ mod tests {
     /// No Chinese text slips into the UI without going through `t` / `tr`.
     #[test]
     fn no_chinese_literal_is_left_untranslated() {
-        let is_cjk = |c: char| ('\u{3000}'..='\u{9fff}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c);
+        let is_cjk = |c: char| {
+            ('\u{3000}'..='\u{9fff}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c)
+        };
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut bad = Vec::new();
         let mut stack = vec![dir];
@@ -656,7 +959,10 @@ mod tests {
                 }
                 let name = p.file_name().unwrap().to_string_lossy().to_string();
                 // identity.rs holds names that are saved into the settings, not interface text.
-                if p.extension().is_none_or(|x| x != "rs") || name == "i18n.rs" || name == "identity.rs" {
+                if p.extension().is_none_or(|x| x != "rs")
+                    || name == "i18n.rs"
+                    || name == "identity.rs"
+                {
                     continue;
                 }
                 let full = std::fs::read_to_string(&p).unwrap();
@@ -683,8 +989,15 @@ mod tests {
                         // The language names are shown the same in every language.
                         let own_name = lit == "\"繁體中文\"" || lit == "\"語言 / Language\"";
                         if lit.chars().any(is_cjk) && !own_name {
-                            let before: String = b[start.saturating_sub(14)..start].iter().collect();
-                            if !(before.ends_with("i18n::t(") || before.ends_with("i18n::tr(") || before.ends_with("i18n::t (")) {
+                            // rustfmt may break the line after "(", so look past whitespace.
+                            let before: String = b[start.saturating_sub(200)..start]
+                                .iter()
+                                .filter(|c| !c.is_whitespace())
+                                .collect();
+                            if !(before.ends_with("i18n::t(")
+                                || before.ends_with("i18n::tr(")
+                                || before.ends_with("i18n::t ("))
+                            {
                                 bad.push(format!("{name}: {lit}"));
                             }
                         }
@@ -693,6 +1006,10 @@ mod tests {
                 }
             }
         }
-        assert!(bad.is_empty(), "Chinese text outside t()/tr():\n{}", bad.join("\n"));
+        assert!(
+            bad.is_empty(),
+            "Chinese text outside t()/tr():\n{}",
+            bad.join("\n")
+        );
     }
 }

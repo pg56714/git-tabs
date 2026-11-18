@@ -11,7 +11,10 @@ pub fn norm_url(u: &str) -> String {
         let rest = s.strip_prefix(prefix)?;
         // drop "user@" before the first slash
         match rest.split_once('/') {
-            Some((head, tail)) if head.contains('@') => Some(format!("{}/{tail}", head.rsplit('@').next().unwrap_or(head))),
+            Some((head, tail)) if head.contains('@') => Some(format!(
+                "{}/{tail}",
+                head.rsplit('@').next().unwrap_or(head)
+            )),
             _ => Some(rest.to_string()),
         }
     };
@@ -65,7 +68,11 @@ fn norm_dir(p: &str) -> String {
 
 /// Which identity the rules give a repo (pins are handled by the caller). The last match
 /// wins, like git: includeIf lines are written in identity order.
-pub fn match_identity<'a>(ids: &'a [Identity], repo_path: &str, remote_url: Option<&str>) -> Option<&'a Identity> {
+pub fn match_identity<'a>(
+    ids: &'a [Identity],
+    repo_path: &str,
+    remote_url: Option<&str>,
+) -> Option<&'a Identity> {
     let url = norm_url(remote_url.unwrap_or(""));
     let dir = norm_dir(repo_path);
     let mut hit = None;
@@ -91,7 +98,10 @@ pub fn match_identity<'a>(ids: &'a [Identity], repo_path: &str, remote_url: Opti
 }
 
 pub fn new_identity(existing: &[Identity]) -> Identity {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     Identity {
         id: format!("id{stamp:x}"),
         name: crate::i18n::tr("新 identity {}", &[], &[(existing.len() + 1).to_string()]),
@@ -124,20 +134,32 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
     let mut ids: Vec<Identity> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
     let add = |ids: &mut Vec<Identity>, existing: &[Identity], make: &dyn Fn(&mut Identity)| {
-        let all: Vec<Identity> = existing.iter().cloned().chain(ids.iter().cloned()).collect();
+        let all: Vec<Identity> = existing
+            .iter()
+            .cloned()
+            .chain(ids.iter().cloned())
+            .collect();
         let mut id = new_identity(&all);
         make(&mut id);
         ids.push(id);
     };
     // One identity per include file, however many conditions point at it.
-    for inc in found.get("includes").and_then(Value::as_array).into_iter().flatten() {
+    for inc in found
+        .get("includes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         let path = text(inc, "path");
         if seen.contains(&norm_path(&path)) {
             continue;
         }
         seen.push(norm_path(&path));
         let file = file_name(&path);
-        let mut base = file.trim_end_matches(".gitconfig").trim_end_matches(".config").to_string();
+        let mut base = file
+            .trim_end_matches(".gitconfig")
+            .trim_end_matches(".config")
+            .to_string();
         if let Some(rest) = base.strip_prefix(".gitconfig") {
             base = rest.trim_start_matches(['-', '_', '.']).to_string();
         }
@@ -148,13 +170,31 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
         let (n, e, k) = (text(inc, "name"), email, text(inc, "key"));
         add(&mut ids, existing, &|id| {
             id.name = base.clone();
-            id.user = if n.is_empty() { f_name.clone() } else { n.clone() };
-            id.email = if e.is_empty() { f_email.clone() } else { e.clone() };
+            id.user = if n.is_empty() {
+                f_name.clone()
+            } else {
+                n.clone()
+            };
+            id.email = if e.is_empty() {
+                f_email.clone()
+            } else {
+                e.clone()
+            };
             id.key = k.clone();
         });
     }
-    let used: Vec<String> = existing.iter().chain(ids.iter()).map(|i| norm_path(&i.key)).filter(|k| !k.is_empty()).collect();
-    for k in found.get("keys").and_then(Value::as_array).into_iter().flatten() {
+    let used: Vec<String> = existing
+        .iter()
+        .chain(ids.iter())
+        .map(|i| norm_path(&i.key))
+        .filter(|k| !k.is_empty())
+        .collect();
+    for k in found
+        .get("keys")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
         let path = text(k, "path");
         if used.contains(&norm_path(&path)) {
             continue;
@@ -166,24 +206,46 @@ pub fn from_found(found: &Value, existing: &[Identity]) -> Vec<Identity> {
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .filter_map(|h| Some((h.get(0)?.as_str()?.to_string(), h.get(1)?.as_str()?.to_string())))
+            .filter_map(|h| {
+                Some((
+                    h.get(0)?.as_str()?.to_string(),
+                    h.get(1)?.as_str()?.to_string(),
+                ))
+            })
             .collect();
         let alias = hosts.iter().find(|(h, n)| h != n).map(|(h, _)| h.clone());
         let name = if is_default {
             "預設 key".to_string()
         } else {
             alias.unwrap_or_else(|| {
-                let stripped = file.strip_prefix("id_ed25519_").or_else(|| file.strip_prefix("id_rsa_")).or_else(|| file.strip_prefix("id_ecdsa_")).unwrap_or(&file);
+                let stripped = file
+                    .strip_prefix("id_ed25519_")
+                    .or_else(|| file.strip_prefix("id_rsa_"))
+                    .or_else(|| file.strip_prefix("id_ecdsa_"))
+                    .unwrap_or(&file);
                 stripped.to_string()
             })
         };
         let comment = text(k, "comment");
-        let comment_is_email = comment.split_once('@').is_some_and(|(u, d)| !u.is_empty() && !u.contains(char::is_whitespace) && d.contains('.') && !d.contains('@'));
-        let host = hosts.first().map(|h| h.1.clone()).unwrap_or_else(|| "github.com".into());
+        let comment_is_email = comment.split_once('@').is_some_and(|(u, d)| {
+            !u.is_empty() && !u.contains(char::is_whitespace) && d.contains('.') && !d.contains('@')
+        });
+        let host = hosts
+            .first()
+            .map(|h| h.1.clone())
+            .unwrap_or_else(|| "github.com".into());
         add(&mut ids, existing, &|id| {
-            id.name = if name.is_empty() { file.clone() } else { name.clone() };
+            id.name = if name.is_empty() {
+                file.clone()
+            } else {
+                name.clone()
+            };
             id.user = f_name.clone();
-            id.email = if comment_is_email { comment.clone() } else { f_email.clone() };
+            id.email = if comment_is_email {
+                comment.clone()
+            } else {
+                f_email.clone()
+            };
             id.key = path.clone();
             id.host = host.clone();
         });
@@ -199,14 +261,23 @@ mod tests {
     fn id(name: &str, rules: &[(&str, &str)]) -> Identity {
         let mut i = new_identity(&[]);
         i.name = name.into();
-        i.rules = rules.iter().map(|(t, v)| Rule { t: (*t).into(), v: (*v).into() }).collect();
+        i.rules = rules
+            .iter()
+            .map(|(t, v)| Rule {
+                t: (*t).into(),
+                v: (*v).into(),
+            })
+            .collect();
         i
     }
 
     #[test]
     fn urls_normalise() {
         assert_eq!(norm_url("git@github.com:org/x.git"), "github.com/org/x.git");
-        assert_eq!(norm_url("https://user@github.com/org/x"), "github.com/org/x");
+        assert_eq!(
+            norm_url("https://user@github.com/org/x"),
+            "github.com/org/x"
+        );
         assert_eq!(norm_url("ssh://git@host/org/x"), "host/org/x");
     }
 
@@ -215,9 +286,23 @@ mod tests {
         let a = id("A", &[("remote", "github.com/acme/*")]);
         let b = id("B", &[("dir", "D:\\work\\")]);
         let ids = vec![a, b];
-        assert_eq!(match_identity(&ids, "C:\\x", Some("git@github.com:acme/app.git")).unwrap().name, "A");
-        assert_eq!(match_identity(&ids, "d:\\work\\proj", None).unwrap().name, "B");
-        assert_eq!(match_identity(&ids, "d:\\work\\proj", Some("git@github.com:acme/app.git")).unwrap().name, "B", "later identity wins");
+        assert_eq!(
+            match_identity(&ids, "C:\\x", Some("git@github.com:acme/app.git"))
+                .unwrap()
+                .name,
+            "A"
+        );
+        assert_eq!(
+            match_identity(&ids, "d:\\work\\proj", None).unwrap().name,
+            "B"
+        );
+        assert_eq!(
+            match_identity(&ids, "d:\\work\\proj", Some("git@github.com:acme/app.git"))
+                .unwrap()
+                .name,
+            "B",
+            "later identity wins"
+        );
         assert!(match_identity(&ids, "C:\\x", Some("git@github.com:other/app.git")).is_none());
     }
 

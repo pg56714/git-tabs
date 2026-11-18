@@ -26,15 +26,26 @@ pub fn to_patch(d: &FileDiff) -> String {
     if d.hunks.is_empty() {
         return s;
     }
-    s.push_str(&if d.new_file { "--- /dev/null\n".to_string() } else { format!("--- a/{old}\n") });
-    s.push_str(&if d.deleted { "+++ /dev/null\n".to_string() } else { format!("+++ b/{new}\n") });
+    s.push_str(&if d.new_file {
+        "--- /dev/null\n".to_string()
+    } else {
+        format!("--- a/{old}\n")
+    });
+    s.push_str(&if d.deleted {
+        "+++ /dev/null\n".to_string()
+    } else {
+        format!("+++ b/{new}\n")
+    });
     for h in &d.hunks {
         // Counts come from the lines themselves: the synthetic conflict view has a header that
         // does not add up, and a wrong count makes the parser reject the whole file.
         let ctx = h.lines.iter().filter(|l| l.t == ' ').count();
         let old_n = ctx + h.lines.iter().filter(|l| l.t == '-').count();
         let new_n = ctx + h.lines.iter().filter(|l| l.t == '+').count();
-        s.push_str(&format!("@@ -{},{} +{},{} @@\n", h.old_start, old_n, h.new_start, new_n));
+        s.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            h.old_start, old_n, h.new_start, new_n
+        ));
         for l in &h.lines {
             s.push(l.t);
             s.push_str(&l.text);
@@ -71,7 +82,13 @@ fn rows(d: &FileDiff) -> Vec<Row> {
             if l.t != '-' {
                 n += 1;
             }
-            out.push(Row { hunk: hi, line: li, changed: l.t != ' ', old_no, new_no });
+            out.push(Row {
+                hunk: hi,
+                line: li,
+                changed: l.t != ' ',
+                old_no,
+                new_no,
+            });
         }
     }
     out
@@ -87,20 +104,35 @@ fn find(rows: &[Row], side: DiffSide, no: usize) -> Option<usize> {
 /// The changed lines between two positions of the diff view, both ends included. The two
 /// ends may be on different sides (a drag across a split view); they are ordered by where
 /// they fall in the unified diff, so the result is the same either way round.
-pub fn selected_pairs(d: &FileDiff, start: (DiffSide, usize), end: (DiffSide, usize)) -> Vec<(usize, usize)> {
+pub fn selected_pairs(
+    d: &FileDiff,
+    start: (DiffSide, usize),
+    end: (DiffSide, usize),
+) -> Vec<(usize, usize)> {
     let rows = rows(d);
     let (Some(a), Some(b)) = (find(&rows, start.0, start.1), find(&rows, end.0, end.1)) else {
         return Vec::new();
     };
     let (lo, hi) = (a.min(b), a.max(b));
-    rows[lo..=hi].iter().filter(|r| r.changed).map(|r| (r.hunk, r.line)).collect()
+    rows[lo..=hi]
+        .iter()
+        .filter(|r| r.changed)
+        .map(|r| (r.hunk, r.line))
+        .collect()
 }
 
 /// Every changed line of one hunk.
 pub fn hunk_pairs(d: &FileDiff, hunk: usize) -> Vec<(usize, usize)> {
     d.hunks
         .get(hunk)
-        .map(|h| h.lines.iter().enumerate().filter(|(_, l)| l.t != ' ').map(|(i, _)| (hunk, i)).collect())
+        .map(|h| {
+            h.lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| l.t != ' ')
+                .map(|(i, _)| (hunk, i))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -181,8 +213,16 @@ mod tests {
     }
 
     fn git(dir: &std::path::Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git").args(args).current_dir(dir).output().expect("git runs");
-        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
@@ -201,7 +241,12 @@ mod tests {
         git(&dir, &["add", "-A"]);
         git(&dir, &["commit", "-q", "-m", "init"]);
         // two edits far apart => two hunks
-        std::fs::write(dir.join("a.txt"), base.replace("line 3\n", "line 3 CHANGED\n").replace("line 25\n", "line 25 CHANGED\n")).unwrap();
+        std::fs::write(
+            dir.join("a.txt"),
+            base.replace("line 3\n", "line 3 CHANGED\n")
+                .replace("line 25\n", "line 25 CHANGED\n"),
+        )
+        .unwrap();
 
         let fd = gitcore::ops::diff_file(&dir, "a.txt", false, false).unwrap();
         assert_eq!(fd.hunks.len(), 2);
@@ -209,24 +254,56 @@ mod tests {
         let pairs = selected_pairs(&fd, (DiffSide::Modified, 25), (DiffSide::Modified, 25));
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].0, 1, "line 25 is in the second hunk");
-        gitcore::ops::apply_lines(&dir, "a.txt", gitcore::ops::LineAction::Stage, &pairs, &fd.fingerprint()).unwrap();
+        gitcore::ops::apply_lines(
+            &dir,
+            "a.txt",
+            gitcore::ops::LineAction::Stage,
+            &pairs,
+            &fd.fingerprint(),
+        )
+        .unwrap();
 
         let cached = git(&dir, &["diff", "--cached", "-U0"]);
         assert!(cached.contains("+line 25 CHANGED"), "{cached}");
         assert!(!cached.contains("line 3 CHANGED"), "{cached}");
         // and the other edit is still only in the working tree
         let work = git(&dir, &["diff", "-U0"]);
-        assert!(work.contains("+line 3 CHANGED") && !work.contains("line 25 CHANGED"), "{work}");
+        assert!(
+            work.contains("+line 3 CHANGED") && !work.contains("line 25 CHANGED"),
+            "{work}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn the_conflict_view_parses_even_though_its_header_counts_do_not_add_up() {
         use gitcore::parse::{DiffLine, FileDiff, Hunk};
-        let line = |t: char, x: &str| DiffLine { t, text: x.into(), no_eol: false, cr: false };
-        let lines = vec![line(' ', "<<<<<<< HEAD"), line('-', "mine"), line(' ', "======="), line('+', "theirs"), line(' ', ">>>>>>> x")];
+        let line = |t: char, x: &str| DiffLine {
+            t,
+            text: x.into(),
+            no_eol: false,
+            cr: false,
+        };
+        let lines = vec![
+            line(' ', "<<<<<<< HEAD"),
+            line('-', "mine"),
+            line(' ', "======="),
+            line('+', "theirs"),
+            line(' ', ">>>>>>> x"),
+        ];
         let n = lines.len() as u32;
-        let d = FileDiff { path: "a.txt".into(), hunks: vec![Hunk { header: "@@ conflict @@".into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines }], ..Default::default() };
+        let d = FileDiff {
+            path: "a.txt".into(),
+            hunks: vec![Hunk {
+                header: "@@ conflict @@".into(),
+                old_start: 1,
+                old_lines: n,
+                new_start: 1,
+                new_lines: n,
+                lines,
+            }],
+            ..Default::default()
+        };
         let files = DiffFile::parse(&to_patch(&d)).expect("parses");
         assert_eq!(files.len(), 1);
         assert_eq!((files[0].additions(), files[0].deletions()), (1, 1));

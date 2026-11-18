@@ -10,8 +10,17 @@ pub struct TreeFile {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Row {
-    Dir { name: String, depth: usize, dir: String },
-    File { path: String, status: char, name: String, depth: usize },
+    Dir {
+        name: String,
+        depth: usize,
+        dir: String,
+    },
+    File {
+        path: String,
+        status: char,
+        name: String,
+        depth: usize,
+    },
 }
 
 /// Same order as the tree: in each folder, sub-folders first, then files, both A→Z.
@@ -70,14 +79,24 @@ pub fn file_tree_rows(paths: &[String], open: &HashSet<String>) -> Vec<FtRow> {
         for name in dirs {
             let path = format!("{prefix}{name}");
             let unfolded = open.contains(&path);
-            out.push(FtRow { name: name.to_string(), path: path.clone(), depth, dir: true });
+            out.push(FtRow {
+                name: name.to_string(),
+                path: path.clone(),
+                depth,
+                dir: true,
+            });
             if unfolded {
                 emit(&dir.dirs[name], &format!("{path}/"), depth + 1, open, out);
             }
         }
         let mut files = dir.files.clone();
         files.sort_by(by_name);
-        out.extend(files.into_iter().map(|name| FtRow { name: name.to_string(), path: format!("{prefix}{name}"), depth, dir: false }));
+        out.extend(files.into_iter().map(|name| FtRow {
+            name: name.to_string(),
+            path: format!("{prefix}{name}"),
+            depth,
+            dir: false,
+        }));
     }
     let mut out = Vec::new();
     emit(&root, "", 0, open, &mut out);
@@ -107,7 +126,13 @@ pub fn tree_rows(files: &[TreeFile], collapsed: &HashSet<String>) -> Vec<Row> {
         n.files.push(f);
     }
     let mut rows = Vec::new();
-    fn walk(n: &Node, depth: usize, prefix: &str, collapsed: &HashSet<String>, rows: &mut Vec<Row>) {
+    fn walk(
+        n: &Node,
+        depth: usize,
+        prefix: &str,
+        collapsed: &HashSet<String>,
+        rows: &mut Vec<Row>,
+    ) {
         for key in &n.order {
             let mut c = &n.dirs[key];
             let (mut name, mut full) = (key.clone(), format!("{prefix}{key}"));
@@ -119,13 +144,22 @@ pub fn tree_rows(files: &[TreeFile], collapsed: &HashSet<String>) -> Vec<Row> {
                 full.push_str(k);
                 c = &c.dirs[k];
             }
-            rows.push(Row::Dir { name, depth, dir: full.clone() });
+            rows.push(Row::Dir {
+                name,
+                depth,
+                dir: full.clone(),
+            });
             if !collapsed.contains(&full) {
                 walk(c, depth + 1, &format!("{full}/"), collapsed, rows);
             }
         }
         for f in &n.files {
-            rows.push(Row::File { path: f.path.clone(), status: f.status, name: f.path.rsplit('/').next().unwrap_or(&f.path).to_string(), depth });
+            rows.push(Row::File {
+                path: f.path.clone(),
+                status: f.status,
+                name: f.path.rsplit('/').next().unwrap_or(&f.path).to_string(),
+                depth,
+            });
         }
     }
     walk(&root, 0, "", collapsed, &mut rows);
@@ -138,32 +172,86 @@ mod tests {
 
     #[test]
     fn the_whole_tree_shows_only_what_is_unfolded() {
-        let paths: Vec<String> = ["README.md", "Cargo.toml", ".gitignore", "src/main.rs", "src/views/mod.rs", "src/app.rs", "crates/x/lib.rs"].iter().map(|s| s.to_string()).collect();
-        let line = |r: &FtRow| format!("{}{}{}", "  ".repeat(r.depth), r.name, if r.dir { "/" } else { "" });
-        let folded: Vec<String> = file_tree_rows(&paths, &HashSet::new()).iter().map(line).collect();
-        assert_eq!(folded, ["crates/", "src/", ".gitignore", "Cargo.toml", "README.md"], "folders first, then files, A to Z whatever the case");
+        let paths: Vec<String> = [
+            "README.md",
+            "Cargo.toml",
+            ".gitignore",
+            "src/main.rs",
+            "src/views/mod.rs",
+            "src/app.rs",
+            "crates/x/lib.rs",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let line = |r: &FtRow| {
+            format!(
+                "{}{}{}",
+                "  ".repeat(r.depth),
+                r.name,
+                if r.dir { "/" } else { "" }
+            )
+        };
+        let folded: Vec<String> = file_tree_rows(&paths, &HashSet::new())
+            .iter()
+            .map(line)
+            .collect();
+        assert_eq!(
+            folded,
+            ["crates/", "src/", ".gitignore", "Cargo.toml", "README.md"],
+            "folders first, then files, A to Z whatever the case"
+        );
         let open: HashSet<String> = ["src".to_string(), "src/views".to_string()].into();
         let rows = file_tree_rows(&paths, &open);
-        assert_eq!(rows.iter().map(line).collect::<Vec<_>>(), ["crates/", "src/", "  views/", "    mod.rs", "  app.rs", "  main.rs", ".gitignore", "Cargo.toml", "README.md"]);
+        assert_eq!(
+            rows.iter().map(line).collect::<Vec<_>>(),
+            [
+                "crates/",
+                "src/",
+                "  views/",
+                "    mod.rs",
+                "  app.rs",
+                "  main.rs",
+                ".gitignore",
+                "Cargo.toml",
+                "README.md"
+            ]
+        );
         assert_eq!(rows[3].path, "src/views/mod.rs");
         assert_eq!(rows[2].path, "src/views");
     }
 
     fn f(p: &str) -> TreeFile {
-        TreeFile { path: p.into(), status: 'M' }
+        TreeFile {
+            path: p.into(),
+            status: 'M',
+        }
     }
 
     #[test]
     fn folders_before_files_and_case_insensitive() {
-        let s = tree_sort(&[f("b.txt"), f("src/z.rs"), f("A.txt"), f("src/a.rs")], |x| &x.path);
+        let s = tree_sort(
+            &[f("b.txt"), f("src/z.rs"), f("A.txt"), f("src/a.rs")],
+            |x| &x.path,
+        );
         let p: Vec<_> = s.iter().map(|x| x.path.as_str()).collect();
         assert_eq!(p, ["src/a.rs", "src/z.rs", "A.txt", "b.txt"]);
     }
 
     #[test]
     fn single_child_chains_merge() {
-        let rows = tree_rows(&[f("apps/backend/app/main.py"), f("README.md")], &HashSet::new());
-        assert_eq!(rows[0], Row::Dir { name: "apps/backend/app".into(), depth: 0, dir: "apps/backend/app".into() });
+        let rows = tree_rows(
+            &[f("apps/backend/app/main.py"), f("README.md")],
+            &HashSet::new(),
+        );
+        assert_eq!(
+            rows[0],
+            Row::Dir {
+                name: "apps/backend/app".into(),
+                depth: 0,
+                dir: "apps/backend/app".into()
+            }
+        );
         assert!(matches!(&rows[1], Row::File { name, depth: 1, .. } if name == "main.py"));
         assert!(matches!(&rows[2], Row::File { name, depth: 0, .. } if name == "README.md"));
     }

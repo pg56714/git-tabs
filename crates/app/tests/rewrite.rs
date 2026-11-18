@@ -7,8 +7,17 @@ use std::process::Command;
 use gitcore::rewrite::{Rewrite, rewrite};
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let o = Command::new("git").args(args).current_dir(dir).output().unwrap();
-    assert!(o.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&o.stderr));
+    let o = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "git {:?}: {}",
+        args,
+        String::from_utf8_lossy(&o.stderr)
+    );
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 
@@ -20,7 +29,10 @@ fn commit(dir: &Path, file: &str, msg: &str) -> String {
 }
 
 fn subjects(dir: &Path) -> Vec<String> {
-    git(dir, &["log", "--format=%s"]).lines().map(String::from).collect()
+    git(dir, &["log", "--format=%s"])
+        .lines()
+        .map(String::from)
+        .collect()
 }
 
 #[test]
@@ -28,7 +40,11 @@ fn reword_squash_and_drop_older_commits() {
     let exe = Path::new(env!("CARGO_BIN_EXE_git-tabs"));
     let home = tempfile::tempdir().unwrap();
     let global = home.path().join("gitconfig");
-    std::fs::write(&global, "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n").unwrap();
+    std::fs::write(
+        &global,
+        "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n",
+    )
+    .unwrap();
     // SAFETY: the only test in this binary, set before it starts any git.
     unsafe {
         std::env::set_var("GIT_CONFIG_GLOBAL", &global);
@@ -45,18 +61,38 @@ fn reword_squash_and_drop_older_commits() {
     std::fs::write(d.join("a.txt"), "edited, not committed\n").unwrap();
 
     // A new message for a commit in the middle; the commits above it are replayed.
-    rewrite(d, exe, &two, &Rewrite::Reword("two, said better\n\nand why".into())).unwrap();
+    rewrite(
+        d,
+        exe,
+        &two,
+        &Rewrite::Reword("two, said better\n\nand why".into()),
+    )
+    .unwrap();
     assert_eq!(subjects(d), ["four", "three", "two, said better", "one"]);
-    assert_eq!(git(d, &["log", "-1", "--format=%b", "HEAD~2"]).trim(), "and why");
-    assert_eq!(std::fs::read_to_string(d.join("a.txt")).unwrap(), "edited, not committed\n");
+    assert_eq!(
+        git(d, &["log", "-1", "--format=%b", "HEAD~2"]).trim(),
+        "and why"
+    );
+    assert_eq!(
+        std::fs::read_to_string(d.join("a.txt")).unwrap(),
+        "edited, not committed\n"
+    );
 
     // "three" folded into the commit before it: one commit with both files and both messages.
     let three = git(d, &["rev-parse", "HEAD~1"]).trim().to_string();
     rewrite(d, exe, &three, &Rewrite::Squash).unwrap();
     assert_eq!(subjects(d), ["four", "two, said better", "one"]);
     let folded = git(d, &["log", "-1", "--format=%B", "HEAD~1"]);
-    assert!(folded.contains("and why") && folded.contains("three"), "{folded}");
-    assert_eq!(git(d, &["show", "--name-only", "--format=", "HEAD~1"]).split_whitespace().collect::<Vec<_>>(), ["b.txt", "c.txt"]);
+    assert!(
+        folded.contains("and why") && folded.contains("three"),
+        "{folded}"
+    );
+    assert_eq!(
+        git(d, &["show", "--name-only", "--format=", "HEAD~1"])
+            .split_whitespace()
+            .collect::<Vec<_>>(),
+        ["b.txt", "c.txt"]
+    );
 
     // The first commit has nothing before it to be folded into, and nothing is left half done.
     let one = git(d, &["rev-parse", "HEAD~2"]).trim().to_string();
@@ -78,7 +114,10 @@ fn reword_squash_and_drop_older_commits() {
     git(d, &["switch", "-q", "-c", "side", "HEAD~1"]);
     commit(d, "s.txt", "on the side");
     git(d, &["switch", "-q", "main"]);
-    git(d, &["merge", "-q", "--no-ff", "-m", "merge the side", "side"]);
+    git(
+        d,
+        &["merge", "-q", "--no-ff", "-m", "merge the side", "side"],
+    );
     let merge = git(d, &["rev-parse", "HEAD"]).trim().to_string();
     let before = subjects(d);
     assert!(rewrite(d, exe, &merge, &Rewrite::Reword("x".into())).is_err());
@@ -93,13 +132,27 @@ fn reword_squash_and_drop_older_commits() {
     git(h, &["init", "-q", "-b", "main"]);
     commit(h, "a.txt", "base");
     let issue = commit(h, "b.txt", "#123 fix login");
-    rewrite(h, exe, &issue, &Rewrite::Reword("#124 fix login\n\n# kept too".into())).unwrap();
+    rewrite(
+        h,
+        exe,
+        &issue,
+        &Rewrite::Reword("#124 fix login\n\n# kept too".into()),
+    )
+    .unwrap();
     assert_eq!(subjects(h)[0], "#124 fix login");
     assert!(git(h, &["log", "-1", "--format=%B"]).contains("# kept too"));
     commit(h, "c.txt", "#200 second");
     let second = git(h, &["rev-parse", "HEAD"]).trim().to_string();
     rewrite(h, exe, &second, &Rewrite::Squash).unwrap();
     let body = git(h, &["log", "-1", "--format=%B"]);
-    assert!(body.contains("#124 fix login") && body.contains("#200 second") && body.contains("# kept too"), "{body}");
-    assert!(!body.contains("This is a combination") && !body.contains("Please enter"), "{body}");
+    assert!(
+        body.contains("#124 fix login")
+            && body.contains("#200 second")
+            && body.contains("# kept too"),
+        "{body}"
+    );
+    assert!(
+        !body.contains("This is a combination") && !body.contains("Please enter"),
+        "{body}"
+    );
 }

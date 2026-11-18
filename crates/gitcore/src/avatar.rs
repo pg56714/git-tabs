@@ -14,11 +14,15 @@ const MAX_PARALLEL: usize = 4;
 
 fn md5_hex(data: &[u8]) -> String {
     const S: [u32; 64] = [
-        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15,
-        21, 6, 10, 15, 21, 6, 10, 15, 21,
+        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5,
+        9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10,
+        15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
     ];
-    let k: Vec<u32> = (0..64).map(|i| ((i as f64 + 1.0).sin().abs() * 4294967296.0) as u32).collect();
-    let (mut a0, mut b0, mut c0, mut d0) = (0x67452301u32, 0xefcdab89u32, 0x98badcfeu32, 0x10325476u32);
+    let k: Vec<u32> = (0..64)
+        .map(|i| ((i as f64 + 1.0).sin().abs() * 4294967296.0) as u32)
+        .collect();
+    let (mut a0, mut b0, mut c0, mut d0) =
+        (0x67452301u32, 0xefcdab89u32, 0x98badcfeu32, 0x10325476u32);
     let mut msg = data.to_vec();
     msg.push(0x80);
     while msg.len() % 64 != 56 {
@@ -26,7 +30,10 @@ fn md5_hex(data: &[u8]) -> String {
     }
     msg.extend(((data.len() as u64) * 8).to_le_bytes());
     for chunk in msg.chunks(64) {
-        let m: Vec<u32> = chunk.chunks(4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]])).collect();
+        let m: Vec<u32> = chunk
+            .chunks(4)
+            .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+            .collect();
         let (mut a, mut b, mut c, mut d) = (a0, b0, c0, d0);
         for i in 0..64 {
             let (f, g) = match i / 16 {
@@ -46,7 +53,11 @@ fn md5_hex(data: &[u8]) -> String {
         c0 = c0.wrapping_add(c);
         d0 = d0.wrapping_add(d);
     }
-    [a0, b0, c0, d0].iter().flat_map(|x| x.to_le_bytes()).map(|b| format!("{b:02x}")).collect()
+    [a0, b0, c0, d0]
+        .iter()
+        .flat_map(|x| x.to_le_bytes())
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Where the picture for a commit email comes from.
@@ -62,7 +73,9 @@ pub fn url(email: &str) -> Option<String> {
     if let Some(user) = e.strip_suffix("@users.noreply.github.com") {
         // "12345+name" carries the account number; an old "name" alone is the login.
         return Some(match user.split_once('+') {
-            Some((id, _)) if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() => format!("https://avatars.githubusercontent.com/u/{id}?s=64"),
+            Some((id, _)) if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() => {
+                format!("https://avatars.githubusercontent.com/u/{id}?s=64")
+            }
             Some((_, name)) => format!("https://github.com/{name}.png?size=64"),
             None => format!("https://github.com/{user}.png?size=64"),
         });
@@ -70,7 +83,10 @@ pub fn url(email: &str) -> Option<String> {
     if e.ends_with(".local") || e.ends_with(".invalid") || e.ends_with("@localhost") {
         return None;
     }
-    Some(format!("https://www.gravatar.com/avatar/{}?s=64&d=404", md5_hex(e.as_bytes())))
+    Some(format!(
+        "https://www.gravatar.com/avatar/{}?s=64&d=404",
+        md5_hex(e.as_bytes())
+    ))
 }
 
 /// "owner/repo" of a github.com remote URL.
@@ -78,8 +94,14 @@ pub fn github_slug(remote: &str) -> Option<String> {
     let r = remote.trim();
     // github.com, or an ssh alias for it such as "github-work-emu".
     let at = r.find("github")?;
-    let rest = r[at..].split_once([':', '/'])?.1.trim_start_matches([':', '/']);
-    let mut it = rest.trim_end_matches('/').trim_end_matches(".git").split('/');
+    let rest = r[at..]
+        .split_once([':', '/'])?
+        .1
+        .trim_start_matches([':', '/']);
+    let mut it = rest
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .split('/');
     match (it.next(), it.next()) {
         (Some(o), Some(n)) if !o.is_empty() && !n.is_empty() => Some(format!("{o}/{n}")),
         _ => None,
@@ -114,8 +136,17 @@ pub struct Cache {
 impl Cache {
     pub fn new(config_dir: &Path) -> Arc<Self> {
         let no_gh = std::env::var("GIT_TABS_NO_GH").is_ok_and(|v| v == "1");
-        let accounts: Accounts = if no_gh { Arc::new(Vec::new) } else { Arc::new(gh_accounts) };
-        Self::with_parts(config_dir, Arc::new(curl_fetch), accounts, std::env::var("GIT_TABS_NO_AVATARS").is_ok_and(|v| v == "1"))
+        let accounts: Accounts = if no_gh {
+            Arc::new(Vec::new)
+        } else {
+            Arc::new(gh_accounts)
+        };
+        Self::with_parts(
+            config_dir,
+            Arc::new(curl_fetch),
+            accounts,
+            std::env::var("GIT_TABS_NO_AVATARS").is_ok_and(|v| v == "1"),
+        )
     }
 
     pub fn with_fetch(config_dir: &Path, fetch: Fetch, off: bool) -> Arc<Self> {
@@ -123,7 +154,17 @@ impl Cache {
     }
 
     pub fn with_parts(config_dir: &Path, fetch: Fetch, accounts: Accounts, off: bool) -> Arc<Self> {
-        Arc::new(Self { dir: config_dir.join("avatars"), fetch, accounts, known: OnceLock::new(), served_by: Mutex::new(HashMap::new()), map: Mutex::new(HashMap::new()), busy: AtomicUsize::new(0), changed: AtomicBool::new(false), off })
+        Arc::new(Self {
+            dir: config_dir.join("avatars"),
+            fetch,
+            accounts,
+            known: OnceLock::new(),
+            served_by: Mutex::new(HashMap::new()),
+            map: Mutex::new(HashMap::new()),
+            busy: AtomicUsize::new(0),
+            changed: AtomicBool::new(false),
+            off,
+        })
     }
 
     fn file(&self, key: &str) -> PathBuf {
@@ -154,7 +195,9 @@ impl Cache {
             map.insert(key, State::Have(f.clone()));
             return Some(f);
         }
-        let fresh_miss = std::fs::metadata(&miss).and_then(|m| m.modified()).is_ok_and(|t| SystemTime::now().duration_since(t).unwrap_or_default() < MISS_FOR);
+        let fresh_miss = std::fs::metadata(&miss)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| SystemTime::now().duration_since(t).unwrap_or_default() < MISS_FOR);
         let Some(url) = url(&key).filter(|_| !fresh_miss) else {
             map.insert(key, State::None);
             return None;
@@ -166,7 +209,12 @@ impl Cache {
         map.insert(key.clone(), State::Loading);
         self.busy.fetch_add(1, Ordering::SeqCst);
         let me = self.clone();
-        let hint = hint.map(|(s, c)| (s.to_string(), format!("https://api.github.com/repos/{s}/commits/{c}")));
+        let hint = hint.map(|(s, c)| {
+            (
+                s.to_string(),
+                format!("https://api.github.com/repos/{s}/commits/{c}"),
+            )
+        });
         std::thread::spawn(move || {
             let _ = std::fs::create_dir_all(&me.dir);
             let tmp = f.with_extension("part");
@@ -198,7 +246,11 @@ impl Cache {
         let ok = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.len() > 100);
         let json = f.with_extension("json");
         let known = self.known.get_or_init(|| (self.accounts)());
-        let first = self.served_by.lock().ok().and_then(|m| m.get(slug).cloned());
+        let first = self
+            .served_by
+            .lock()
+            .ok()
+            .and_then(|m| m.get(slug).cloned());
         let mut order: Vec<&(String, String)> = known.iter().collect();
         order.sort_by_key(|(name, _)| Some(name) != first.as_ref());
         let mut tries: Vec<Option<&(String, String)>> = order.into_iter().map(Some).collect();
@@ -210,7 +262,11 @@ impl Cache {
             let pic = std::fs::read_to_string(&json)
                 .ok()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-                .and_then(|v| v["author"]["avatar_url"].as_str().map(|u| format!("{u}{}s=64", if u.contains('?') { "&" } else { "?" })));
+                .and_then(|v| {
+                    v["author"]["avatar_url"]
+                        .as_str()
+                        .map(|u| format!("{u}{}s=64", if u.contains('?') { "&" } else { "?" }))
+                });
             let _ = std::fs::remove_file(&json);
             // The commit was readable; if its author has no account there is nothing more to find.
             if let (Some(w), Ok(mut m)) = (who, self.served_by.lock()) {
@@ -230,18 +286,34 @@ impl Cache {
 
 fn curl_fetch(url: &str, to: &Path, token: Option<&str>) -> bool {
     let mut c = std::process::Command::new("curl");
-    c.args(["-fsSL", "--max-time", "15", "--max-filesize", "2000000", "-H", "User-Agent: git-tabs"]);
+    c.args([
+        "-fsSL",
+        "--max-time",
+        "15",
+        "--max-filesize",
+        "2000000",
+        "-H",
+        "User-Agent: git-tabs",
+    ]);
     // The token goes in a header file, not on the command line, where other programs could read it.
     let header = token.and_then(|t| {
         static N: AtomicUsize = AtomicUsize::new(0);
-        let p = std::env::temp_dir().join(format!("git-tabs-h-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
-        std::fs::write(&p, format!("Authorization: Bearer {t}\n")).ok().map(|_| p)
+        let p = std::env::temp_dir().join(format!(
+            "git-tabs-h-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
+        std::fs::write(&p, format!("Authorization: Bearer {t}\n"))
+            .ok()
+            .map(|_| p)
     });
     if let Some(h) = &header {
         c.arg("-H").arg(format!("@{}", h.display()));
     }
     c.arg("-o").arg(to).arg(url);
-    c.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    c.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -256,7 +328,9 @@ fn curl_fetch(url: &str, to: &Path, token: Option<&str>) -> bool {
 
 fn gh(args: &[&str]) -> Option<String> {
     let mut c = std::process::Command::new("gh");
-    c.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    c.args(args)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -270,16 +344,24 @@ fn gh(args: &[&str]) -> Option<String> {
 fn account_names(status: &str) -> Vec<String> {
     status
         .lines()
-        .filter_map(|l| l.split_once("Logged in to github.com account ").map(|x| x.1))
+        .filter_map(|l| {
+            l.split_once("Logged in to github.com account ")
+                .map(|x| x.1)
+        })
         .filter_map(|r| r.split_whitespace().next().map(String::from))
         .collect()
 }
 
 fn gh_accounts() -> Vec<(String, String)> {
-    let Some(status) = gh(&["auth", "status", "--hostname", "github.com"]) else { return vec![] };
+    let Some(status) = gh(&["auth", "status", "--hostname", "github.com"]) else {
+        return vec![];
+    };
     account_names(&status)
         .into_iter()
-        .filter_map(|n| gh(&["auth", "token", "--hostname", "github.com", "--user", &n]).map(|t| (n, t.trim().to_string())))
+        .filter_map(|n| {
+            gh(&["auth", "token", "--hostname", "github.com", "--user", &n])
+                .map(|t| (n, t.trim().to_string()))
+        })
         .filter(|(_, t)| !t.is_empty())
         .collect()
 }
@@ -292,9 +374,15 @@ mod tests {
     fn md5_matches_the_known_vectors() {
         assert_eq!(md5_hex(b""), "d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(md5_hex(b"abc"), "900150983cd24fb0d6963f7d28e17f72");
-        assert_eq!(md5_hex(b"The quick brown fox jumps over the lazy dog"), "9e107d9d372bb6826bd81d3542a419d6");
+        assert_eq!(
+            md5_hex(b"The quick brown fox jumps over the lazy dog"),
+            "9e107d9d372bb6826bd81d3542a419d6"
+        );
         // Gravatar's own documented example.
-        assert_eq!(md5_hex(b"myemailaddress@example.com"), "0bc83cb571cd1c50ba6f3e8a78ef1346");
+        assert_eq!(
+            md5_hex(b"myemailaddress@example.com"),
+            "0bc83cb571cd1c50ba6f3e8a78ef1346"
+        );
     }
 
     #[test]
@@ -305,18 +393,39 @@ mod tests {
 
     #[test]
     fn github_slugs() {
-        assert_eq!(github_slug("git@github.com:pg56714/git-tabs.git").unwrap(), "pg56714/git-tabs");
-        assert_eq!(github_slug("https://alice@github.com/Org/repo").unwrap(), "Org/repo");
-        assert_eq!(github_slug("git@github-work-emu:TRUSTA-SW-FAE/x.git").unwrap(), "TRUSTA-SW-FAE/x");
+        assert_eq!(
+            github_slug("git@github.com:pg56714/git-tabs.git").unwrap(),
+            "pg56714/git-tabs"
+        );
+        assert_eq!(
+            github_slug("https://alice@github.com/Org/repo").unwrap(),
+            "Org/repo"
+        );
+        assert_eq!(
+            github_slug("git@github-work-emu:TRUSTA-SW-FAE/x.git").unwrap(),
+            "TRUSTA-SW-FAE/x"
+        );
         assert!(github_slug("https://gitlab.com/a/b").is_none());
     }
 
     #[test]
     fn where_each_address_gets_its_picture() {
-        assert_eq!(url("293473+sandersn@users.noreply.github.com").unwrap(), "https://avatars.githubusercontent.com/u/293473?s=64");
-        assert_eq!(url("sandersn@users.noreply.github.com").unwrap(), "https://github.com/sandersn.png?size=64");
-        assert_eq!(url("noreply@github.com").unwrap(), "https://avatars.githubusercontent.com/u/19864447?s=64");
-        assert_eq!(url("  MyEmailAddress@example.com ").unwrap(), "https://www.gravatar.com/avatar/0bc83cb571cd1c50ba6f3e8a78ef1346?s=64&d=404");
+        assert_eq!(
+            url("293473+sandersn@users.noreply.github.com").unwrap(),
+            "https://avatars.githubusercontent.com/u/293473?s=64"
+        );
+        assert_eq!(
+            url("sandersn@users.noreply.github.com").unwrap(),
+            "https://github.com/sandersn.png?size=64"
+        );
+        assert_eq!(
+            url("noreply@github.com").unwrap(),
+            "https://avatars.githubusercontent.com/u/19864447?s=64"
+        );
+        assert_eq!(
+            url("  MyEmailAddress@example.com ").unwrap(),
+            "https://www.gravatar.com/avatar/0bc83cb571cd1c50ba6f3e8a78ef1346?s=64&d=404"
+        );
         assert!(url("nobody").is_none());
         assert!(url("me@host.local").is_none());
     }
@@ -345,7 +454,10 @@ mod tests {
             }
         });
         let c = Cache::with_fetch(d.path(), fetch.clone(), false);
-        assert!(c.get("7+x@users.noreply.github.com", None).is_none(), "first call only starts the download");
+        assert!(
+            c.get("7+x@users.noreply.github.com", None).is_none(),
+            "first call only starts the download"
+        );
         let p = wait(&c, "7+x@users.noreply.github.com").expect("arrives");
         assert!(p.is_file());
         assert!(c.take_changed());
@@ -389,16 +501,29 @@ mod tests {
             if url.contains("gravatar") {
                 false
             } else if url.contains("api.github.com/repos/o/priv/commits/") {
-                log.lock().unwrap().push(token.unwrap_or("none").to_string());
-                token == Some("tok-b") && std::fs::write(to, r#"{"author":{"avatar_url":"https://avatars.githubusercontent.com/u/5"}}"#).is_ok()
+                log.lock()
+                    .unwrap()
+                    .push(token.unwrap_or("none").to_string());
+                token == Some("tok-b")
+                    && std::fs::write(
+                        to,
+                        r#"{"author":{"avatar_url":"https://avatars.githubusercontent.com/u/5"}}"#,
+                    )
+                    .is_ok()
             } else if url.starts_with("https://avatars.githubusercontent.com/u/5?s=64") {
                 std::fs::write(to, vec![3u8; 500]).is_ok()
             } else {
                 false
             }
         });
-        let accounts: Accounts = Arc::new(|| vec![("a".into(), "tok-a".into()), ("b".into(), "tok-b".into())]);
-        let c5 = Cache::with_parts(tempfile::tempdir().unwrap().path(), private, accounts, false);
+        let accounts: Accounts =
+            Arc::new(|| vec![("a".into(), "tok-a".into()), ("b".into(), "tok-b".into())]);
+        let c5 = Cache::with_parts(
+            tempfile::tempdir().unwrap().path(),
+            private,
+            accounts,
+            false,
+        );
         for email in ["w@corp.com", "v@corp.com"] {
             let sha = if email.starts_with('w') { "1" } else { "2" };
             assert!(c5.get(email, Some(("o/priv", sha))).is_none());
@@ -410,9 +535,17 @@ mod tests {
             }
             assert!(c5.get(email, Some(("o/priv", sha))).is_some());
         }
-        assert_eq!(*seen.lock().unwrap(), ["tok-a", "tok-b", "tok-b"], "the account that worked goes first next time");
+        assert_eq!(
+            *seen.lock().unwrap(),
+            ["tok-a", "tok-b", "tok-b"],
+            "the account that worked goes first next time"
+        );
         // Switched off: never fetches.
-        let off = Cache::with_fetch(tempfile::tempdir().unwrap().path(), Arc::new(|_, _, _| panic!("no network")), true);
+        let off = Cache::with_fetch(
+            tempfile::tempdir().unwrap().path(),
+            Arc::new(|_, _, _| panic!("no network")),
+            true,
+        );
         assert!(off.get("7+x@users.noreply.github.com", None).is_none());
     }
 }

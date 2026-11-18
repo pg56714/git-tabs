@@ -10,7 +10,7 @@ use gitcore::config::Identity;
 use gitcore::ops::{BlameLine, CommitDetail, RefsAll, Summary};
 use gitcore::parse::{Commit, FileDiff, ReflogEntry, StatusEntry};
 use gpui_kit::component::input::{InputState, TextareaState};
-use gpui_kit::{Context, Entity, Point, Pixels, Subscription, Window};
+use gpui_kit::{Context, Entity, Pixels, Point, Subscription, Window};
 
 use crate::app::GitTabs;
 use crate::graph::GraphRow;
@@ -145,11 +145,17 @@ impl RepoState {
     }
 
     pub fn unstaged(&self) -> Vec<&StatusEntry> {
-        self.status.iter().filter(|f| f.untracked || f.conflicted || f.y != '.').collect()
+        self.status
+            .iter()
+            .filter(|f| f.untracked || f.conflicted || f.y != '.')
+            .collect()
     }
 
     pub fn staged(&self) -> Vec<&StatusEntry> {
-        self.status.iter().filter(|f| !f.untracked && !f.conflicted && f.x != '.').collect()
+        self.status
+            .iter()
+            .filter(|f| !f.untracked && !f.conflicted && f.x != '.')
+            .collect()
     }
 
     pub fn changes(&self) -> usize {
@@ -174,19 +180,43 @@ pub struct MenuItem {
 
 impl MenuItem {
     fn blank() -> Self {
-        Self { label: String::new(), hint: String::new(), icon: None, danger: false, checked: false, header: false, sep: false, disabled: false, on: None }
+        Self {
+            label: String::new(),
+            hint: String::new(),
+            icon: None,
+            danger: false,
+            checked: false,
+            header: false,
+            sep: false,
+            disabled: false,
+            on: None,
+        }
     }
 
-    pub fn new(label: impl Into<String>, on: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static) -> Self {
-        Self { label: label.into(), on: Some(Rc::new(on)), ..Self::blank() }
+    pub fn new(
+        label: impl Into<String>,
+        on: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            on: Some(Rc::new(on)),
+            ..Self::blank()
+        }
     }
 
     pub fn sep() -> Self {
-        Self { sep: true, ..Self::blank() }
+        Self {
+            sep: true,
+            ..Self::blank()
+        }
     }
 
     pub fn header(label: impl Into<String>) -> Self {
-        Self { header: true, label: label.into(), ..Self::blank() }
+        Self {
+            header: true,
+            label: label.into(),
+            ..Self::blank()
+        }
     }
 
     pub fn danger(mut self) -> Self {
@@ -254,15 +284,29 @@ pub struct FieldSpec {
 
 impl FieldSpec {
     pub fn text(key: &'static str, label: &str) -> Self {
-        Self { key, label: label.into(), kind: FieldKind::Text, value: String::new(), placeholder: String::new(), check: None }
+        Self {
+            key,
+            label: label.into(),
+            kind: FieldKind::Text,
+            value: String::new(),
+            placeholder: String::new(),
+            check: None,
+        }
     }
 
     pub fn textarea(key: &'static str, label: &str) -> Self {
-        Self { kind: FieldKind::Textarea, ..Self::text(key, label) }
+        Self {
+            kind: FieldKind::Textarea,
+            ..Self::text(key, label)
+        }
     }
 
     pub fn checkbox(key: &'static str, label: &str, on: bool) -> Self {
-        Self { kind: FieldKind::Checkbox, value: if on { "1".into() } else { String::new() }, ..Self::text(key, label) }
+        Self {
+            kind: FieldKind::Checkbox,
+            value: if on { "1".into() } else { String::new() },
+            ..Self::text(key, label)
+        }
     }
 
     pub fn value(mut self, v: impl Into<String>) -> Self {
@@ -289,7 +333,14 @@ pub struct PromptField {
     pub err: Option<String>,
 }
 
-pub type PromptDone = Rc<dyn Fn(&mut GitTabs, std::collections::HashMap<String, String>, &mut Window, &mut Context<GitTabs>)>;
+pub type PromptDone = Rc<
+    dyn Fn(
+        &mut GitTabs,
+        std::collections::HashMap<String, String>,
+        &mut Window,
+        &mut Context<GitTabs>,
+    ),
+>;
 pub type ChoiceDone = Rc<dyn Fn(&mut GitTabs, String, &mut Window, &mut Context<GitTabs>)>;
 
 pub struct Choice {

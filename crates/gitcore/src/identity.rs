@@ -16,7 +16,10 @@ fn slash(p: &str) -> String {
 
 /// The home folder git expands `~/` to in config paths.
 fn home() -> PathBuf {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_default()
 }
 
 /// A path the way Windows compares paths: either slash, any case, no doubled or trailing slash.
@@ -34,13 +37,21 @@ fn path_key(p: &str) -> String {
 /// Whether a path from a gitconfig points at something inside `dir`, file still there or not.
 fn points_into(value: &str, dir: &Path, home: &Path) -> bool {
     let d = path_key(&dir.display().to_string());
-    !d.is_empty() && path_key(&expand(value, home)).strip_prefix(&d).is_some_and(|rest| rest.len() > 1 && rest.starts_with('/'))
+    !d.is_empty()
+        && path_key(&expand(value, home))
+            .strip_prefix(&d)
+            .is_some_and(|rest| rest.len() > 1 && rest.starts_with('/'))
 }
 
 /// A config key the way git prints it: section and variable lower case, the subsection as is.
 fn canon(key: &str) -> String {
     match (key.find('.'), key.rfind('.')) {
-        (Some(a), Some(b)) if a < b => format!("{}{}{}", key[..a].to_ascii_lowercase(), &key[a..b], key[b..].to_ascii_lowercase()),
+        (Some(a), Some(b)) if a < b => format!(
+            "{}{}{}",
+            key[..a].to_ascii_lowercase(),
+            &key[a..b],
+            key[b..].to_ascii_lowercase()
+        ),
         _ => key.to_ascii_lowercase(),
     }
 }
@@ -48,7 +59,18 @@ fn canon(key: &str) -> String {
 /// Every `include.path` and `includeIf.<condition>.path` line in the global gitconfig, copies
 /// included, with the key as git prints it.
 fn global_includes() -> Result<Vec<Managed>, String> {
-    let o = run(None, &["config", "--global", "--null", "--get-regexp", r"^include(if\..*)?\.path$"], None, false);
+    let o = run(
+        None,
+        &[
+            "config",
+            "--global",
+            "--null",
+            "--get-regexp",
+            r"^include(if\..*)?\.path$",
+        ],
+        None,
+        false,
+    );
     match o.code {
         0 => {}
         // nothing matched, or there is no global gitconfig at all
@@ -59,7 +81,10 @@ fn global_includes() -> Result<Vec<Managed>, String> {
     Ok(entries
         .map(|e| {
             let (key, value) = e.split_once('\n').unwrap_or((e, ""));
-            Managed { key: key.to_string(), value: value.to_string() }
+            Managed {
+                key: key.to_string(),
+                value: value.to_string(),
+            }
         })
         .collect())
 }
@@ -69,13 +94,30 @@ fn global_includes() -> Result<Vec<Managed>, String> {
 /// `unset_local`, that one stays out of the command log.
 fn unset_global(key: &str, value: &str) -> Result<bool, String> {
     let t = std::time::Instant::now();
-    let args = ["config", "--global", "--fixed-value", "--unset-all", key, value];
+    let args = [
+        "config",
+        "--global",
+        "--fixed-value",
+        "--unset-all",
+        key,
+        value,
+    ];
     let o = run(None, &args, None, false);
     if o.code == 5 {
         return Ok(false);
     }
-    let cmd = std::iter::once("git").chain(args).map(crate::runner::quote).collect::<Vec<_>>().join(" ");
-    crate::runner::record("", cmd, t.elapsed().as_millis() as u64, o.ok(), &o.message());
+    let cmd = std::iter::once("git")
+        .chain(args)
+        .map(crate::runner::quote)
+        .collect::<Vec<_>>()
+        .join(" ");
+    crate::runner::record(
+        "",
+        cmd,
+        t.elapsed().as_millis() as u64,
+        o.ok(),
+        &o.message(),
+    );
     if o.ok() { Ok(true) } else { Err(o.message()) }
 }
 
@@ -107,7 +149,10 @@ pub fn tidy(cfg_dir: &Path, managed: &mut Vec<Managed>) -> Result<Vec<Managed>, 
     let home = home();
     let stale = |m: &Managed| canon(&m.key) == "include.path" && points_into(&m.value, &dir, &home);
     managed.retain(|m| !stale(m));
-    let lines: Vec<Managed> = global_includes()?.into_iter().filter(|m| stale(m)).collect();
+    let lines: Vec<Managed> = global_includes()?
+        .into_iter()
+        .filter(|m| stale(m))
+        .collect();
     remove(&lines)
 }
 
@@ -121,9 +166,19 @@ pub fn ssh_command(key: &str) -> String {
 pub fn apply(cfg_dir: &Path, _ids: &[Identity], old: &[Managed]) -> Result<Vec<Managed>, String> {
     let dir = cfg_dir.join("identities");
     let home = home();
-    let old: Vec<Managed> = old.iter().map(|m| Managed { key: canon(&m.key), value: m.value.clone() }).collect();
+    let old: Vec<Managed> = old
+        .iter()
+        .map(|m| Managed {
+            key: canon(&m.key),
+            value: m.value.clone(),
+        })
+        .collect();
     let present = global_includes()?;
-    let ours: Vec<Managed> = present.iter().filter(|m| old.contains(m) || points_into(&m.value, &dir, &home)).cloned().collect();
+    let ours: Vec<Managed> = present
+        .iter()
+        .filter(|m| old.contains(m) || points_into(&m.value, &dir, &home))
+        .cloned()
+        .collect();
     // Identities are picked by hand now (pinned into each repo's own config), so nothing is
     // written to the global gitconfig any more; only what older versions wrote goes.
     remove(&ours)?;
@@ -139,9 +194,20 @@ pub fn apply(cfg_dir: &Path, _ids: &[Identity], old: &[Managed]) -> Result<Vec<M
 /// a red line in the command log, so only a real removal is recorded.
 fn unset_local(repo: &Path, key: &str) {
     let t = std::time::Instant::now();
-    let o = run(Some(repo), &["config", "--local", "--unset-all", key], None, false);
+    let o = run(
+        Some(repo),
+        &["config", "--local", "--unset-all", key],
+        None,
+        false,
+    );
     if o.ok() {
-        crate::runner::record(&repo.display().to_string(), format!("git config --local --unset-all {key}"), t.elapsed().as_millis() as u64, true, "");
+        crate::runner::record(
+            &repo.display().to_string(),
+            format!("git config --local --unset-all {key}"),
+            t.elapsed().as_millis() as u64,
+            true,
+            "",
+        );
     }
 }
 
@@ -149,7 +215,18 @@ fn unset_local(repo: &Path, key: &str) {
 pub fn pin(repo: &Path, id: Option<&Identity>) -> Result<(), String> {
     match id {
         Some(id) => {
-            for (k, v) in [("user.name", id.user.trim().to_string()), ("user.email", id.email.trim().to_string()), ("core.sshCommand", if id.key.trim().is_empty() { String::new() } else { ssh_command(&id.key) })] {
+            for (k, v) in [
+                ("user.name", id.user.trim().to_string()),
+                ("user.email", id.email.trim().to_string()),
+                (
+                    "core.sshCommand",
+                    if id.key.trim().is_empty() {
+                        String::new()
+                    } else {
+                        ssh_command(&id.key)
+                    },
+                ),
+            ] {
                 if v.is_empty() {
                     unset_local(repo, k);
                 } else {
@@ -178,22 +255,62 @@ pub struct SshTest {
 
 /// `ssh -T git@host` with one key; GitHub answers "Hi <user>!" (and exits 1).
 pub fn ssh_test(key: &str, host: &str) -> SshTest {
-    let host = if host.trim().is_empty() { "github.com" } else { host.trim() };
+    let host = if host.trim().is_empty() {
+        "github.com"
+    } else {
+        host.trim()
+    };
     let t = std::time::Instant::now();
     let mut c = command("ssh");
-    c.args(["-T", "-i", key.trim(), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10", &format!("git@{host}")]);
+    c.args([
+        "-T",
+        "-i",
+        key.trim(),
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=10",
+        &format!("git@{host}"),
+    ]);
     let (out, ok_run) = match c.output() {
-        Ok(o) => (format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)).trim().to_string(), true),
+        Ok(o) => (
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            )
+            .trim()
+            .to_string(),
+            true,
+        ),
         Err(e) => (format!("找不到 ssh：{e}"), false),
     };
     let account = out
         .split("Hi ")
         .nth(1)
         .and_then(|s| s.split('!').next())
-        .or_else(|| out.split("Welcome to GitLab, @").nth(1).and_then(|s| s.split('!').next()))
+        .or_else(|| {
+            out.split("Welcome to GitLab, @")
+                .nth(1)
+                .and_then(|s| s.split('!').next())
+        })
         .map(|s| s.trim().to_string());
-    crate::runner::record("", format!("ssh -T -i {} git@{host}", key.trim()), t.elapsed().as_millis() as u64, account.is_some(), &out);
-    SshTest { ok: ok_run && account.is_some(), account, output: out }
+    crate::runner::record(
+        "",
+        format!("ssh -T -i {} git@{host}", key.trim()),
+        t.elapsed().as_millis() as u64,
+        account.is_some(),
+        &out,
+    );
+    SshTest {
+        ok: ok_run && account.is_some(),
+        account,
+        output: out,
+    }
 }
 
 /// Creates a new ed25519 key pair; never overwrites. Returns the public key.
@@ -206,13 +323,35 @@ pub fn keygen(path: &str, email: &str, passphrase: &str) -> Result<String, Strin
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let mut c = command("ssh-keygen");
-    c.args(["-q", "-t", "ed25519", "-C", email.trim(), "-f", path.trim(), "-N", passphrase]);
+    c.args([
+        "-q",
+        "-t",
+        "ed25519",
+        "-C",
+        email.trim(),
+        "-f",
+        path.trim(),
+        "-N",
+        passphrase,
+    ]);
     let o = c.output().map_err(|e| format!("找不到 ssh-keygen：{e}"))?;
-    crate::runner::record("", format!("ssh-keygen -t ed25519 -C {} -f {}", email.trim(), path.trim()), 0, o.status.success(), &String::from_utf8_lossy(&o.stderr));
+    crate::runner::record(
+        "",
+        format!(
+            "ssh-keygen -t ed25519 -C {} -f {}",
+            email.trim(),
+            path.trim()
+        ),
+        0,
+        o.status.success(),
+        &String::from_utf8_lossy(&o.stderr),
+    );
     if !o.status.success() {
         return Err(String::from_utf8_lossy(&o.stderr).trim().to_string());
     }
-    std::fs::read_to_string(format!("{}.pub", path.trim())).map(|s| s.trim().to_string()).map_err(|e| e.to_string())
+    std::fs::read_to_string(format!("{}.pub", path.trim()))
+        .map(|s| s.trim().to_string())
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize, Default)]
@@ -256,7 +395,11 @@ fn key_of(ssh: &str) -> String {
     let mut it = ssh.split_whitespace();
     while let Some(a) = it.next() {
         if a == "-i" {
-            return it.next().unwrap_or_default().trim_matches(['"', '\'']).to_string();
+            return it
+                .next()
+                .unwrap_or_default()
+                .trim_matches(['"', '\''])
+                .to_string();
         }
     }
     String::new()
@@ -265,7 +408,10 @@ fn key_of(ssh: &str) -> String {
 fn expand(p: &str, home: &Path) -> String {
     let p = p.trim().trim_matches('"');
     match p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")) {
-        Some(rest) => home.join(rest.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR)).display().to_string(),
+        Some(rest) => home
+            .join(rest.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR))
+            .display()
+            .to_string(),
         None => p.to_string(),
     }
 }
@@ -279,13 +425,27 @@ pub fn detect(home: &Path, skip: &[String]) -> Found {
         let mut paths: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         paths.sort();
         for p in paths {
-            let Some(pub_text) = p.extension().filter(|e| *e == "pub").and_then(|_| std::fs::read_to_string(&p).ok()) else { continue };
+            let Some(pub_text) = p
+                .extension()
+                .filter(|e| *e == "pub")
+                .and_then(|_| std::fs::read_to_string(&p).ok())
+            else {
+                continue;
+            };
             let private = p.with_extension("");
             if !private.is_file() {
                 continue;
             }
-            let comment = pub_text.split_whitespace().nth(2).unwrap_or_default().to_string();
-            keys.push(FoundKey { path: private.display().to_string(), comment, hosts: vec![] });
+            let comment = pub_text
+                .split_whitespace()
+                .nth(2)
+                .unwrap_or_default()
+                .to_string();
+            keys.push(FoundKey {
+                path: private.display().to_string(),
+                comment,
+                hosts: vec![],
+            });
         }
     }
     // ~/.ssh/config: Host blocks with an IdentityFile point that key at a host.
@@ -298,24 +458,48 @@ pub fn detect(home: &Path, skip: &[String]) -> Found {
                 return;
             }
             let f = expand(file, home);
-            let k = match keys.iter_mut().find(|k| k.path.replace('\\', "/").eq_ignore_ascii_case(&f.replace('\\', "/"))) {
+            let k = match keys.iter_mut().find(|k| {
+                k.path
+                    .replace('\\', "/")
+                    .eq_ignore_ascii_case(&f.replace('\\', "/"))
+            }) {
                 Some(k) => k,
                 None => {
-                    keys.push(FoundKey { path: f.clone(), ..Default::default() });
+                    keys.push(FoundKey {
+                        path: f.clone(),
+                        ..Default::default()
+                    });
                     keys.last_mut().unwrap()
                 }
             };
             for h in hosts {
-                k.hosts.push((h.clone(), if hostname.is_empty() { h.clone() } else { hostname.to_string() }));
+                k.hosts.push((
+                    h.clone(),
+                    if hostname.is_empty() {
+                        h.clone()
+                    } else {
+                        hostname.to_string()
+                    },
+                ));
             }
         };
         for line in cfg.lines() {
             let l = line.trim();
-            let (k, v) = l.split_once(|c: char| c.is_whitespace() || c == '=').map(|(a, b)| (a.to_ascii_lowercase(), b.trim().to_string())).unwrap_or_default();
+            let (k, v) = l
+                .split_once(|c: char| c.is_whitespace() || c == '=')
+                .map(|(a, b)| (a.to_ascii_lowercase(), b.trim().to_string()))
+                .unwrap_or_default();
             match k.as_str() {
                 "host" | "match" => {
                     flush(&hosts, &hostname, &file, &mut keys);
-                    hosts = if k == "host" { v.split_whitespace().filter(|h| !h.contains('*')).map(String::from).collect() } else { vec![] };
+                    hosts = if k == "host" {
+                        v.split_whitespace()
+                            .filter(|h| !h.contains('*'))
+                            .map(String::from)
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                     hostname.clear();
                     file.clear();
                 }
@@ -327,12 +511,30 @@ pub fn detect(home: &Path, skip: &[String]) -> Found {
         flush(&hosts, &hostname, &file, &mut keys);
     }
     let mut includes = Vec::new();
-    let o = run(None, &["config", "--global", "--get-regexp", r"^includeif\..*\.path$"], None, false);
+    let o = run(
+        None,
+        &[
+            "config",
+            "--global",
+            "--get-regexp",
+            r"^includeif\..*\.path$",
+        ],
+        None,
+        false,
+    );
     for line in o.stdout.lines() {
-        let Some((k, v)) = line.split_once(' ') else { continue };
-        let cond = k.trim_start_matches("includeif.").trim_end_matches(".path").to_string();
+        let Some((k, v)) = line.split_once(' ') else {
+            continue;
+        };
+        let cond = k
+            .trim_start_matches("includeif.")
+            .trim_end_matches(".path")
+            .to_string();
         let path = expand(v, home);
-        if skip.iter().any(|s| s.replace('\\', "/").eq_ignore_ascii_case(&path.replace('\\', "/"))) {
+        if skip.iter().any(|s| {
+            s.replace('\\', "/")
+                .eq_ignore_ascii_case(&path.replace('\\', "/"))
+        }) {
             continue;
         }
         includes.push(FoundInclude {
@@ -343,7 +545,12 @@ pub fn detect(home: &Path, skip: &[String]) -> Found {
             path,
         });
     }
-    Found { name: global("user.name"), email: global("user.email"), keys, includes }
+    Found {
+        name: global("user.name"),
+        email: global("user.email"),
+        keys,
+        includes,
+    }
 }
 
 #[cfg(test)]
@@ -380,7 +587,13 @@ mod tests {
     fn keys_compare_the_way_git_prints_them() {
         assert_eq!(canon("include.path"), "include.path");
         assert_eq!(canon("Include.Path"), "include.path");
-        assert_eq!(canon("includeIf.hasconfig:remote.*.url:git@github.com:Acme/**.path"), "includeif.hasconfig:remote.*.url:git@github.com:Acme/**.path");
-        assert_eq!(canon("includeIf.gitdir/i:D:/Work/.PATH"), "includeif.gitdir/i:D:/Work/.path");
+        assert_eq!(
+            canon("includeIf.hasconfig:remote.*.url:git@github.com:Acme/**.path"),
+            "includeif.hasconfig:remote.*.url:git@github.com:Acme/**.path"
+        );
+        assert_eq!(
+            canon("includeIf.gitdir/i:D:/Work/.PATH"),
+            "includeif.gitdir/i:D:/Work/.path"
+        );
     }
 }

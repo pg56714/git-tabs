@@ -1,7 +1,10 @@
 //! The "a newer version is out" bar and what its button does. The work itself is in
 //! `gitcore::update`.
 
-use gpui_kit::{AnyElement, Context, IntoElement, ParentElement as _, StatefulInteractiveElement as _, Styled as _, div, px};
+use gpui_kit::{
+    AnyElement, Context, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
+    Styled as _, div, px,
+};
 
 use crate::app::GitTabs;
 use crate::model::ToastKind;
@@ -18,7 +21,12 @@ impl GitTabs {
         }
         if self.update.is_some() {
             if manual {
-                self.toast(crate::i18n::t("有新版本，請按上方的「立即更新」"), ToastKind::Info, None, cx);
+                self.toast(
+                    crate::i18n::t("有新版本，請按上方的「立即更新」"),
+                    ToastKind::Info,
+                    None,
+                    cx,
+                );
             }
             return;
         }
@@ -31,8 +39,15 @@ impl GitTabs {
                 this.checking = false;
                 match found {
                     Ok(Some(rel)) => this.update = Some(rel),
-                    Ok(None) if manual => this.toast(crate::i18n::tr("已是最新版本（{}）", &[], &[VERSION.to_string()]), ToastKind::Ok, None, cx),
-                    Err(e) if manual => this.toast(crate::i18n::t("檢查更新失敗"), ToastKind::Err, Some(e), cx),
+                    Ok(None) if manual => this.toast(
+                        crate::i18n::tr("已是最新版本（{}）", &[], &[VERSION.to_string()]),
+                        ToastKind::Ok,
+                        None,
+                        cx,
+                    ),
+                    Err(e) if manual => {
+                        this.toast(crate::i18n::t("檢查更新失敗"), ToastKind::Err, Some(e), cx)
+                    }
                     _ => {}
                 }
                 cx.notify();
@@ -43,7 +58,9 @@ impl GitTabs {
     /// Downloads the new version, swaps it in and starts it (or opens the release page, for
     /// installs the app cannot replace by itself).
     pub fn install_update(&mut self, cx: &mut Context<Self>) {
-        let Some(rel) = self.update.clone() else { return };
+        let Some(rel) = self.update.clone() else {
+            return;
+        };
         if self.updating {
             return;
         }
@@ -55,10 +72,17 @@ impl GitTabs {
             |this, r, cx| {
                 this.updating = false;
                 match r {
-                    Ok(gitcore::update::Outcome::Restart(p)) => match gitcore::update::restart(&p) {
-                        Ok(()) => cx.quit(),
-                        Err(e) => this.toast(crate::i18n::t("已更新，但無法重新啟動，請手動開啟"), ToastKind::Err, Some(e), cx),
-                    },
+                    Ok(gitcore::update::Outcome::Restart(p)) => {
+                        match gitcore::update::restart(&p) {
+                            Ok(()) => cx.quit(),
+                            Err(e) => this.toast(
+                                crate::i18n::t("已更新，但無法重新啟動，請手動開啟"),
+                                ToastKind::Err,
+                                Some(e),
+                                cx,
+                            ),
+                        }
+                    }
                     Ok(gitcore::update::Outcome::Quit) => cx.quit(),
                     Ok(gitcore::update::Outcome::OpenPage(url)) => {
                         let _ = gitcore::open_url(&url);
@@ -74,7 +98,14 @@ impl GitTabs {
     pub fn render_update_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let rel = self.update.as_ref()?;
         let p = self.pal;
-        let text = crate::i18n::tr("有新版本 {v}（目前 {cur}）", &[("v", rel.version().to_string()), ("cur", VERSION.to_string())], &[]);
+        let text = crate::i18n::tr(
+            "有新版本 {v}（目前 {cur}）",
+            &[
+                ("v", rel.version().to_string()),
+                ("cur", VERSION.to_string()),
+            ],
+            &[],
+        );
         let updating = self.updating;
         Some(
             div()
@@ -89,13 +120,27 @@ impl GitTabs {
                 .child(div().child(text))
                 .child(div().flex_1())
                 .child(
-                    btn(&p, "update-now", Bk::Primary, true, if updating { crate::i18n::t("更新中") } else { crate::i18n::t("立即更新") })
-                        .on_click(cx.listener(|this, _, _, cx| this.install_update(cx))),
+                    btn(
+                        &p,
+                        "update-now",
+                        Bk::Primary,
+                        true,
+                        if updating {
+                            crate::i18n::t("更新中")
+                        } else {
+                            crate::i18n::t("立即更新")
+                        },
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.install_update(cx))),
                 )
-                .child(btn(&p, "update-later", Bk::Ghost, true, crate::i18n::t("稍後")).on_click(cx.listener(|this, _, _, cx| {
-                    this.update = None;
-                    cx.notify();
-                })))
+                .child(
+                    btn(&p, "update-later", Bk::Ghost, true, crate::i18n::t("稍後")).on_click(
+                        cx.listener(|this, _, _, cx| {
+                            this.update = None;
+                            cx.notify();
+                        }),
+                    ),
+                )
                 .into_any_element(),
         )
     }

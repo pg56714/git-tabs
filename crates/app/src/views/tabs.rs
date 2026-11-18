@@ -1,8 +1,9 @@
 //! The tab bar.
 
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render, ScrollEvent, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
+    Render, ScrollEvent, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    point, prelude::FluentBuilder as _, px,
 };
 
 use gpui_kit::{AppContext as _, Hsla};
@@ -17,22 +18,45 @@ struct DraggedTab(usize);
 struct TabGhost(String, Hsla);
 impl Render for TabGhost {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().px_3().py_1().rounded(px(8.)).bg(self.1).opacity(0.85).child(self.0.clone())
+        div()
+            .px_3()
+            .py_1()
+            .rounded(px(8.))
+            .bg(self.1)
+            .opacity(0.85)
+            .child(self.0.clone())
     }
 }
 
 impl GitTabs {
     pub fn tab_menu(&self, i: usize) -> Vec<MenuItem> {
-        let Some(r) = self.repos.get(i) else { return vec![] };
+        let Some(r) = self.repos.get(i) else {
+            return vec![];
+        };
         let (path, ps) = (r.path.clone(), r.path.display().to_string());
         let (ps2, ps3) = (ps.clone(), ps.clone());
         vec![
-            MenuItem::new(crate::i18n::t("重新整理"), move |t, _, cx| t.refresh(&path, cx)).icon(Ico::RefreshCw),
-            MenuItem::new(crate::i18n::t("在檔案總管開啟"), move |t, _, cx| t.open_folder(ps.clone(), cx)).icon(Ico::FolderOpen),
-            MenuItem::new(crate::i18n::t("開終端機"), move |t, _, cx| t.open_terminal(ps2.clone(), cx)).icon(Ico::SquareTerminal),
-            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| t.copy(ps3.clone(), crate::i18n::t("路徑"), cx)).icon(Ico::Copy),
+            MenuItem::new(crate::i18n::t("重新整理"), move |t, _, cx| {
+                t.refresh(&path, cx)
+            })
+            .icon(Ico::RefreshCw),
+            MenuItem::new(crate::i18n::t("在檔案總管開啟"), move |t, _, cx| {
+                t.open_folder(ps.clone(), cx)
+            })
+            .icon(Ico::FolderOpen),
+            MenuItem::new(crate::i18n::t("開終端機"), move |t, _, cx| {
+                t.open_terminal(ps2.clone(), cx)
+            })
+            .icon(Ico::SquareTerminal),
+            MenuItem::new(crate::i18n::t("複製路徑"), move |t, _, cx| {
+                t.copy(ps3.clone(), crate::i18n::t("路徑"), cx)
+            })
+            .icon(Ico::Copy),
             MenuItem::sep(),
-            MenuItem::new(crate::i18n::t("關閉分頁"), move |t, _, cx| t.close_repo(i, cx)).icon(Ico::X),
+            MenuItem::new(crate::i18n::t("關閉分頁"), move |t, _, cx| {
+                t.close_repo(i, cx)
+            })
+            .icon(Ico::X),
         ]
     }
 
@@ -46,11 +70,31 @@ impl GitTabs {
             .map(|(i, r)| {
                 let on = i == active;
                 let lead: Option<AnyElement> = if r.busy.is_some() {
-                    Some(div().size(px(10.)).rounded_full().border_2().border_color(p.accent).into_any_element())
+                    Some(
+                        div()
+                            .size(px(10.))
+                            .rounded_full()
+                            .border_2()
+                            .border_color(p.accent)
+                            .into_any_element(),
+                    )
                 } else if r.error.is_some() {
-                    Some(div().text_color(p.danger).font_weight(gpui_kit::FontWeight::BOLD).child("!").into_any_element())
+                    Some(
+                        div()
+                            .text_color(p.danger)
+                            .font_weight(gpui_kit::FontWeight::BOLD)
+                            .child("!")
+                            .into_any_element(),
+                    )
                 } else if r.changes() > 0 {
-                    Some(div().size(px(7.)).flex_none().rounded_full().bg(gpui_kit::rgb(0xe8a33a)).into_any_element())
+                    Some(
+                        div()
+                            .size(px(7.))
+                            .flex_none()
+                            .rounded_full()
+                            .bg(gpui_kit::rgb(0xe8a33a))
+                            .into_any_element(),
+                    )
                 } else {
                     None
                 };
@@ -79,11 +123,18 @@ impl GitTabs {
                     .rounded_t(px(8.))
                     .whitespace_nowrap()
                     .cursor_pointer()
-                    .bg(if on { p.panel } else { gpui_kit::Hsla::transparent_black() })
+                    .bg(if on {
+                        p.panel
+                    } else {
+                        gpui_kit::Hsla::transparent_black()
+                    })
                     .text_color(if on { p.text } else { p.muted })
                     .hover(move |s| s.bg(if on { p.panel } else { p.hover }))
                     .on_click(cx.listener(move |this, _, _, cx| this.switch_tab(i, cx)))
-                    .on_mouse_down(MouseButton::Middle, cx.listener(move |this, _, _, cx| this.close_repo(i, cx)))
+                    .on_mouse_down(
+                        MouseButton::Middle,
+                        cx.listener(move |this, _, _, cx| this.close_repo(i, cx)),
+                    )
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, _, cx| {
@@ -95,10 +146,20 @@ impl GitTabs {
                         let n = name.clone();
                         move |_, _, _, cx| cx.new(|_| TabGhost(n.clone(), p.panel))
                     })
-                    .on_drop(cx.listener(move |this, d: &DraggedTab, _, cx| this.move_tab(d.0, i, cx)))
+                    .on_drop(
+                        cx.listener(move |this, d: &DraggedTab, _, cx| this.move_tab(d.0, i, cx)),
+                    )
                     .when_some(lead, |d, l| d.child(l))
                     .child(div().overflow_hidden().text_ellipsis().child(name))
-                    .when_some(branch, |d, b| d.child(div().text_size(px(11.5)).text_color(p.faint).whitespace_nowrap().child(b)))
+                    .when_some(branch, |d, b| {
+                        d.child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(p.faint)
+                                .whitespace_nowrap()
+                                .child(b),
+                        )
+                    })
                     .child(
                         div()
                             .id(SharedString::from(format!("x-{i}")))
@@ -158,7 +219,16 @@ impl GitTabs {
                     .repos
                     .iter()
                     .enumerate()
-                    .map(|(i, r)| MenuItem::new(r.name.clone(), move |t, _, cx| t.switch_tab(i, cx)).checked(i == this.active).hint(r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_default()))
+                    .map(|(i, r)| {
+                        MenuItem::new(r.name.clone(), move |t, _, cx| t.switch_tab(i, cx))
+                            .checked(i == this.active)
+                            .hint(
+                                r.summary
+                                    .as_ref()
+                                    .and_then(|s| s.branch.clone())
+                                    .unwrap_or_default(),
+                            )
+                    })
                     .collect();
                 this.open_menu(ev.position(), items, true, cx);
             }))
@@ -191,13 +261,27 @@ impl GitTabs {
                     .children(tabs),
             )
             // A thin rule sets the two buttons off from the tabs; they stay plain until the pointer is over them.
-            .child(div().flex_none().w(px(1.)).h(px(16.)).mb(px(7.)).mx(px(6.)).bg(p.border_strong))
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(1.))
+                    .h(px(16.))
+                    .mb(px(7.))
+                    .mx(px(6.))
+                    .bg(p.border_strong),
+            )
             .child(plus)
             .child(all)
             // The empty space right of the buttons moves the window (and maximises on a double click);
             // the tabs and buttons themselves must stay clickable. It never gets narrower than 72px, so
             // there is always a place to grab even when the tabs fill the row.
-            .child(div().flex_1().min_w(px(72.)).h_full().window_control_area(gpui_kit::WindowControlArea::Drag))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(72.))
+                    .h_full()
+                    .window_control_area(gpui_kit::WindowControlArea::Drag),
+            )
             .into_any_element()
     }
 }

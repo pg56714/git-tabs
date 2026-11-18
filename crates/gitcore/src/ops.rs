@@ -1,17 +1,20 @@
 //! Repository operations, one function per thing the UI can ask for.
 
-use crate::parse::{self, ChangedFile, Commit, FileDiff, Refs, ReflogEntry, Stash, StatusEntry, Worktree};
+use crate::parse::{
+    self, ChangedFile, Commit, FileDiff, ReflogEntry, Refs, Stash, StatusEntry, Worktree,
+};
 use crate::patch;
 use crate::runner::{read, run, write, write_stdin};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 pub fn toplevel(path: &Path) -> Result<PathBuf, String> {
-    let s = read(path, &["rev-parse", "--show-toplevel"]).map_err(|_| format!("{} 不是 git repo", path.display()))?;
+    let s = read(path, &["rev-parse", "--show-toplevel"])
+        .map_err(|_| format!("{} 不是 git repo", path.display()))?;
     Ok(PathBuf::from(s.trim()))
 }
 
@@ -22,7 +25,11 @@ fn git_dir(repo: &Path) -> Option<PathBuf> {
     if let Some(d) = cache.lock().unwrap().get(repo) {
         return Some(d.clone());
     }
-    let d = PathBuf::from(read(repo, &["rev-parse", "--absolute-git-dir"]).ok()?.trim());
+    let d = PathBuf::from(
+        read(repo, &["rev-parse", "--absolute-git-dir"])
+            .ok()?
+            .trim(),
+    );
     cache.lock().unwrap().insert(repo.to_path_buf(), d.clone());
     Some(d)
 }
@@ -54,7 +61,12 @@ pub fn summary(repo: &Path) -> Result<Summary, String> {
     Ok(make_summary(repo, b, &files, remote_url))
 }
 
-fn make_summary(repo: &Path, b: parse::BranchInfo, files: &[StatusEntry], remote_url: Option<String>) -> Summary {
+fn make_summary(
+    repo: &Path,
+    b: parse::BranchInfo,
+    files: &[StatusEntry],
+    remote_url: Option<String>,
+) -> Summary {
     let state = git_dir(repo).and_then(|g| {
         if g.join("rebase-merge").exists() || g.join("rebase-apply").exists() {
             Some("rebase")
@@ -70,7 +82,10 @@ fn make_summary(repo: &Path, b: parse::BranchInfo, files: &[StatusEntry], remote
     });
     Summary {
         path: repo.display().to_string(),
-        name: repo.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        name: repo
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         branch: b.head,
         head: b.oid,
         upstream: b.upstream,
@@ -100,7 +115,11 @@ pub fn snapshot(repo: &Path) -> Result<Snapshot, String> {
         let url = u.join().ok().flatten();
         let refs = rf.join().map_err(|_| "refs 讀取失敗".to_string())??;
         let (b, files) = st?;
-        Ok(Snapshot { summary: make_summary(repo, b, &files, url), status: files, refs })
+        Ok(Snapshot {
+            summary: make_summary(repo, b, &files, url),
+            status: files,
+            refs,
+        })
     })
 }
 
@@ -108,11 +127,23 @@ pub fn snapshot(repo: &Path) -> Result<Snapshot, String> {
 pub fn remote_url(repo: &Path) -> Option<String> {
     let out = read(repo, &["config", "--get-regexp", r"^remote\..*\.url$"]).ok()?;
     let urls: Vec<(&str, &str)> = out.lines().filter_map(|l| l.split_once(' ')).collect();
-    urls.iter().find(|(k, _)| *k == "remote.origin.url").or_else(|| urls.first()).map(|(_, v)| v.trim().to_string())
+    urls.iter()
+        .find(|(k, _)| *k == "remote.origin.url")
+        .or_else(|| urls.first())
+        .map(|(_, v)| v.trim().to_string())
 }
 
 fn status_raw(repo: &Path) -> Result<(parse::BranchInfo, Vec<StatusEntry>), String> {
-    let out = read(repo, &["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"])?;
+    let out = read(
+        repo,
+        &[
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "-z",
+            "--untracked-files=all",
+        ],
+    )?;
     Ok(parse::parse_status(&out))
 }
 
@@ -124,14 +155,22 @@ pub fn status(repo: &Path) -> Result<Vec<StatusEntry>, String> {
 
 fn one(mut v: Vec<FileDiff>, path: &str) -> FileDiff {
     if v.is_empty() {
-        FileDiff { path: path.into(), ..Default::default() }
+        FileDiff {
+            path: path.into(),
+            ..Default::default()
+        }
     } else {
         v.swap_remove(0)
     }
 }
 
 /// Diff of one changed file. `staged` = index vs HEAD, otherwise worktree vs index.
-pub fn diff_file(repo: &Path, path: &str, staged: bool, untracked: bool) -> Result<FileDiff, String> {
+pub fn diff_file(
+    repo: &Path,
+    path: &str,
+    staged: bool,
+    untracked: bool,
+) -> Result<FileDiff, String> {
     if untracked {
         return Ok(new_file_diff(&repo.join(path), path));
     }
@@ -146,12 +185,16 @@ pub fn diff_file(repo: &Path, path: &str, staged: bool, untracked: bool) -> Resu
 pub const CONFLICT_HEADER: &str = "@@ 衝突：紅色是我的版本（HEAD），綠色是對方的版本 @@";
 /// While rebasing, git's "ours" (HEAD) is the branch being rebuilt onto, and "theirs" is the
 /// commit being replayed, which is the user's own work.
-pub const CONFLICT_HEADER_REBASE: &str = "@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@";
+pub const CONFLICT_HEADER_REBASE: &str =
+    "@@ 衝突（rebase 中）：紅色是對方（上游）的版本，綠色是我的版本（正在重放的 commit） @@";
 
 /// A conflicted file as one block: our side (HEAD) as removed lines, theirs as added lines,
 /// so the conflict regions stand out. git's own `--cc` diff is hard to read.
 pub fn conflict_view(repo: &Path, path: &str) -> FileDiff {
-    let mut d = FileDiff { path: path.into(), ..Default::default() };
+    let mut d = FileDiff {
+        path: path.into(),
+        ..Default::default()
+    };
     let rebasing = summary(repo).is_ok_and(|s| s.state == Some("rebase"));
     let Ok(text) = std::fs::read_to_string(repo.join(path)) else {
         d.binary = true;
@@ -176,20 +219,50 @@ pub fn conflict_view(repo: &Path, path: &str) -> FileDiff {
         } else if l.starts_with(">>>>>>>") && side == Side::Theirs {
             (' ', Side::Both)
         } else {
-            (match side { Side::Ours => '-', Side::Theirs => '+', _ => ' ' }, side)
+            (
+                match side {
+                    Side::Ours => '-',
+                    Side::Theirs => '+',
+                    _ => ' ',
+                },
+                side,
+            )
         };
-        lines.push(parse::DiffLine { t, text: l.to_string(), no_eol: false, cr: false });
+        lines.push(parse::DiffLine {
+            t,
+            text: l.to_string(),
+            no_eol: false,
+            cr: false,
+        });
         side = next;
     }
     let n = lines.len() as u32;
-    d.hunks.push(parse::Hunk { header: if rebasing { CONFLICT_HEADER_REBASE } else { CONFLICT_HEADER }.into(), old_start: 1, old_lines: n, new_start: 1, new_lines: n, lines });
+    d.hunks.push(parse::Hunk {
+        header: if rebasing {
+            CONFLICT_HEADER_REBASE
+        } else {
+            CONFLICT_HEADER
+        }
+        .into(),
+        old_start: 1,
+        old_lines: n,
+        new_start: 1,
+        new_lines: n,
+        lines,
+    });
     d
 }
 
 /// An untracked file shown as all-added lines (cheaper than spawning `git diff --no-index`).
 fn new_file_diff(full: &Path, path: &str) -> FileDiff {
-    let mut d = FileDiff { path: path.into(), new_file: true, ..Default::default() };
-    let Ok(bytes) = std::fs::read(full) else { return d };
+    let mut d = FileDiff {
+        path: path.into(),
+        new_file: true,
+        ..Default::default()
+    };
+    let Ok(bytes) = std::fs::read(full) else {
+        return d;
+    };
     if bytes.len() > 8 * 1024 * 1024 || bytes[..bytes.len().min(8000)].contains(&0) {
         d.binary = true;
         return d;
@@ -199,16 +272,36 @@ fn new_file_diff(full: &Path, path: &str) -> FileDiff {
         return d;
     }
     let no_eol = !text.ends_with('\n');
-    let mut lines: Vec<parse::DiffLine> = text.lines().map(|l| parse::DiffLine { t: '+', text: l.to_string(), no_eol: false, cr: false }).collect();
+    let mut lines: Vec<parse::DiffLine> = text
+        .lines()
+        .map(|l| parse::DiffLine {
+            t: '+',
+            text: l.to_string(),
+            no_eol: false,
+            cr: false,
+        })
+        .collect();
     if let Some(l) = lines.last_mut() {
         l.no_eol = no_eol;
     }
     let n = lines.len() as u32;
-    d.hunks.push(parse::Hunk { header: format!("@@ -0,0 +1,{n} @@"), old_start: 0, old_lines: 0, new_start: 1, new_lines: n, lines });
+    d.hunks.push(parse::Hunk {
+        header: format!("@@ -0,0 +1,{n} @@"),
+        old_start: 0,
+        old_lines: 0,
+        new_start: 1,
+        new_lines: n,
+        lines,
+    });
     d
 }
 
-pub fn commit_file_diff(repo: &Path, sha: &str, path: &str, old_path: Option<&str>) -> Result<FileDiff, String> {
+pub fn commit_file_diff(
+    repo: &Path,
+    sha: &str,
+    path: &str,
+    old_path: Option<&str>,
+) -> Result<FileDiff, String> {
     let parent = first_parent(repo, sha);
     let base = parent.as_deref().unwrap_or(EMPTY_TREE);
     let mut args = vec!["diff", "--no-color", "--no-ext-diff", "-M", base, sha, "--"];
@@ -246,7 +339,11 @@ pub fn stage(repo: &Path, paths: &[String]) -> Result<(), String> {
 
 pub fn unstage(repo: &Path, paths: &[String]) -> Result<(), String> {
     let has_head = read(repo, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok();
-    let mut args = if has_head { vec!["--literal-pathspecs", "restore", "--staged", "--"] } else { vec!["--literal-pathspecs", "rm", "--cached", "-r", "-q", "--"] };
+    let mut args = if has_head {
+        vec!["--literal-pathspecs", "restore", "--staged", "--"]
+    } else {
+        vec!["--literal-pathspecs", "rm", "--cached", "-r", "-q", "--"]
+    };
     args.extend(paths.iter().map(String::as_str));
     write(repo, &args).map(|_| ())
 }
@@ -254,7 +351,9 @@ pub fn unstage(repo: &Path, paths: &[String]) -> Result<(), String> {
 /// Throws away worktree changes. Untracked files are deleted.
 pub fn discard(repo: &Path, paths: &[String]) -> Result<(), String> {
     let st = status(repo)?;
-    let (untracked, tracked): (Vec<&String>, Vec<&String>) = paths.iter().partition(|p| st.iter().any(|s| s.untracked && &s.path == *p));
+    let (untracked, tracked): (Vec<&String>, Vec<&String>) = paths
+        .iter()
+        .partition(|p| st.iter().any(|s| s.untracked && &s.path == *p));
     if !tracked.is_empty() {
         let mut args = vec!["--literal-pathspecs", "restore", "--worktree", "--"];
         args.extend(tracked.iter().map(|s| s.as_str()));
@@ -280,7 +379,13 @@ pub enum LineAction {
 /// `shown` is the fingerprint of the diff the pairs were picked from. The pairs are positions in
 /// that diff, so when git's diff of the file has changed since (an earlier click was applied, the
 /// file was edited), nothing is touched.
-pub fn apply_lines(repo: &Path, path: &str, action: LineAction, lines: &[(usize, usize)], shown: &str) -> Result<(), String> {
+pub fn apply_lines(
+    repo: &Path,
+    path: &str,
+    action: LineAction,
+    lines: &[(usize, usize)],
+    shown: &str,
+) -> Result<(), String> {
     let stale = || "畫面上的 diff 已經不是檔案現在的內容，請重新整理後再操作".to_string();
     let untracked = status(repo)?.iter().any(|s| s.untracked && s.path == path);
     if untracked {
@@ -304,11 +409,24 @@ pub fn apply_lines(repo: &Path, path: &str, action: LineAction, lines: &[(usize,
     diff.new_file = false;
     diff.deleted = false;
     let sel: HashSet<(usize, usize)> = lines.iter().copied().collect();
-    let mode = if action == LineAction::Stage { patch::Mode::Forward } else { patch::Mode::Reverse };
-    let Some(p) = patch::build(&diff, &sel, mode) else { return Ok(()) };
+    let mode = if action == LineAction::Stage {
+        patch::Mode::Forward
+    } else {
+        patch::Mode::Reverse
+    };
+    let Some(p) = patch::build(&diff, &sel, mode) else {
+        return Ok(());
+    };
     let args: &[&str] = match action {
         LineAction::Stage => &["apply", "--cached", "--recount", "--whitespace=nowarn", "-"],
-        LineAction::Unstage => &["apply", "--cached", "-R", "--recount", "--whitespace=nowarn", "-"],
+        LineAction::Unstage => &[
+            "apply",
+            "--cached",
+            "-R",
+            "--recount",
+            "--whitespace=nowarn",
+            "-",
+        ],
         LineAction::Discard => &["apply", "-R", "--recount", "--whitespace=nowarn", "-"],
     };
     write_stdin(repo, args, p.as_bytes()).map(|_| ())
@@ -344,7 +462,11 @@ pub fn pull(repo: &Path, mode: &str) -> Result<String, String> {
 }
 
 pub fn push(repo: &Path, force: bool) -> Result<String, String> {
-    let has_upstream = read(repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok();
+    let has_upstream = read(
+        repo,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    )
+    .is_ok();
     let mut args: Vec<String> = vec!["push".into()];
     if force {
         // A bare lease compares with the remote-tracking ref, which the background fetch keeps
@@ -354,7 +476,11 @@ pub fn push(repo: &Path, force: bool) -> Result<String, String> {
     }
     if !has_upstream {
         let remotes = read(repo, &["remote"])?;
-        let remote = remotes.lines().find(|r| *r == "origin").or_else(|| remotes.lines().next()).ok_or("這個 repo 沒有設定 remote")?;
+        let remote = remotes
+            .lines()
+            .find(|r| *r == "origin")
+            .or_else(|| remotes.lines().next())
+            .ok_or("這個 repo 沒有設定 remote")?;
         args.extend(["-u".into(), remote.into(), "HEAD".into()]);
     }
     let a: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -363,14 +489,28 @@ pub fn push(repo: &Path, force: bool) -> Result<String, String> {
 
 // ---------- history ----------
 
-pub fn log(repo: &Path, skip: usize, limit: usize, all: bool, query: &str, path: Option<&str>) -> Result<Vec<Commit>, String> {
+pub fn log(
+    repo: &Path,
+    skip: usize,
+    limit: usize,
+    all: bool,
+    query: &str,
+    path: Option<&str>,
+) -> Result<Vec<Commit>, String> {
     if read(repo, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() && !all {
         return Ok(vec![]);
     }
     let skip_s = format!("--skip={skip}");
     let n = format!("-n{limit}");
     let fmt = format!("--format={}", parse::LOG_FORMAT);
-    let mut args: Vec<String> = vec!["log".into(), "--decorate=full".into(), "--date-order".into(), skip_s, n, fmt];
+    let mut args: Vec<String> = vec![
+        "log".into(),
+        "--decorate=full".into(),
+        "--date-order".into(),
+        skip_s,
+        n,
+        fmt,
+    ];
     if all {
         args.extend(["--branches".into(), "--remotes".into(), "--tags".into()]);
     }
@@ -379,8 +519,20 @@ pub fn log(repo: &Path, skip: usize, limit: usize, all: bool, query: &str, path:
     if !q.is_empty() {
         if q.len() >= 4 && q.chars().all(|c| c.is_ascii_hexdigit()) {
             // A hash prefix: show that commit if it exists.
-            if let Ok(full) = read(repo, &["rev-parse", "--verify", "-q", &format!("{q}^{{commit}}")]) {
-                let out = read(repo, &["log", "--decorate=full", "-n1", &format!("--format={}", parse::LOG_FORMAT), full.trim()])?;
+            if let Ok(full) = read(
+                repo,
+                &["rev-parse", "--verify", "-q", &format!("{q}^{{commit}}")],
+            ) {
+                let out = read(
+                    repo,
+                    &[
+                        "log",
+                        "--decorate=full",
+                        "-n1",
+                        &format!("--format={}", parse::LOG_FORMAT),
+                        full.trim(),
+                    ],
+                )?;
                 return Ok(parse::parse_log(&out));
             }
         }
@@ -393,7 +545,12 @@ pub fn log(repo: &Path, skip: usize, limit: usize, all: bool, query: &str, path:
     let o = run(Some(repo), &a, None, false);
     if !o.ok() {
         // An empty repo has no HEAD yet.
-        return if o.stderr.contains("unknown revision") || o.stderr.contains("bad default revision") { Ok(vec![]) } else { Err(o.message()) };
+        return if o.stderr.contains("unknown revision") || o.stderr.contains("bad default revision")
+        {
+            Ok(vec![])
+        } else {
+            Err(o.message())
+        };
     }
     Ok(parse::parse_log(&o.stdout))
 }
@@ -414,13 +571,29 @@ pub struct CommitDetail {
 }
 
 pub fn commit_detail(repo: &Path, sha: &str) -> Result<CommitDetail, String> {
-    let out = read(repo, &["show", "-s", "--decorate=full", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%D%x1f%B", sha])?;
+    let out = read(
+        repo,
+        &[
+            "show",
+            "-s",
+            "--decorate=full",
+            "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%D%x1f%B",
+            sha,
+        ],
+    )?;
     let f: Vec<&str> = out.splitn(10, '\x1f').collect();
     if f.len() < 10 {
         return Err("讀不到這個 commit".into());
     }
-    let parents: Vec<String> = f[1].split(' ').filter(|s| !s.is_empty()).map(String::from).collect();
-    let base = parents.first().cloned().unwrap_or_else(|| EMPTY_TREE.into());
+    let parents: Vec<String> = f[1]
+        .split(' ')
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect();
+    let base = parents
+        .first()
+        .cloned()
+        .unwrap_or_else(|| EMPTY_TREE.into());
     let files = changed_files(repo, &base, Some(f[0]))?;
     Ok(CommitDetail {
         sha: f[0].into(),
@@ -474,14 +647,21 @@ pub fn parse_submodules(out: &str) -> Vec<Submodule> {
                 Some(i) if rest.ends_with(')') => &rest[..i],
                 _ => rest,
             };
-            Some(Submodule { path: path.into(), sha: sha.into(), state })
+            Some(Submodule {
+                path: path.into(),
+                sha: sha.into(),
+                state,
+            })
         })
         .collect()
 }
 
 /// Clones the submodule if it is not there yet and checks out the commit the repo records for it.
 pub fn submodule_update(repo: &Path, path: &str) -> Result<String, String> {
-    write(repo, &["submodule", "update", "--init", "--recursive", "--", path])
+    write(
+        repo,
+        &["submodule", "update", "--init", "--recursive", "--", path],
+    )
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -496,27 +676,60 @@ pub fn parse_remotes(out: &str) -> Vec<Remote> {
         .filter_map(|l| {
             let (name, rest) = l.split_once('\t')?;
             let url = rest.strip_suffix(" (fetch)")?;
-            Some(Remote { name: name.into(), url: url.into() })
+            Some(Remote {
+                name: name.into(),
+                url: url.into(),
+            })
         })
         .collect()
 }
 
 pub fn refs(repo: &Path) -> Result<RefsAll, String> {
     std::thread::scope(|sc| {
-        let stash = sc.spawn(|| read(repo, &["stash", "list", "--format=%gd%x1f%H%x1f%s"]).unwrap_or_default());
+        let stash = sc.spawn(|| {
+            read(repo, &["stash", "list", "--format=%gd%x1f%H%x1f%s"]).unwrap_or_default()
+        });
         let wt = sc.spawn(|| read(repo, &["worktree", "list", "--porcelain"]).unwrap_or_default());
-        let head = sc.spawn(|| read(repo, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).ok());
+        let head = sc.spawn(|| {
+            read(
+                repo,
+                &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+            )
+            .ok()
+        });
         let remotes = sc.spawn(|| read(repo, &["remote", "-v"]).unwrap_or_default());
         // Asking costs a git call per refresh, so only repos that declare submodules pay it.
-        let subs = sc.spawn(|| if repo.join(".gitmodules").is_file() { read(repo, &["submodule", "status"]).unwrap_or_default() } else { String::new() });
+        let subs = sc.spawn(|| {
+            if repo.join(".gitmodules").is_file() {
+                read(repo, &["submodule", "status"]).unwrap_or_default()
+            } else {
+                String::new()
+            }
+        });
         let fmt = format!("--format={}", parse::REF_FORMAT);
-        let r = parse::parse_refs(&read(repo, &["for-each-ref", &fmt, "refs/heads", "refs/remotes", "refs/tags"])?);
+        let r = parse::parse_refs(&read(
+            repo,
+            &[
+                "for-each-ref",
+                &fmt,
+                "refs/heads",
+                "refs/remotes",
+                "refs/tags",
+            ],
+        )?);
         let stashes = parse::parse_stashes(&stash.join().unwrap_or_default());
         let worktrees = parse::parse_worktrees(&wt.join().unwrap_or_default());
         let default_branch = default_branch(head.join().ok().flatten(), &r);
         let remote_list = parse_remotes(&remotes.join().unwrap_or_default());
         let submodules = parse_submodules(&subs.join().unwrap_or_default());
-        Ok(RefsAll { refs: r, stashes, worktrees, default_branch, remote_list, submodules })
+        Ok(RefsAll {
+            refs: r,
+            stashes,
+            worktrees,
+            default_branch,
+            remote_list,
+            submodules,
+        })
     })
 }
 
@@ -529,32 +742,63 @@ pub fn default_branch(origin_head: Option<String>, r: &Refs) -> Option<String> {
         }
         return Some(format!("origin/{name}"));
     }
-    ["main", "master", "trunk", "develop"].iter().find(|n| r.branches.iter().any(|b| &b.name == *n)).map(|s| s.to_string())
+    ["main", "master", "trunk", "develop"]
+        .iter()
+        .find(|n| r.branches.iter().any(|b| &b.name == *n))
+        .map(|s| s.to_string())
 }
 
 pub fn reflog(repo: &Path, limit: usize) -> Result<Vec<ReflogEntry>, String> {
     let n = format!("-n{limit}");
-    Ok(parse::parse_reflog(&read(repo, &["reflog", &n, "--format=%gd%x1f%H%x1f%ct%x1f%gs"]).unwrap_or_default()))
+    Ok(parse::parse_reflog(
+        &read(repo, &["reflog", &n, "--format=%gd%x1f%H%x1f%ct%x1f%gs"]).unwrap_or_default(),
+    ))
 }
 
 // ---------- branches & history edits ----------
 
 /// Switches to a local branch, or creates a tracking branch for "origin/x".
 pub fn switch(repo: &Path, name: &str) -> Result<String, String> {
-    let local = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/heads/{name}")]).is_ok();
+    let local = read(
+        repo,
+        &["rev-parse", "--verify", "-q", &format!("refs/heads/{name}")],
+    )
+    .is_ok();
     if local {
         return write(repo, &["switch", name]);
     }
-    let remote = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/remotes/{name}")]).is_ok();
+    let remote = read(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &format!("refs/remotes/{name}"),
+        ],
+    )
+    .is_ok();
     if remote {
         // "origin/main" while a local main exists: a remote branch cannot be checked out itself, so
         // that is main. It follows the remote when it is only behind it (what pull would do).
         if let Some((_, short)) = name.split_once('/') {
-            let have_local = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/heads/{short}")]).is_ok();
+            let have_local = read(
+                repo,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "-q",
+                    &format!("refs/heads/{short}"),
+                ],
+            )
+            .is_ok();
             if have_local {
                 let out = write(repo, &["switch", short])?;
                 let behind = read(repo, &["merge-base", "--is-ancestor", "HEAD", name]).is_ok();
-                return if behind { write(repo, &["merge", "--ff-only", name]).map(|m| format!("{out}{m}")) } else { Ok(out) };
+                return if behind {
+                    write(repo, &["merge", "--ff-only", name]).map(|m| format!("{out}{m}"))
+                } else {
+                    Ok(out)
+                };
             }
         }
         return write(repo, &["switch", "--track", name]);
@@ -562,8 +806,17 @@ pub fn switch(repo: &Path, name: &str) -> Result<String, String> {
     Err(format!("找不到分支 {name}"))
 }
 
-pub fn create_branch(repo: &Path, name: &str, from: Option<&str>, checkout: bool) -> Result<String, String> {
-    let mut args = if checkout { vec!["switch", "-c", name] } else { vec!["branch", name] };
+pub fn create_branch(
+    repo: &Path,
+    name: &str,
+    from: Option<&str>,
+    checkout: bool,
+) -> Result<String, String> {
+    let mut args = if checkout {
+        vec!["switch", "-c", name]
+    } else {
+        vec!["branch", name]
+    };
     if let Some(f) = from.filter(|f| !f.is_empty()) {
         args.push(f);
     }
@@ -573,7 +826,11 @@ pub fn create_branch(repo: &Path, name: &str, from: Option<&str>, checkout: bool
 /// Every file of the repo as it was at `rev`.
 pub fn tree(repo: &Path, rev: &str) -> Result<Vec<String>, String> {
     let out = read(repo, &["ls-tree", "-r", "-z", "--name-only", rev])?;
-    Ok(out.split('\0').filter(|s| !s.is_empty()).map(String::from).collect())
+    Ok(out
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect())
 }
 
 /// What a file held at some commit, for reading.
@@ -591,12 +848,19 @@ const SHOW_LIMIT: u64 = 2_000_000;
 /// The file `path` as it was at `rev`.
 pub fn file_at(repo: &Path, rev: &str, path: &str) -> Result<FileText, String> {
     let spec = format!("{rev}:{path}");
-    let size: u64 = read(repo, &["cat-file", "-s", &spec])?.trim().parse().unwrap_or(0);
+    let size: u64 = read(repo, &["cat-file", "-s", &spec])?
+        .trim()
+        .parse()
+        .unwrap_or(0);
     if size > SHOW_LIMIT {
         return Ok(FileText::Large(size));
     }
     let text = read(repo, &["cat-file", "blob", &spec])?;
-    Ok(if text.contains('\0') { FileText::Binary } else { FileText::Text(text) })
+    Ok(if text.contains('\0') {
+        FileText::Binary
+    } else {
+        FileText::Text(text)
+    })
 }
 
 pub fn rename_branch(repo: &Path, old: &str, new: &str) -> Result<String, String> {
@@ -605,7 +869,9 @@ pub fn rename_branch(repo: &Path, old: &str, new: &str) -> Result<String, String
 
 /// Deletes `origin/feat/x` on its remote (the local branch, if any, stays).
 pub fn delete_remote_branch(repo: &Path, full: &str) -> Result<String, String> {
-    let (remote, branch) = full.split_once('/').ok_or_else(|| format!("{full} 不是遠端分支"))?;
+    let (remote, branch) = full
+        .split_once('/')
+        .ok_or_else(|| format!("{full} 不是遠端分支"))?;
     write(repo, &["push", remote, "--delete", branch])
 }
 
@@ -628,9 +894,32 @@ pub fn delete_branch(repo: &Path, name: &str, force: bool) -> Result<String, Str
 /// Adds a worktree for `branch` in `dir`. A branch that exists (here or on a remote) is checked
 /// out there; any other name becomes a new branch from HEAD.
 pub fn worktree_add(repo: &Path, dir: &str, branch: &str) -> Result<String, String> {
-    let local = read(repo, &["rev-parse", "--verify", "-q", &format!("refs/heads/{branch}")]).is_ok();
-    let remote = || read(repo, &["for-each-ref", "--format=%(refname)", &format!("refs/remotes/*/{branch}")]).is_ok_and(|o| !o.trim().is_empty());
-    if local || remote() { write(repo, &["worktree", "add", dir, branch]) } else { write(repo, &["worktree", "add", "-b", branch, dir]) }
+    let local = read(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .is_ok();
+    let remote = || {
+        read(
+            repo,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                &format!("refs/remotes/*/{branch}"),
+            ],
+        )
+        .is_ok_and(|o| !o.trim().is_empty())
+    };
+    if local || remote() {
+        write(repo, &["worktree", "add", dir, branch])
+    } else {
+        write(repo, &["worktree", "add", "-b", branch, dir])
+    }
 }
 
 pub fn simple(repo: &Path, op: &str, arg: &str) -> Result<String, String> {
@@ -650,8 +939,13 @@ pub fn simple(repo: &Path, op: &str, arg: &str) -> Result<String, String> {
         "use-ours" | "use-theirs" => {
             let mine = op == "use-ours";
             let rebasing = summary(repo)?.state == Some("rebase");
-            let side = if mine != rebasing { "--ours" } else { "--theirs" };
-            write(repo, &["checkout", side, "--", arg]).and_then(|_| write(repo, &["add", "--", arg]))
+            let side = if mine != rebasing {
+                "--ours"
+            } else {
+                "--theirs"
+            };
+            write(repo, &["checkout", side, "--", arg])
+                .and_then(|_| write(repo, &["add", "--", arg]))
         }
         "mark-resolved" => write(repo, &["add", "--", arg]),
         "stash-apply" => write(repo, &["stash", "apply", &format!("stash@{{{arg}}}")]),
@@ -674,7 +968,11 @@ fn abort_or_continue(repo: &Path, flag: &str) -> Result<String, String> {
 }
 
 pub fn tag(repo: &Path, name: &str, sha: &str, message: &str) -> Result<String, String> {
-    if message.trim().is_empty() { write(repo, &["tag", name, sha]) } else { write(repo, &["tag", "-a", name, "-m", message, sha]) }
+    if message.trim().is_empty() {
+        write(repo, &["tag", name, sha])
+    } else {
+        write(repo, &["tag", "-a", name, "-m", message, sha])
+    }
 }
 
 pub fn stash_push(repo: &Path, message: &str, include_untracked: bool) -> Result<String, String> {
@@ -708,11 +1006,28 @@ pub fn blame(repo: &Path, path: &str, rev: Option<&str>) -> Result<Vec<BlameLine
     args.extend(["--", path]);
     let out = read(repo, &args)?;
     let mut v = Vec::new();
-    let mut cur = BlameLine { sha: String::new(), author: String::new(), time: 0, summary: String::new(), line: 0, text: String::new() };
+    let mut cur = BlameLine {
+        sha: String::new(),
+        author: String::new(),
+        time: 0,
+        summary: String::new(),
+        line: 0,
+        text: String::new(),
+    };
     for l in out.lines() {
         if let Some(t) = l.strip_prefix('\t') {
             cur.text = t.into();
-            v.push(std::mem::replace(&mut cur, BlameLine { sha: String::new(), author: String::new(), time: 0, summary: String::new(), line: 0, text: String::new() }));
+            v.push(std::mem::replace(
+                &mut cur,
+                BlameLine {
+                    sha: String::new(),
+                    author: String::new(),
+                    time: 0,
+                    summary: String::new(),
+                    line: 0,
+                    text: String::new(),
+                },
+            ));
         } else if let Some(a) = l.strip_prefix("author ") {
             cur.author = a.into();
         } else if let Some(a) = l.strip_prefix("author-time ") {
@@ -741,7 +1056,11 @@ pub fn scan(dir: &Path) -> Vec<String> {
         v.push(dir.display().to_string());
     }
     if let Ok(rd) = std::fs::read_dir(dir) {
-        let mut subs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir() && p.join(".git").exists()).collect();
+        let mut subs: Vec<PathBuf> = rd
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join(".git").exists())
+            .collect();
         subs.sort();
         v.extend(subs.into_iter().map(|p| p.display().to_string()));
     }

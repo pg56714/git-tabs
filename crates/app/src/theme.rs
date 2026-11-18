@@ -81,7 +81,9 @@ impl Pal {
 
 /// The graph's lane colours.
 /// Warm colours first (amber, red, brown), as in Fork.
-pub const LANE_COLORS: [u32; 8] = [0xf0a30a, 0xe5484d, 0x9a6b4c, 0x2f9e6e, 0x3b82f6, 0x9b59d0, 0x0f8fa8, 0xd6409f];
+pub const LANE_COLORS: [u32; 8] = [
+    0xf0a30a, 0xe5484d, 0x9a6b4c, 0x2f9e6e, 0x3b82f6, 0x9b59d0, 0x0f8fa8, 0xd6409f,
+];
 
 pub fn lane_color(i: usize) -> Hsla {
     c(LANE_COLORS[i % LANE_COLORS.len()])
@@ -89,7 +91,15 @@ pub fn lane_color(i: usize) -> Hsla {
 
 /// Puts the palette into GPUI Kit's theme.
 pub fn apply(dark: bool, window: Option<&mut Window>, cx: &mut App) {
-    Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, window, cx);
+    Theme::change(
+        if dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        },
+        window,
+        cx,
+    );
     // Always drawn: the default shows a bar only while scrolling, so the one under a wide diff was never seen.
     Theme::set_scrollbar_mode(gpui_kit::component::scroll::ScrollbarMode::Always, cx);
     let p = Pal::new(dark);

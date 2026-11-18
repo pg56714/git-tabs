@@ -8,18 +8,20 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
+use gitcore::Ctx;
 use gitcore::config::{self, AppConfig, RepoEntry};
 use gitcore::ops;
 use gitcore::parse::FileDiff;
 use gitcore::runner::LogEntry;
-use gitcore::Ctx;
 use gpui_kit::component::diff::{DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::{
-    AppContext as _, Context, Entity, FocusHandle, Render, Subscription, Task, Window, WindowAppearance,
+    AppContext as _, Context, Entity, FocusHandle, Render, Subscription, Task, Window,
+    WindowAppearance,
 };
 use notify_debouncer_mini::{
-    DebounceEventResult, Debouncer, new_debouncer, notify::RecommendedWatcher, notify::RecursiveMode,
+    DebounceEventResult, Debouncer, new_debouncer, notify::RecommendedWatcher,
+    notify::RecursiveMode,
 };
 
 use crate::model::*;
@@ -151,20 +153,28 @@ impl GitTabs {
     fn watch_diff(diff: &gpui_kit::Entity<DiffState>, cx: &mut Context<Self>) -> Vec<Subscription> {
         let mut subs = Vec::new();
         subs.push(cx.observe(diff, |_, _, cx| cx.notify()));
-        subs.push(cx.subscribe(diff, |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
-            use gpui_kit::component::diff::DiffEvent;
-            match ev {
-                DiffEvent::SelectionChanged(Some(r)) | DiffEvent::SelectionEnded(r) => this.stored_sel = Some(r.clone()),
-                DiffEvent::SelectionChanged(None) => {
-                    // Pressing the selection bar itself must not lose the pick.
-                    if this.bar_press.is_none_or(|t| t.elapsed() > Duration::from_millis(800)) {
-                        this.stored_sel = None;
+        subs.push(cx.subscribe(
+            diff,
+            |this, _, ev: &gpui_kit::component::diff::DiffEvent, cx| {
+                use gpui_kit::component::diff::DiffEvent;
+                match ev {
+                    DiffEvent::SelectionChanged(Some(r)) | DiffEvent::SelectionEnded(r) => {
+                        this.stored_sel = Some(r.clone())
                     }
+                    DiffEvent::SelectionChanged(None) => {
+                        // Pressing the selection bar itself must not lose the pick.
+                        if this
+                            .bar_press
+                            .is_none_or(|t| t.elapsed() > Duration::from_millis(800))
+                        {
+                            this.stored_sel = None;
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            cx.notify();
-        }));
+                cx.notify();
+            },
+        ));
         subs
     }
 
@@ -172,7 +182,11 @@ impl GitTabs {
     /// file before it, and in side-by-side mode a later file could come out half drawn; a fresh
     /// one starts clean.
     pub fn fresh_diff(&mut self, cx: &mut Context<Self>) {
-        let mode = if self.side_by_side { DiffMode::Split } else { DiffMode::Unified };
+        let mode = if self.side_by_side {
+            DiffMode::Split
+        } else {
+            DiffMode::Unified
+        };
         let diff = cx.new(|cx| DiffState::new([], cx).with_mode(mode));
         self.diff_subs = Self::watch_diff(&diff, cx);
         self.diff = diff;
@@ -182,8 +196,12 @@ impl GitTabs {
         window.set_window_title("git-tabs");
         gitcore::update::tidy();
         let cfg = config::load(&ctx.config_dir);
-        let repos: Vec<RepoState> =
-            cfg.repos.iter().filter(|r| Path::new(&r.path).is_dir()).map(|r| RepoState::new(PathBuf::from(&r.path))).collect();
+        let repos: Vec<RepoState> = cfg
+            .repos
+            .iter()
+            .filter(|r| Path::new(&r.path).is_dir())
+            .map(|r| RepoState::new(PathBuf::from(&r.path)))
+            .collect();
         let active = cfg.active.min(repos.len().saturating_sub(1));
         let dark = resolve_dark(&cfg.theme, window.appearance());
         theme::apply(dark, Some(window), cx);
@@ -191,10 +209,15 @@ impl GitTabs {
         let window_place = load_window(&ctx.config_dir);
         crate::i18n::set_from_setting(&prefs.lang);
         let diff = cx.new(|cx| DiffState::new([], cx).with_mode(DiffMode::Unified));
-        let subject = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Commit 標題")));
-        let desc = cx.new(|cx| TextareaState::new(window, cx).placeholder(crate::i18n::t("說明（可留空）")));
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA")));
-        let side_filter = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Filter")));
+        let subject =
+            cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Commit 標題")));
+        let desc = cx
+            .new(|cx| TextareaState::new(window, cx).placeholder(crate::i18n::t("說明（可留空）")));
+        let search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"))
+        });
+        let side_filter =
+            cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("Filter")));
         let nav_focus = cx.focus_handle().tab_stop(true);
         let mut subs = Vec::new();
         subs.push(cx.subscribe(&side_filter, |_, _, ev: &InputEvent, cx| {
@@ -215,7 +238,9 @@ impl GitTabs {
                 this.on_search(q, cx);
             }
         }));
-        subs.push(cx.observe_window_bounds(window, |this, window, cx| this.window_moved(window, cx)));
+        subs.push(
+            cx.observe_window_bounds(window, |this, window, cx| this.window_moved(window, cx)),
+        );
         subs.push(cx.observe_window_appearance(window, |this, window, cx| {
             if this.cfg.theme == "system" {
                 this.apply_theme(window, cx);
@@ -286,7 +311,10 @@ impl GitTabs {
             again: HashSet::new(),
             after_refresh: HashMap::new(),
             diff_seq: 0,
-            gate: Arc::new(Gate { turn: Mutex::new(0), cv: Condvar::new() }),
+            gate: Arc::new(Gate {
+                turn: Mutex::new(0),
+                cv: Condvar::new(),
+            }),
             gate_next: 1,
             watcher: None,
             search_timer: Task::ready(()),
@@ -301,13 +329,26 @@ impl GitTabs {
         this.nav_focus.focus(window, cx);
         this.watch(cx);
         this.start_timers(cx);
-        this.work(cx, || gitcore::runner::run(None, &["--version"], None, false), |this, o, cx| {
-            this.git_version = if o.ok() { o.stdout.trim().to_string() } else { String::new() };
-            if !o.ok() {
-                this.toast(crate::i18n::t("找不到 git，請到設定填 git 路徑"), ToastKind::Err, Some(o.message()), cx);
-            }
-            cx.notify();
-        });
+        this.work(
+            cx,
+            || gitcore::runner::run(None, &["--version"], None, false),
+            |this, o, cx| {
+                this.git_version = if o.ok() {
+                    o.stdout.trim().to_string()
+                } else {
+                    String::new()
+                };
+                if !o.ok() {
+                    this.toast(
+                        crate::i18n::t("找不到 git，請到設定填 git 路徑"),
+                        ToastKind::Err,
+                        Some(o.message()),
+                        cx,
+                    );
+                }
+                cx.notify();
+            },
+        );
         this.offer_detected_identities(cx);
         this.migrate_rules(cx);
         this.tidy_global_includes(cx);
@@ -331,15 +372,19 @@ impl GitTabs {
         let _ = std::fs::create_dir_all(&self.ctx.config_dir);
         let _ = std::fs::write(&flag, "1");
         let ctx = self.ctx.clone();
-        self.work(cx, move || gitcore::dispatch(&ctx, "identities_detect", serde_json::json!({})), |this, res, cx| {
-            if let Ok(found) = res {
-                let ids = crate::identity::from_found(&found, &[]);
-                if !ids.is_empty() {
-                    this.pending_first_run = Some(ids);
-                    cx.notify();
+        self.work(
+            cx,
+            move || gitcore::dispatch(&ctx, "identities_detect", serde_json::json!({})),
+            |this, res, cx| {
+                if let Ok(found) = res {
+                    let ids = crate::identity::from_found(&found, &[]);
+                    if !ids.is_empty() {
+                        this.pending_first_run = Some(ids);
+                        cx.notify();
+                    }
                 }
-            }
-        });
+            },
+        );
     }
 
     /// Identities used to be picked by rules (includeIf in the global gitconfig). They are
@@ -350,7 +395,13 @@ impl GitTabs {
             return;
         }
         let ids = self.cfg.identities.clone();
-        let repos: Vec<String> = self.cfg.repos.iter().filter(|r| r.pin.is_none()).map(|r| r.path.clone()).collect();
+        let repos: Vec<String> = self
+            .cfg
+            .repos
+            .iter()
+            .filter(|r| r.pin.is_none())
+            .map(|r| r.path.clone())
+            .collect();
         let ctx = self.ctx.clone();
         self.work(
             cx,
@@ -359,7 +410,11 @@ impl GitTabs {
                 for path in repos {
                     let url = gitcore::ops::remote_url(Path::new(&path));
                     if let Some(id) = crate::identity::match_identity(&ids, &path, url.as_deref()) {
-                        let _ = gitcore::dispatch(&ctx, "identity_pin", serde_json::json!({ "repo": path, "identity": id }));
+                        let _ = gitcore::dispatch(
+                            &ctx,
+                            "identity_pin",
+                            serde_json::json!({ "repo": path, "identity": id }),
+                        );
                         pins.push((path, id.id.clone()));
                     }
                 }
@@ -376,12 +431,31 @@ impl GitTabs {
                 }
                 this.save_config();
                 let (ctx, ids) = (this.ctx.clone(), this.cfg.identities.clone());
-                this.work(cx, move || drop(gitcore::dispatch(&ctx, "identities_apply", serde_json::json!({ "identities": ids }))), |this, _, cx| {
-                    this.pull_log();
-                    cx.notify();
-                });
+                this.work(
+                    cx,
+                    move || {
+                        drop(gitcore::dispatch(
+                            &ctx,
+                            "identities_apply",
+                            serde_json::json!({ "identities": ids }),
+                        ))
+                    },
+                    |this, _, cx| {
+                        this.pull_log();
+                        cx.notify();
+                    },
+                );
                 if !pins.is_empty() {
-                    this.toast(crate::i18n::tr("Identity 改成手動選擇：{} 個 repo 已依舊規則固定好 identity", &[], &[pins.len().to_string()]), ToastKind::Info, None, cx);
+                    this.toast(
+                        crate::i18n::tr(
+                            "Identity 改成手動選擇：{} 個 repo 已依舊規則固定好 identity",
+                            &[],
+                            &[pins.len().to_string()],
+                        ),
+                        ToastKind::Info,
+                        None,
+                        cx,
+                    );
                 }
                 cx.notify();
             },
@@ -393,23 +467,41 @@ impl GitTabs {
     /// now; take out any that are left, and say so when there were some.
     fn tidy_global_includes(&mut self, cx: &mut Context<Self>) {
         let ctx = self.ctx.clone();
-        self.work(cx, move || gitcore::dispatch(&ctx, "identities_tidy", serde_json::json!({})), |this, res, cx| match res {
-            Ok(v) => {
-                let lines: Vec<&str> = v.as_array().into_iter().flatten().filter_map(|m| m["value"].as_str()).collect();
-                if !lines.is_empty() {
-                    let mut paths: Vec<&str> = Vec::new();
-                    for l in &lines {
-                        if !paths.contains(l) {
-                            paths.push(l);
+        self.work(
+            cx,
+            move || gitcore::dispatch(&ctx, "identities_tidy", serde_json::json!({})),
+            |this, res, cx| match res {
+                Ok(v) => {
+                    let lines: Vec<&str> = v
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|m| m["value"].as_str())
+                        .collect();
+                    if !lines.is_empty() {
+                        let mut paths: Vec<&str> = Vec::new();
+                        for l in &lines {
+                            if !paths.contains(l) {
+                                paths.push(l);
+                            }
                         }
+                        this.pull_log();
+                        this.toast(
+                            crate::i18n::tr(
+                                "已從全域 git 設定移除 {} 行舊版留下的 include.path",
+                                &[],
+                                &[lines.len().to_string()],
+                            ),
+                            ToastKind::Info,
+                            Some(paths.join("\n")),
+                            cx,
+                        );
+                        cx.notify();
                     }
-                    this.pull_log();
-                    this.toast(crate::i18n::tr("已從全域 git 設定移除 {} 行舊版留下的 include.path", &[], &[lines.len().to_string()]), ToastKind::Info, Some(paths.join("\n")), cx);
-                    cx.notify();
                 }
-            }
-            Err(e) => crate::debug::log("identity", || format!("tidy: {e}")),
-        });
+                Err(e) => crate::debug::log("identity", || format!("tidy: {e}")),
+            },
+        );
     }
 
     // ----- plumbing -----
@@ -451,15 +543,30 @@ impl GitTabs {
         self.repo().map(|r| r.path.clone())
     }
 
-    pub fn toast(&mut self, text: impl Into<String>, kind: ToastKind, detail: Option<String>, cx: &mut Context<Self>) {
+    pub fn toast(
+        &mut self,
+        text: impl Into<String>,
+        kind: ToastKind,
+        detail: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.toast_id += 1;
         let id = self.toast_id;
         let text: String = text.into();
-        crate::debug::log("toast", || format!("{kind:?}: {text} {}", detail.as_deref().unwrap_or("")));
-        self.toasts.push(Toast { id, text, kind, detail });
+        crate::debug::log("toast", || {
+            format!("{kind:?}: {text} {}", detail.as_deref().unwrap_or(""))
+        });
+        self.toasts.push(Toast {
+            id,
+            text,
+            kind,
+            detail,
+        });
         let secs = if kind == ToastKind::Err { 9 } else { 3 };
         cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_secs(secs)).await;
+            cx.background_executor()
+                .timer(Duration::from_secs(secs))
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.toasts.retain(|t| t.id != id);
                 cx.notify();
@@ -493,12 +600,21 @@ impl GitTabs {
         self.cfg.repos = self
             .repos
             .iter()
-            .map(|r| RepoEntry { path: r.path.display().to_string(), pin: old.iter().find(|e| Path::new(&e.path) == r.path).and_then(|e| e.pin.clone()) })
+            .map(|r| RepoEntry {
+                path: r.path.display().to_string(),
+                pin: old
+                    .iter()
+                    .find(|e| Path::new(&e.path) == r.path)
+                    .and_then(|e| e.pin.clone()),
+            })
             .collect();
         // A repo whose folder is not there right now (a drive that is unplugged) has no tab, but
         // keeps its place in the settings, so it is back when the drive is.
         let open: Vec<String> = self.cfg.repos.iter().map(|e| e.path.clone()).collect();
-        let missing: Vec<RepoEntry> = old.into_iter().filter(|e| !Path::new(&e.path).is_dir() && !open.contains(&e.path)).collect();
+        let missing: Vec<RepoEntry> = old
+            .into_iter()
+            .filter(|e| !Path::new(&e.path).is_dir() && !open.contains(&e.path))
+            .collect();
         self.cfg.repos.extend(missing);
         self.cfg.active = self.active;
         // `managed` stays as gitcore last wrote it: this copy is from when the app started.
@@ -513,10 +629,18 @@ impl GitTabs {
         crate::i18n::set_from_setting(lang);
         self.save_prefs();
         // Text boxes keep the placeholder they were made with.
-        self.subject.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Commit 標題"), window, cx));
-        self.desc.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("說明（可留空）"), window, cx));
-        self.search.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"), window, cx));
-        self.side_filter.update(cx, |s, cx| s.set_placeholder(crate::i18n::t("Filter"), window, cx));
+        self.subject.update(cx, |s, cx| {
+            s.set_placeholder(crate::i18n::t("Commit 標題"), window, cx)
+        });
+        self.desc.update(cx, |s, cx| {
+            s.set_placeholder(crate::i18n::t("說明（可留空）"), window, cx)
+        });
+        self.search.update(cx, |s, cx| {
+            s.set_placeholder(crate::i18n::t("搜尋 commit 訊息，或貼上 SHA"), window, cx)
+        });
+        self.side_filter.update(cx, |s, cx| {
+            s.set_placeholder(crate::i18n::t("Filter"), window, cx)
+        });
         cx.notify();
     }
 
@@ -535,16 +659,28 @@ impl GitTabs {
     fn window_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (b, maximized) = match window.window_bounds() {
             gpui_kit::WindowBounds::Windowed(b) => (b, false),
-            gpui_kit::WindowBounds::Maximized(b) | gpui_kit::WindowBounds::Fullscreen(b) => (b, true),
+            gpui_kit::WindowBounds::Maximized(b) | gpui_kit::WindowBounds::Fullscreen(b) => {
+                (b, true)
+            }
         };
-        let place = WindowPlace { rect: [b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into()], maximized };
+        let place = WindowPlace {
+            rect: [
+                b.origin.x.into(),
+                b.origin.y.into(),
+                b.size.width.into(),
+                b.size.height.into(),
+            ],
+            maximized,
+        };
         if self.window_place == Some(place) {
             return;
         }
         self.window_place = Some(place);
         // A drag reports every step; replacing the task cancels the one before it.
         self.window_save = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_millis(600)).await;
+            cx.background_executor()
+                .timer(Duration::from_millis(600))
+                .await;
             let _ = this.update(cx, |this, _| this.save_prefs());
         }));
     }
@@ -568,7 +704,11 @@ impl GitTabs {
     }
 
     pub fn apply_diff_view(&mut self, cx: &mut Context<Self>) {
-        let mode = if self.side_by_side { DiffMode::Split } else { DiffMode::Unified };
+        let mode = if self.side_by_side {
+            DiffMode::Split
+        } else {
+            DiffMode::Unified
+        };
         self.diff.update(cx, |d, cx| d.set_mode(mode, cx));
     }
 
@@ -578,7 +718,20 @@ impl GitTabs {
         if let Some(last) = items.last() {
             self.log_since = last.id;
             for l in &items {
-                crate::debug::log("git", || format!("{} {} [{}ms] {} {}", if l.ok { "ok " } else { "ERR" }, l.cmd, l.ms, l.repo, if l.ok { String::new() } else { l.output.clone() }));
+                crate::debug::log("git", || {
+                    format!(
+                        "{} {} [{}ms] {} {}",
+                        if l.ok { "ok " } else { "ERR" },
+                        l.cmd,
+                        l.ms,
+                        l.repo,
+                        if l.ok {
+                            String::new()
+                        } else {
+                            l.output.clone()
+                        }
+                    )
+                });
             }
             self.log.extend(items);
             let n = self.log.len();
@@ -595,26 +748,41 @@ impl GitTabs {
         let roots: Vec<PathBuf> = self.repos.iter().map(|r| r.path.clone()).collect();
         let (tx, rx) = mpsc::channel::<PathBuf>();
         let r2 = roots.clone();
-        let Ok(mut deb) = new_debouncer(Duration::from_millis(400), move |res: DebounceEventResult| {
-            let Ok(events) = res else { return };
-            let mut hit: Vec<PathBuf> = Vec::new();
-            for e in &events {
-                let s = e.path.to_string_lossy().replace('\\', "/");
-                // Object writes and lock files churn during git commands; build folders during builds.
-                const NOISY: [&str; 8] = ["/.git/objects", "/node_modules/", "/target/", "/.venv/", "/__pycache__/", "/dist/", "/.next/", "/.mypy_cache/"];
-                if s.ends_with(".lock") || NOISY.iter().any(|n| s.contains(n)) {
-                    continue;
+        let Ok(mut deb) = new_debouncer(
+            Duration::from_millis(400),
+            move |res: DebounceEventResult| {
+                let Ok(events) = res else { return };
+                let mut hit: Vec<PathBuf> = Vec::new();
+                for e in &events {
+                    let s = e.path.to_string_lossy().replace('\\', "/");
+                    // Object writes and lock files churn during git commands; build folders during builds.
+                    const NOISY: [&str; 8] = [
+                        "/.git/objects",
+                        "/node_modules/",
+                        "/target/",
+                        "/.venv/",
+                        "/__pycache__/",
+                        "/dist/",
+                        "/.next/",
+                        "/.mypy_cache/",
+                    ];
+                    if s.ends_with(".lock") || NOISY.iter().any(|n| s.contains(n)) {
+                        continue;
+                    }
+                    if let Some(root) = r2
+                        .iter()
+                        .filter(|r| e.path.starts_with(r))
+                        .max_by_key(|r| r.as_os_str().len())
+                        && !hit.contains(root)
+                    {
+                        hit.push(root.clone());
+                    }
                 }
-                if let Some(root) = r2.iter().filter(|r| e.path.starts_with(r)).max_by_key(|r| r.as_os_str().len())
-                    && !hit.contains(root)
-                {
-                    hit.push(root.clone());
+                for h in hit {
+                    let _ = tx.send(h);
                 }
-            }
-            for h in hit {
-                let _ = tx.send(h);
-            }
-        }) else {
+            },
+        ) else {
             return;
         };
         for r in &roots {
@@ -625,8 +793,16 @@ impl GitTabs {
         cx.spawn(async move |this, cx| {
             loop {
                 let rx = rx.clone();
-                let Some(path) = cx.background_spawn(async move { rx.lock().ok()?.recv().ok() }).await else { break };
-                if this.update(cx, |this, cx| this.on_disk_change(&path, cx)).is_err() {
+                let Some(path) = cx
+                    .background_spawn(async move { rx.lock().ok()?.recv().ok() })
+                    .await
+                else {
+                    break;
+                };
+                if this
+                    .update(cx, |this, cx| this.on_disk_change(&path, cx))
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -636,7 +812,9 @@ impl GitTabs {
 
     fn on_disk_change(&mut self, path: &Path, cx: &mut Context<Self>) {
         let active = self.active_path();
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         if r.busy.is_some() || r.queued > 0 || r.quiet_until.is_some_and(|t| Instant::now() < t) {
             return;
         }
@@ -677,7 +855,13 @@ impl GitTabs {
                 let p = r.path.clone();
                 self.refresh(&p, cx);
             }
-            let others: Vec<PathBuf> = self.repos.iter().enumerate().filter(|(i, _)| *i != self.active).map(|(_, r)| r.path.clone()).collect();
+            let others: Vec<PathBuf> = self
+                .repos
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != self.active)
+                .map(|(_, r)| r.path.clone())
+                .collect();
             if self.ticks % 36 == 0 {
                 for p in others {
                     self.refresh_summary(&p, cx);
@@ -713,18 +897,22 @@ impl GitTabs {
     pub fn refresh_summary(&mut self, path: &Path, cx: &mut Context<Self>) {
         let p = path.to_path_buf();
         let p2 = p.clone();
-        self.work(cx, move || ops::summary(&p2), move |this, res, cx| {
-            if let Some(r) = this.repo_by_path(&p) {
-                match res {
-                    Ok(s) => {
-                        r.summary = Some(s);
-                        r.error = None;
+        self.work(
+            cx,
+            move || ops::summary(&p2),
+            move |this, res, cx| {
+                if let Some(r) = this.repo_by_path(&p) {
+                    match res {
+                        Ok(s) => {
+                            r.summary = Some(s);
+                            r.error = None;
+                        }
+                        Err(e) => r.error = Some(e),
                     }
-                    Err(e) => r.error = Some(e),
                 }
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     /// Reloads everything the current view of a repo shows. Calls made while one runs are merged.
@@ -736,72 +924,106 @@ impl GitTabs {
         self.do_refresh(path.to_path_buf(), cx);
     }
 
-    pub fn refresh_then(&mut self, path: &Path, cx: &mut Context<Self>, then: impl FnOnce(&mut GitTabs, &mut Context<GitTabs>) + 'static) {
-        self.after_refresh.entry(path.to_path_buf()).or_default().push(Box::new(then));
+    pub fn refresh_then(
+        &mut self,
+        path: &Path,
+        cx: &mut Context<Self>,
+        then: impl FnOnce(&mut GitTabs, &mut Context<GitTabs>) + 'static,
+    ) {
+        self.after_refresh
+            .entry(path.to_path_buf())
+            .or_default()
+            .push(Box::new(then));
         self.refresh(path, cx);
     }
 
     fn do_refresh(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         self.again.remove(&path);
         let p2 = path.clone();
-        self.work(cx, move || ops::snapshot(&p2), move |this, res, cx| {
-            let mut reload_log = false;
-            let mut ok = false;
-            if let Some(r) = this.repo_by_path(&path) {
-                match res {
-                    Ok(snap) => {
-                        let sig = |r: &RepoState| -> String {
-                            // Every label the list draws: branches (and which one is checked out), remote branches, tags.
-                            r.refs
-                                .as_ref()
-                                .map(|x| {
-                                    let b = x.refs.branches.iter().chain(&x.refs.remotes).map(|b| format!("{}{}{}", b.sha, b.name, if b.current { "*" } else { "" }));
-                                    b.chain(x.refs.tags.iter().map(|t| format!("{}{}", t.sha, t.name))).collect::<String>()
-                                })
-                                .unwrap_or_default()
-                        };
-                        let (old_head, old_refs) = (r.summary.as_ref().and_then(|s| s.head.clone()), sig(r));
-                        let old_branch = r.summary.as_ref().and_then(|s| s.branch.clone());
-                        r.summary = Some(snap.summary);
-                        r.status = snap.status;
-                        r.refs = Some(snap.refs);
-                        r.error = None;
-                        reload_log = !r.commits.is_empty() && (old_head != r.summary.as_ref().and_then(|s| s.head.clone()) || old_branch != r.summary.as_ref().and_then(|s| s.branch.clone()) || old_refs != sig(r));
-                        ok = true;
+        self.work(
+            cx,
+            move || ops::snapshot(&p2),
+            move |this, res, cx| {
+                let mut reload_log = false;
+                let mut ok = false;
+                if let Some(r) = this.repo_by_path(&path) {
+                    match res {
+                        Ok(snap) => {
+                            let sig = |r: &RepoState| -> String {
+                                // Every label the list draws: branches (and which one is checked out), remote branches, tags.
+                                r.refs
+                                    .as_ref()
+                                    .map(|x| {
+                                        let b = x.refs.branches.iter().chain(&x.refs.remotes).map(
+                                            |b| {
+                                                format!(
+                                                    "{}{}{}",
+                                                    b.sha,
+                                                    b.name,
+                                                    if b.current { "*" } else { "" }
+                                                )
+                                            },
+                                        );
+                                        b.chain(
+                                            x.refs
+                                                .tags
+                                                .iter()
+                                                .map(|t| format!("{}{}", t.sha, t.name)),
+                                        )
+                                        .collect::<String>()
+                                    })
+                                    .unwrap_or_default()
+                            };
+                            let (old_head, old_refs) =
+                                (r.summary.as_ref().and_then(|s| s.head.clone()), sig(r));
+                            let old_branch = r.summary.as_ref().and_then(|s| s.branch.clone());
+                            r.summary = Some(snap.summary);
+                            r.status = snap.status;
+                            r.refs = Some(snap.refs);
+                            r.error = None;
+                            reload_log = !r.commits.is_empty()
+                                && (old_head != r.summary.as_ref().and_then(|s| s.head.clone())
+                                    || old_branch
+                                        != r.summary.as_ref().and_then(|s| s.branch.clone())
+                                    || old_refs != sig(r));
+                            ok = true;
+                        }
+                        Err(e) => r.error = Some(e.trim_start_matches("Error: ").to_string()),
                     }
-                    Err(e) => r.error = Some(e.trim_start_matches("Error: ").to_string()),
                 }
-            }
-            if ok {
-                this.prune_seen(&path);
-                if reload_log {
-                    this.load_log(&path, true, cx);
+                if ok {
+                    this.prune_seen(&path);
+                    if reload_log {
+                        this.load_log(&path, true, cx);
+                    }
+                    let view = this.repos.iter().find(|r| r.path == path).map(|r| r.view);
+                    match view {
+                        Some(View::Reflog) => this.load_reflog(&path, cx),
+                        Some(View::Changes) => this.ensure_sel(&path),
+                        _ => {}
+                    }
+                    if this.active_path().as_deref() == Some(&path) {
+                        this.load_diff(cx);
+                    }
                 }
-                let view = this.repos.iter().find(|r| r.path == path).map(|r| r.view);
-                match view {
-                    Some(View::Reflog) => this.load_reflog(&path, cx),
-                    Some(View::Changes) => this.ensure_sel(&path),
-                    _ => {}
+                let hooks = this.after_refresh.remove(&path).unwrap_or_default();
+                for h in hooks {
+                    h(this, cx);
                 }
-                if this.active_path().as_deref() == Some(&path) {
-                    this.load_diff(cx);
+                if this.again.contains(&path) {
+                    this.do_refresh(path, cx);
+                } else {
+                    this.inflight.remove(&path);
                 }
-            }
-            let hooks = this.after_refresh.remove(&path).unwrap_or_default();
-            for h in hooks {
-                h(this, cx);
-            }
-            if this.again.contains(&path) {
-                this.do_refresh(path, cx);
-            } else {
-                this.inflight.remove(&path);
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn load_log(&mut self, path: &Path, reset: bool, cx: &mut Context<Self>) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         if r.log_loading && !reset {
             return;
         }
@@ -812,39 +1034,61 @@ impl GitTabs {
         let (query, lp) = (r.log_query.clone(), r.log_path.clone());
         let p = path.to_path_buf();
         let p2 = p.clone();
-        self.work(cx, move || ops::log(&p2, skip, 400, lp.is_none(), &query, lp.as_deref()), move |this, res, cx| {
-            let Some(r) = this.repo_by_path(&p) else { return };
-            if r.log_seq != seq {
-                return;
-            }
-            r.log_loading = false;
-            match res {
-                Ok(page) => {
-                    r.log_done = page.len() < 400;
-                    if reset {
-                        r.commits = Arc::new(page);
-                    } else {
-                        Arc::make_mut(&mut r.commits).extend(page);
-                    }
-                    Self::relayout(r, reset);
-                    let is_stash = |s: &String| r.refs.iter().flat_map(|x| x.stashes.iter()).any(|x| &x.sha == s);
-                    // A stash being looked at is not in the log, and stays selected all the same.
-                    if reset && r.sel_commit.as_ref().is_none_or(|s| !r.commits.iter().any(|c| &c.sha == s) && !is_stash(s)) {
-                        r.sel_commit = r.commits.first().map(|c| c.sha.clone());
-                    }
-                    if reset {
-                        this.load_detail(&p, cx);
-                    }
+        self.work(
+            cx,
+            move || ops::log(&p2, skip, 400, lp.is_none(), &query, lp.as_deref()),
+            move |this, res, cx| {
+                let Some(r) = this.repo_by_path(&p) else {
+                    return;
+                };
+                if r.log_seq != seq {
+                    return;
                 }
-                Err(e) => this.toast(crate::i18n::t("讀不到 history"), ToastKind::Err, Some(e), cx),
-            }
-            cx.notify();
-        });
+                r.log_loading = false;
+                match res {
+                    Ok(page) => {
+                        r.log_done = page.len() < 400;
+                        if reset {
+                            r.commits = Arc::new(page);
+                        } else {
+                            Arc::make_mut(&mut r.commits).extend(page);
+                        }
+                        Self::relayout(r, reset);
+                        let is_stash = |s: &String| {
+                            r.refs
+                                .iter()
+                                .flat_map(|x| x.stashes.iter())
+                                .any(|x| &x.sha == s)
+                        };
+                        // A stash being looked at is not in the log, and stays selected all the same.
+                        if reset
+                            && r.sel_commit.as_ref().is_none_or(|s| {
+                                !r.commits.iter().any(|c| &c.sha == s) && !is_stash(s)
+                            })
+                        {
+                            r.sel_commit = r.commits.first().map(|c| c.sha.clone());
+                        }
+                        if reset {
+                            this.load_detail(&p, cx);
+                        }
+                    }
+                    Err(e) => this.toast(
+                        crate::i18n::t("讀不到 history"),
+                        ToastKind::Err,
+                        Some(e),
+                        cx,
+                    ),
+                }
+                cx.notify();
+            },
+        );
         cx.notify();
     }
 
     pub fn load_detail(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         let Some(sha) = r.sel_commit.clone() else {
             r.detail = None;
             return;
@@ -863,61 +1107,92 @@ impl GitTabs {
         let p = path.to_path_buf();
         let p2 = p.clone();
         let s2 = sha.clone();
-        self.work(cx, move || ops::commit_detail(&p2, &s2), move |this, res, cx| {
-            let Some(r) = this.repo_by_path(&p) else { return };
-            // Holding the arrow key fires many loads; only the latest selection may land.
-            if r.detail_seq != seq || r.sel_commit.as_deref() != Some(&sha) {
-                return;
-            }
-            match res {
-                Ok(d) => {
-                    let want = r.log_path.as_ref().and_then(|lp| d.files.iter().find(|f| &f.path == lp)).map(|f| f.path.clone());
-                    r.sel = d.files.first().map(|f| Sel { list: ListKind::C, path: want.unwrap_or_else(|| f.path.clone()) });
-                    r.detail = Some(d);
-                    if this.active_path().as_deref() == Some(&p) {
-                        this.load_diff(cx);
+        self.work(
+            cx,
+            move || ops::commit_detail(&p2, &s2),
+            move |this, res, cx| {
+                let Some(r) = this.repo_by_path(&p) else {
+                    return;
+                };
+                // Holding the arrow key fires many loads; only the latest selection may land.
+                if r.detail_seq != seq || r.sel_commit.as_deref() != Some(&sha) {
+                    return;
+                }
+                match res {
+                    Ok(d) => {
+                        let want = r
+                            .log_path
+                            .as_ref()
+                            .and_then(|lp| d.files.iter().find(|f| &f.path == lp))
+                            .map(|f| f.path.clone());
+                        r.sel = d.files.first().map(|f| Sel {
+                            list: ListKind::C,
+                            path: want.unwrap_or_else(|| f.path.clone()),
+                        });
+                        r.detail = Some(d);
+                        if this.active_path().as_deref() == Some(&p) {
+                            this.load_diff(cx);
+                        }
+                        if this.hist_tab == HistTab::Tree {
+                            this.load_tree(&p, cx);
+                        }
                     }
-                    if this.hist_tab == HistTab::Tree {
-                        this.load_tree(&p, cx);
+                    Err(e) => {
+                        r.detail = None;
+                        this.toast(crate::i18n::t("讀不到 commit"), ToastKind::Err, Some(e), cx);
                     }
                 }
-                Err(e) => {
-                    r.detail = None;
-                    this.toast(crate::i18n::t("讀不到 commit"), ToastKind::Err, Some(e), cx);
-                }
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn load_reflog(&mut self, path: &Path, cx: &mut Context<Self>) {
         let p = path.to_path_buf();
         let p2 = p.clone();
-        self.work(cx, move || ops::reflog(&p2, 300).unwrap_or_default(), move |this, v, cx| {
-            if let Some(r) = this.repo_by_path(&p) {
-                r.reflog = v;
-            }
-            cx.notify();
-        });
+        self.work(
+            cx,
+            move || ops::reflog(&p2, 300).unwrap_or_default(),
+            move |this, v, cx| {
+                if let Some(r) = this.repo_by_path(&p) {
+                    r.reflog = v;
+                }
+                cx.notify();
+            },
+        );
     }
 
     // ----- selection and the diff -----
 
     /// Keeps the selected file if it is still listed, follows it between lists, else takes the first.
     pub fn ensure_sel(&mut self, path: &Path) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         let in_u = |r: &RepoState, p: &str| r.unstaged().iter().any(|f| f.path == p);
         let in_s = |r: &RepoState, p: &str| r.staged().iter().any(|f| f.path == p);
         if let Some(s) = &r.sel
-            && ((s.list == ListKind::U && in_u(r, &s.path)) || (s.list == ListKind::S && in_s(r, &s.path)))
+            && ((s.list == ListKind::U && in_u(r, &s.path))
+                || (s.list == ListKind::S && in_s(r, &s.path)))
         {
             return;
         }
         let path_sel = r.sel.as_ref().map(|s| s.path.clone());
         r.sel = if let Some(p) = path_sel.filter(|p| in_u(r, p)) {
-            Some(Sel { list: ListKind::U, path: p })
-        } else if let Some(p) = r.sel.as_ref().map(|s| s.path.clone()).filter(|p| in_s(r, p)) {
-            Some(Sel { list: ListKind::S, path: p })
+            Some(Sel {
+                list: ListKind::U,
+                path: p,
+            })
+        } else if let Some(p) = r
+            .sel
+            .as_ref()
+            .map(|s| s.path.clone())
+            .filter(|p| in_s(r, p))
+        {
+            Some(Sel {
+                list: ListKind::S,
+                path: p,
+            })
         } else {
             Self::ordered_files(r).into_iter().next()
         };
@@ -926,14 +1201,28 @@ impl GitTabs {
     pub fn ordered_files(r: &RepoState) -> Vec<Sel> {
         use crate::tree::tree_sort;
         match r.view {
-            View::History => r.detail.iter().flat_map(|d| d.files.iter()).map(|f| Sel { list: ListKind::C, path: f.path.clone() }).collect(),
+            View::History => r
+                .detail
+                .iter()
+                .flat_map(|d| d.files.iter())
+                .map(|f| Sel {
+                    list: ListKind::C,
+                    path: f.path.clone(),
+                })
+                .collect(),
             _ => {
                 let u: Vec<String> = r.unstaged().iter().map(|f| f.path.clone()).collect();
                 let s: Vec<String> = r.staged().iter().map(|f| f.path.clone()).collect();
                 tree_sort(&u, |x| x.as_str())
                     .into_iter()
-                    .map(|p| Sel { list: ListKind::U, path: p })
-                    .chain(tree_sort(&s, |x| x.as_str()).into_iter().map(|p| Sel { list: ListKind::S, path: p }))
+                    .map(|p| Sel {
+                        list: ListKind::U,
+                        path: p,
+                    })
+                    .chain(tree_sort(&s, |x| x.as_str()).into_iter().map(|p| Sel {
+                        list: ListKind::S,
+                        path: p,
+                    }))
                     .collect()
             }
         }
@@ -953,7 +1242,11 @@ impl GitTabs {
         if files.is_empty() {
             return;
         }
-        let i = r.sel.as_ref().and_then(|s| files.iter().position(|f| f == s)).map_or(0, |i| i as isize);
+        let i = r
+            .sel
+            .as_ref()
+            .and_then(|s| files.iter().position(|f| f == s))
+            .map_or(0, |i| i as isize);
         let j = (i + d).clamp(0, files.len() as isize - 1) as usize;
         let f = files[j].clone();
         self.select(f.list, f.path, cx);
@@ -963,38 +1256,48 @@ impl GitTabs {
 
     /// Lists the files of the commit shown, unless they are the ones listed already.
     pub fn load_tree(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let Some(r) = self.repo_by_path(path) else { return };
-        let Some(sha) = r.detail.as_ref().map(|d| d.sha.clone()) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
+        let Some(sha) = r.detail.as_ref().map(|d| d.sha.clone()) else {
+            return;
+        };
         if r.tree_of == sha {
             return;
         }
         r.tree_of = sha.clone();
         r.tree_file = r.tree_sel.as_ref().map(|_| FileShown::Loading);
         let (p, p2, s2) = (path.to_path_buf(), path.to_path_buf(), sha.clone());
-        self.work(cx, move || ops::tree(&p2, &s2), move |this, res, cx| {
-            let Some(r) = this.repo_by_path(&p) else { return };
-            // Stepping through commits fires many loads; only the commit still shown may land.
-            if r.tree_of != sha {
-                return;
-            }
-            match res {
-                Ok(paths) => {
-                    r.tree_rows = Arc::new(crate::tree::file_tree_rows(&paths, &r.tree_open));
-                    // The file being read stays picked from commit to commit, while the commit has it.
-                    if r.tree_sel.as_ref().is_some_and(|s| !paths.contains(s)) {
-                        r.tree_sel = None;
+        self.work(
+            cx,
+            move || ops::tree(&p2, &s2),
+            move |this, res, cx| {
+                let Some(r) = this.repo_by_path(&p) else {
+                    return;
+                };
+                // Stepping through commits fires many loads; only the commit still shown may land.
+                if r.tree_of != sha {
+                    return;
+                }
+                match res {
+                    Ok(paths) => {
+                        r.tree_rows = Arc::new(crate::tree::file_tree_rows(&paths, &r.tree_open));
+                        // The file being read stays picked from commit to commit, while the commit has it.
+                        if r.tree_sel.as_ref().is_some_and(|s| !paths.contains(s)) {
+                            r.tree_sel = None;
+                        }
+                        r.tree_paths = Arc::new(paths);
+                        this.load_tree_file(&p, cx);
                     }
-                    r.tree_paths = Arc::new(paths);
-                    this.load_tree_file(&p, cx);
+                    Err(e) => {
+                        r.tree_paths = Arc::default();
+                        r.tree_rows = Arc::default();
+                        r.tree_file = Some(FileShown::Note(e));
+                    }
                 }
-                Err(e) => {
-                    r.tree_paths = Arc::default();
-                    r.tree_rows = Arc::default();
-                    r.tree_file = Some(FileShown::Note(e));
-                }
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn toggle_tree_dir(&mut self, dir: String, cx: &mut Context<Self>) {
@@ -1016,26 +1319,49 @@ impl GitTabs {
 
     /// Reads the picked file as it was at the commit shown.
     fn load_tree_file(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         let (Some(file), sha) = (r.tree_sel.clone(), r.tree_of.clone()) else {
             r.tree_file = None;
             return;
         };
         r.tree_file = Some(FileShown::Loading);
-        let (p, p2, s2, f2) = (path.to_path_buf(), path.to_path_buf(), sha.clone(), file.clone());
-        self.work(cx, move || ops::file_at(&p2, &s2, &f2), move |this, res, cx| {
-            let Some(r) = this.repo_by_path(&p) else { return };
-            if r.tree_of != sha || r.tree_sel.as_ref() != Some(&file) {
-                return;
-            }
-            r.tree_file = Some(match res {
-                Ok(ops::FileText::Text(t)) => FileShown::Lines(Arc::new(t.lines().map(|l| gpui_kit::SharedString::from(l.replace('\t', "    "))).collect())),
-                Ok(ops::FileText::Binary) => FileShown::Note(crate::i18n::t("二進位檔案，沒有文字可以顯示").into()),
-                Ok(ops::FileText::Large(n)) => FileShown::Note(crate::i18n::tr("檔案太大（{} MB），不在這裡顯示", &[], &[format!("{:.1}", n as f64 / 1e6)])),
-                Err(e) => FileShown::Note(e),
-            });
-            cx.notify();
-        });
+        let (p, p2, s2, f2) = (
+            path.to_path_buf(),
+            path.to_path_buf(),
+            sha.clone(),
+            file.clone(),
+        );
+        self.work(
+            cx,
+            move || ops::file_at(&p2, &s2, &f2),
+            move |this, res, cx| {
+                let Some(r) = this.repo_by_path(&p) else {
+                    return;
+                };
+                if r.tree_of != sha || r.tree_sel.as_ref() != Some(&file) {
+                    return;
+                }
+                r.tree_file = Some(match res {
+                    Ok(ops::FileText::Text(t)) => FileShown::Lines(Arc::new(
+                        t.lines()
+                            .map(|l| gpui_kit::SharedString::from(l.replace('\t', "    ")))
+                            .collect(),
+                    )),
+                    Ok(ops::FileText::Binary) => {
+                        FileShown::Note(crate::i18n::t("二進位檔案，沒有文字可以顯示").into())
+                    }
+                    Ok(ops::FileText::Large(n)) => FileShown::Note(crate::i18n::tr(
+                        "檔案太大（{} MB），不在這裡顯示",
+                        &[],
+                        &[format!("{:.1}", n as f64 / 1e6)],
+                    )),
+                    Err(e) => FileShown::Note(e),
+                });
+                cx.notify();
+            },
+        );
     }
 
     /// Lays the graph out for the commits loaded so far. While no merge is folded only the new
@@ -1053,10 +1379,23 @@ impl GitTabs {
             r.layout = Default::default();
             return;
         }
-        let pairs: Vec<(&str, &[String])> = r.commits.iter().map(|c| (c.sha.as_str(), c.parents.as_slice())).collect();
-        let remote_tips: HashSet<&str> = r.commits.iter().filter(|c| c.refs.iter().any(|x| x.kind == "remote")).map(|c| c.sha.as_str()).collect();
+        let pairs: Vec<(&str, &[String])> = r
+            .commits
+            .iter()
+            .map(|c| (c.sha.as_str(), c.parents.as_slice()))
+            .collect();
+        let remote_tips: HashSet<&str> = r
+            .commits
+            .iter()
+            .filter(|c| c.refs.iter().any(|x| x.kind == "remote"))
+            .map(|c| c.sha.as_str())
+            .collect();
         r.unpushed = Arc::new(crate::graph::unpushed(&pairs, &remote_tips));
-        let head = r.commits.iter().find(|c| c.refs.iter().any(|x| matches!(x.kind, "head" | "detached"))).map(|c| c.sha.as_str());
+        let head = r
+            .commits
+            .iter()
+            .find(|c| c.refs.iter().any(|x| matches!(x.kind, "head" | "detached")))
+            .map(|c| c.sha.as_str());
         if r.collapsed.is_empty() {
             let done = r.layout.rows.len();
             r.layout.extend(&pairs[done..], head);
@@ -1064,7 +1403,10 @@ impl GitTabs {
         } else {
             let hide = crate::graph::hidden(&pairs, &r.collapsed);
             let rows = crate::graph::shown(&pairs, &r.collapsed, &hide);
-            let left: Vec<(&str, &[String])> = rows.iter().map(|(i, ps)| (pairs[*i].0, ps.as_slice())).collect();
+            let left: Vec<(&str, &[String])> = rows
+                .iter()
+                .map(|(i, ps)| (pairs[*i].0, ps.as_slice()))
+                .collect();
             let mut l = crate::graph::Layout::default();
             l.extend(&left, head);
             r.graph = Some(l.rows);
@@ -1082,7 +1424,12 @@ impl GitTabs {
         }
         Self::relayout(r, false);
         // A selected commit that just got folded away hands the selection to the merge.
-        let gone = r.sel_commit.as_ref().is_some_and(|s| r.commits.iter().position(|c| &c.sha == s).is_some_and(|i| r.shown.as_ref().is_some_and(|v| !v.contains(&i))));
+        let gone = r.sel_commit.as_ref().is_some_and(|s| {
+            r.commits
+                .iter()
+                .position(|c| &c.sha == s)
+                .is_some_and(|i| r.shown.as_ref().is_some_and(|v| !v.contains(&i)))
+        });
         if gone {
             r.sel_commit = Some(sha);
             let p = r.path.clone();
@@ -1097,9 +1444,17 @@ impl GitTabs {
             return;
         }
         // Up and down move over the rows on screen, which skip what is folded away.
-        let rows: Vec<usize> = r.shown.as_ref().map_or_else(|| (0..r.commits.len()).collect(), |v| v.to_vec());
-        let at = r.commits.iter().position(|c| Some(&c.sha) == r.sel_commit.as_ref());
-        let i = at.and_then(|a| rows.iter().position(|x| *x == a)).map_or(0, |i| i as isize);
+        let rows: Vec<usize> = r
+            .shown
+            .as_ref()
+            .map_or_else(|| (0..r.commits.len()).collect(), |v| v.to_vec());
+        let at = r
+            .commits
+            .iter()
+            .position(|c| Some(&c.sha) == r.sel_commit.as_ref());
+        let i = at
+            .and_then(|a| rows.iter().position(|x| *x == a))
+            .map_or(0, |i| i as isize);
         let j = rows[(i + d).clamp(0, rows.len() as isize - 1) as usize];
         if r.sel_commit.as_ref() == Some(&r.commits[j].sha) {
             return;
@@ -1114,7 +1469,9 @@ impl GitTabs {
     pub fn load_diff(&mut self, cx: &mut Context<Self>) {
         self.diff_seq += 1;
         let seq = self.diff_seq;
-        let Some(r) = self.repos.get_mut(self.active) else { return };
+        let Some(r) = self.repos.get_mut(self.active) else {
+            return;
+        };
         let Some(sel) = r.sel.clone() else {
             r.diff = None;
             r.diff_for.clear();
@@ -1124,22 +1481,44 @@ impl GitTabs {
         let repo = r.path.clone();
         let key = format!("{}:{}", sel.list.tag(), sel.path);
         enum Job {
-            Commit { sha: String, old: Option<String> },
-            Work { staged: bool, untracked: bool, conflicted: bool },
+            Commit {
+                sha: String,
+                old: Option<String>,
+            },
+            Work {
+                staged: bool,
+                untracked: bool,
+                conflicted: bool,
+            },
         }
         let job = match sel.list {
             ListKind::C => {
                 let Some(d) = &r.detail else { return };
-                let old = d.files.iter().find(|f| f.path == sel.path).and_then(|f| f.old_path.clone());
-                Job::Commit { sha: d.sha.clone(), old }
+                let old = d
+                    .files
+                    .iter()
+                    .find(|f| f.path == sel.path)
+                    .and_then(|f| f.old_path.clone());
+                Job::Commit {
+                    sha: d.sha.clone(),
+                    old,
+                }
             }
             l => {
                 let st = r.status.iter().find(|x| x.path == sel.path);
-                Job::Work { staged: l == ListKind::S, untracked: st.is_some_and(|s| s.untracked) && l == ListKind::U, conflicted: st.is_some_and(|s| s.conflicted) && l == ListKind::U }
+                Job::Work {
+                    staged: l == ListKind::S,
+                    untracked: st.is_some_and(|s| s.untracked) && l == ListKind::U,
+                    conflicted: st.is_some_and(|s| s.conflicted) && l == ListKind::U,
+                }
             }
         };
         // A commit's diff never changes, so revisiting a file is instant.
-        let cache_key = if let Job::Commit { sha, .. } = &job { Some(format!("{}|{}|{}", repo.display(), sha, sel.path)) } else { None };
+        let cache_key = if let Job::Commit { sha, .. } = &job {
+            Some(format!("{}|{}|{}", repo.display(), sha, sel.path))
+        } else {
+            None
+        };
         if let Some(ck) = &cache_key
             && let Some(pos) = self.commit_diffs.iter().position(|(k, _)| k == ck)
         {
@@ -1152,9 +1531,15 @@ impl GitTabs {
         self.work(
             cx,
             move || match job {
-                Job::Commit { sha, old } => ops::commit_file_diff(&repo, &sha, &path, old.as_deref()).map(|d| (repo, d)),
-                Job::Work { conflicted: true, .. } => Ok((repo.clone(), ops::conflict_view(&repo, &path))),
-                Job::Work { staged, untracked, .. } => ops::diff_file(&repo, &path, staged, untracked).map(|d| (repo, d)),
+                Job::Commit { sha, old } => {
+                    ops::commit_file_diff(&repo, &sha, &path, old.as_deref()).map(|d| (repo, d))
+                }
+                Job::Work {
+                    conflicted: true, ..
+                } => Ok((repo.clone(), ops::conflict_view(&repo, &path))),
+                Job::Work {
+                    staged, untracked, ..
+                } => ops::diff_file(&repo, &path, staged, untracked).map(|d| (repo, d)),
             },
             move |this, res, cx| {
                 if this.diff_seq != seq {
@@ -1172,13 +1557,22 @@ impl GitTabs {
                             this.install_diff(&repo, &sel, key, d, cx);
                         }
                     }
-                    Err(e) => this.toast(crate::i18n::t("讀不到 diff"), ToastKind::Err, Some(e), cx),
+                    Err(e) => {
+                        this.toast(crate::i18n::t("讀不到 diff"), ToastKind::Err, Some(e), cx)
+                    }
                 }
             },
         );
     }
 
-    fn install_diff(&mut self, repo: &Path, sel: &Sel, key: String, d: FileDiff, cx: &mut Context<Self>) {
+    fn install_diff(
+        &mut self,
+        repo: &Path,
+        sel: &Sel,
+        key: String,
+        d: FileDiff,
+        cx: &mut Context<Self>,
+    ) {
         let files = DiffFile::parse(&crate::diffmap::to_patch(&d)).unwrap_or_default();
         // A file marked as reviewed that changed since gets unmarked.
         let hash = diff_hash(&d);
@@ -1206,7 +1600,9 @@ impl GitTabs {
         // measured yet); once they are, go to the top of the first change.
         let want = self.repo().map(|r| r.diff_for.clone());
         cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_millis(150)).await;
+            cx.background_executor()
+                .timer(Duration::from_millis(150))
+                .await;
             let _ = this.update(cx, |this, cx| {
                 if this.repo().map(|r| r.diff_for.clone()) == want {
                     this.goto_hunk(0, cx);
@@ -1227,16 +1623,20 @@ impl GitTabs {
     }
 
     pub fn is_seen(&self, r: &RepoState, list: ListKind, path: &str) -> bool {
-        self.seen_key(r, list, path).is_some_and(|k| self.seen.contains_key(&k))
+        self.seen_key(r, list, path)
+            .is_some_and(|k| self.seen.contains_key(&k))
     }
 
     /// Drops "reviewed" marks of files that are no longer changed, so the saved map doesn't grow forever.
     fn prune_seen(&mut self, path: &Path) {
-        let Some(r) = self.repos.iter().find(|r| r.path == path) else { return };
+        let Some(r) = self.repos.iter().find(|r| r.path == path) else {
+            return;
+        };
         let prefix = format!("{}|w|", path.display());
         let live: HashSet<&str> = r.status.iter().map(|f| f.path.as_str()).collect();
         let before = self.seen.len();
-        self.seen.retain(|k, _| k.strip_prefix(&prefix).is_none_or(|p| live.contains(p)));
+        self.seen
+            .retain(|k, _| k.strip_prefix(&prefix).is_none_or(|p| live.contains(p)));
         if self.seen.len() != before {
             self.persist_seen();
         }
@@ -1248,13 +1648,21 @@ impl GitTabs {
 
     pub fn toggle_seen(&mut self, advance: bool, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (Some(sel), Some(d)) = (r.sel.clone(), r.diff.as_ref()) else { return };
-        let Some(k) = self.seen_key(r, sel.list, &sel.path) else { return };
+        let (Some(sel), Some(d)) = (r.sel.clone(), r.diff.as_ref()) else {
+            return;
+        };
+        let Some(k) = self.seen_key(r, sel.list, &sel.path) else {
+            return;
+        };
         let hash = diff_hash(d);
         if self.seen.remove(&k).is_none() {
             self.seen.insert(k, hash);
             if advance {
-                let next = self.repo().and_then(|r| Self::ordered_files(r).into_iter().find(|f| !self.is_seen(r, f.list, &f.path)));
+                let next = self.repo().and_then(|r| {
+                    Self::ordered_files(r)
+                        .into_iter()
+                        .find(|f| !self.is_seen(r, f.list, &f.path))
+                });
                 match next {
                     Some(n) => self.select(n.list, n.path, cx),
                     None => self.ok(crate::i18n::t("全部檔案都看完了"), cx),
@@ -1268,10 +1676,14 @@ impl GitTabs {
     // ----- search box -----
 
     fn on_search(&mut self, q: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         // Debounce: only the last keystroke of a burst reloads.
         self.search_timer = cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_millis(300)).await;
+            cx.background_executor()
+                .timer(Duration::from_millis(300))
+                .await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(r) = this.repo_by_path(&path)
                     && r.log_query != q
@@ -1286,12 +1698,18 @@ impl GitTabs {
     // ----- identity -----
 
     pub fn pin_of(&self, r: &RepoState) -> Option<String> {
-        self.cfg.repos.iter().find(|x| Path::new(&x.path) == r.path).and_then(|x| x.pin.clone())
+        self.cfg
+            .repos
+            .iter()
+            .find(|x| Path::new(&x.path) == r.path)
+            .and_then(|x| x.pin.clone())
     }
 
     /// The identity pinned to this repo by hand, if any.
     pub fn identity_of(&self, r: &RepoState) -> IdentityInfo {
-        let pinned = self.pin_of(r).and_then(|pin| self.cfg.identities.iter().find(|i| i.id == pin).cloned());
+        let pinned = self
+            .pin_of(r)
+            .and_then(|pin| self.cfg.identities.iter().find(|i| i.id == pin).cloned());
         IdentityInfo { id: pinned }
     }
 
@@ -1351,7 +1769,9 @@ impl GitTabs {
         job: impl FnOnce(&Path) -> Result<String, String> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         apply(r);
         r.queued += 1;
         let (gate, ticket) = self.take_ticket();
@@ -1363,12 +1783,19 @@ impl GitTabs {
             move |this, res, cx| {
                 this.pull_log();
                 let last = {
-                    let Some(r) = this.repo_by_path(&p) else { return };
+                    let Some(r) = this.repo_by_path(&p) else {
+                        return;
+                    };
                     r.queued = r.queued.saturating_sub(1);
                     r.queued == 0
                 };
                 if let Err(e) = res {
-                    this.toast(crate::i18n::tr("{label}失敗", &[("label", (label).to_string())], &[]), ToastKind::Err, Some(e.trim_start_matches("Error: ").to_string()), cx);
+                    this.toast(
+                        crate::i18n::tr("{label}失敗", &[("label", (label).to_string())], &[]),
+                        ToastKind::Err,
+                        Some(e.trim_start_matches("Error: ").to_string()),
+                        cx,
+                    );
                 }
                 if last {
                     this.refresh_status(&p, cx);
@@ -1383,29 +1810,35 @@ impl GitTabs {
     fn refresh_status(&mut self, path: &Path, cx: &mut Context<Self>) {
         let p = path.to_path_buf();
         let p2 = p.clone();
-        self.work(cx, move || ops::status(&p2), move |this, res, cx| {
-            match res {
-                Ok(st) => {
-                    if let Some(r) = this.repo_by_path(&p) {
-                        let conflicts = st.iter().filter(|f| f.conflicted).count();
-                        if let Some(s) = r.summary.as_mut() {
-                            s.changes = st.len();
-                            s.conflicts = conflicts;
+        self.work(
+            cx,
+            move || ops::status(&p2),
+            move |this, res, cx| {
+                match res {
+                    Ok(st) => {
+                        if let Some(r) = this.repo_by_path(&p) {
+                            let conflicts = st.iter().filter(|f| f.conflicted).count();
+                            if let Some(s) = r.summary.as_mut() {
+                                s.changes = st.len();
+                                s.conflicts = conflicts;
+                            }
+                            r.status = st;
+                            r.quiet_until = Some(Instant::now() + Duration::from_millis(1500));
                         }
-                        r.status = st;
-                        r.quiet_until = Some(Instant::now() + Duration::from_millis(1500));
+                        this.prune_seen(&p);
+                        let is_changes = this
+                            .repo_by_path(&p)
+                            .is_some_and(|r| r.view == View::Changes);
+                        if is_changes {
+                            this.ensure_sel(&p);
+                            this.load_diff(cx);
+                        }
                     }
-                    this.prune_seen(&p);
-                    let is_changes = this.repo_by_path(&p).is_some_and(|r| r.view == View::Changes);
-                    if is_changes {
-                        this.ensure_sel(&p);
-                        this.load_diff(cx);
-                    }
+                    Err(_) => this.refresh(&p, cx),
                 }
-                Err(_) => this.refresh(&p, cx),
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 }
 
@@ -1430,7 +1863,10 @@ pub fn resolve_dark(theme: &str, appearance: WindowAppearance) -> bool {
     match theme {
         "dark" => true,
         "light" => false,
-        _ => matches!(appearance, WindowAppearance::Dark | WindowAppearance::VibrantDark),
+        _ => matches!(
+            appearance,
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        ),
     }
 }
 
@@ -1463,9 +1899,19 @@ pub struct WindowPlace {
 }
 
 pub fn load_window(dir: &Path) -> Option<WindowPlace> {
-    let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json")).ok().and_then(|s| serde_json::from_str(&s).ok())?;
-    let r: Vec<f32> = v["window"].as_array()?.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect();
-    Some(WindowPlace { rect: r.try_into().ok()?, maximized: v["maximized"].as_bool().unwrap_or(false) })
+    let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())?;
+    let r: Vec<f32> = v["window"]
+        .as_array()?
+        .iter()
+        .filter_map(|x| x.as_f64())
+        .map(|x| x as f32)
+        .collect();
+    Some(WindowPlace {
+        rect: r.try_into().ok()?,
+        maximized: v["maximized"].as_bool().unwrap_or(false),
+    })
 }
 
 /// The size to open with when nothing fits better: the usual one, but never larger than the screen.
@@ -1481,37 +1927,71 @@ pub fn default_window_size(screen: Option<(f32, f32)>) -> (f32, f32) {
 pub fn window_fits(place: &WindowPlace, screens: &[[f32; 4]]) -> bool {
     let [x, y, w, h] = place.rect;
     let (gx, gy) = (x + w / 2., y + 12.);
-    w >= 480. && h >= 360. && screens.iter().any(|[sx, sy, sw, sh]| gx >= *sx && gx < sx + sw && gy >= *sy && gy < sy + sh)
+    w >= 480.
+        && h >= 360.
+        && screens
+            .iter()
+            .any(|[sx, sy, sw, sh]| gx >= *sx && gx < sx + sw && gy >= *sy && gy < sy + sh)
 }
 
 /// The bounds to open the window with.
 pub fn initial_window(saved: Option<WindowPlace>, cx: &gpui_kit::App) -> gpui_kit::WindowBounds {
     use gpui_kit::{Bounds, WindowBounds, point, px, size};
-    let screens: Vec<[f32; 4]> = cx.displays().iter().map(|d| d.bounds()).map(|b| [b.origin.x.into(), b.origin.y.into(), b.size.width.into(), b.size.height.into()]).collect();
+    let screens: Vec<[f32; 4]> = cx
+        .displays()
+        .iter()
+        .map(|d| d.bounds())
+        .map(|b| {
+            [
+                b.origin.x.into(),
+                b.origin.y.into(),
+                b.size.width.into(),
+                b.size.height.into(),
+            ]
+        })
+        .collect();
     if let Some(p) = saved.filter(|p| window_fits(p, &screens)) {
         let [x, y, w, h] = p.rect;
         let b = Bounds::new(point(px(x), px(y)), size(px(w), px(h)));
-        return if p.maximized { WindowBounds::Maximized(b) } else { WindowBounds::Windowed(b) };
+        return if p.maximized {
+            WindowBounds::Maximized(b)
+        } else {
+            WindowBounds::Windowed(b)
+        };
     }
-    let screen = cx.primary_display().map(|d| d.bounds().size).map(|s| (f32::from(s.width), f32::from(s.height)));
+    let screen = cx
+        .primary_display()
+        .map(|d| d.bounds().size)
+        .map(|s| (f32::from(s.width), f32::from(s.height)));
     let (w, h) = default_window_size(screen);
     WindowBounds::centered(size(px(w), px(h)), cx)
 }
 
 fn load_prefs(dir: &Path) -> Prefs {
-    let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let v: serde_json::Value = std::fs::read_to_string(dir.join("prefs.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
     let z = |k: &str, d: f32| v["sizes"][k].as_f64().map(|x| x as f32).unwrap_or(d);
     Prefs {
         side: v["side"].as_bool().unwrap_or(false),
         wrap: v["wrap"].as_bool().unwrap_or(false),
         hist_tab: v["hist_tab"].as_str().unwrap_or("commit").to_string(),
         lang: v["lang"].as_str().unwrap_or("auto").to_string(),
-        sizes: Sizes { side_bar: z("side_bar", 220.), files: z("files", 300.), hist_top: z("hist_top", 340.), hist_files: z("hist_files", 300.) },
+        sizes: Sizes {
+            side_bar: z("side_bar", 220.),
+            files: z("files", 300.),
+            hist_top: z("hist_top", 340.),
+            hist_files: z("hist_files", 300.),
+        },
     }
 }
 
 fn load_seen(dir: &Path) -> HashMap<String, String> {
-    std::fs::read_to_string(dir.join("seen.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    std::fs::read_to_string(dir.join("seen.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 fn save_seen(dir: &Path, m: &HashMap<String, String>) {
@@ -1522,7 +2002,11 @@ fn save_seen(dir: &Path, m: &HashMap<String, String>) {
 }
 
 impl Render for GitTabs {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui_kit::IntoElement {
+    fn render(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl gpui_kit::IntoElement {
         crate::views::root(self, window, cx)
     }
 }
@@ -1541,9 +2025,24 @@ mod tests {
     #[test]
     fn a_saved_window_is_reused_only_while_its_screen_is_there() {
         let (one, two) = ([0., 0., 1920., 1080.], [1920., 0., 1920., 1080.]);
-        let on_second = WindowPlace { rect: [2000., 100., 1200., 800.], maximized: false };
+        let on_second = WindowPlace {
+            rect: [2000., 100., 1200., 800.],
+            maximized: false,
+        };
         assert!(window_fits(&on_second, &[one, two]));
-        assert!(!window_fits(&on_second, &[one]), "the second screen was unplugged");
-        assert!(!window_fits(&WindowPlace { rect: [10., 10., 200., 100.], maximized: false }, &[one]), "too small to use");
+        assert!(
+            !window_fits(&on_second, &[one]),
+            "the second screen was unplugged"
+        );
+        assert!(
+            !window_fits(
+                &WindowPlace {
+                    rect: [10., 10., 200., 100.],
+                    maximized: false
+                },
+                &[one]
+            ),
+            "too small to use"
+        );
     }
 }

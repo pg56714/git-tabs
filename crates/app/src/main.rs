@@ -9,8 +9,8 @@ mod format;
 mod graph;
 mod i18n;
 mod identity;
-mod model;
 mod modals;
+mod model;
 mod overlays;
 mod theme;
 mod tree;
@@ -31,7 +31,12 @@ fn main() {
     if let Some(code) = gitcore::rewrite::editor_main(&args) {
         std::process::exit(code);
     }
-    let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let flag = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
     if let Some(g) = flag("--git-global") {
         // SAFETY: set before any other thread starts.
         unsafe { std::env::set_var("GIT_CONFIG_GLOBAL", &g) };
@@ -40,12 +45,18 @@ fn main() {
         .or_else(|| std::env::var("GIT_TABS_CONFIG_DIR").ok())
         .map(Into::into)
         // Tauri's app_config_dir for identifier `app.git-tabs.desktop`: same folder, same settings.
-        .unwrap_or_else(|| dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("app.git-tabs.desktop"));
+        .unwrap_or_else(|| {
+            dirs::config_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .join("app.git-tabs.desktop")
+        });
 
     if let Some(repo) = flag("--check") {
         let repo = PathBuf::from(repo);
         let _ctx = gitcore::Ctx::new(dir);
-        match gitcore::ops::summary(&repo).and_then(|s| gitcore::ops::status(&repo).map(|st| (s, st))) {
+        match gitcore::ops::summary(&repo)
+            .and_then(|s| gitcore::ops::status(&repo).map(|st| (s, st)))
+        {
             Ok((s, st)) => {
                 println!("{} on {:?} +{} -{}", s.name, s.branch, s.ahead, s.behind);
                 for f in st {
@@ -60,16 +71,29 @@ fn main() {
         return;
     }
 
-    crate::debug::log("start", || format!("git-tabs {} on {}", env!("CARGO_PKG_VERSION"), std::env::consts::OS));
+    crate::debug::log("start", || {
+        format!(
+            "git-tabs {} on {}",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::OS
+        )
+    });
     let place = app::load_window(&dir);
     let ctx = Arc::new(gitcore::Ctx::new(dir));
-    gpui_kit::application().with_assets(ui::AppAssets).run(move |cx| {
-        gpui_kit::init(cx);
-        views::bind_keys(cx);
-        // The window draws its own title bar (the tab row lives in it), so the system's is off.
-        let options = WindowOptions { window_bounds: Some(app::initial_window(place, cx)), ..gpui_kit::component::TitleBar::window_options() };
-        gpui_kit::open_window(options, cx, move |window, cx| cx.new(|cx| app::GitTabs::new(ctx.clone(), window, cx)))
+    gpui_kit::application()
+        .with_assets(ui::AppAssets)
+        .run(move |cx| {
+            gpui_kit::init(cx);
+            views::bind_keys(cx);
+            // The window draws its own title bar (the tab row lives in it), so the system's is off.
+            let options = WindowOptions {
+                window_bounds: Some(app::initial_window(place, cx)),
+                ..gpui_kit::component::TitleBar::window_options()
+            };
+            gpui_kit::open_window(options, cx, move |window, cx| {
+                cx.new(|cx| app::GitTabs::new(ctx.clone(), window, cx))
+            })
             .expect("failed to open the window");
-        cx.activate(true);
-    });
+            cx.activate(true);
+        });
 }

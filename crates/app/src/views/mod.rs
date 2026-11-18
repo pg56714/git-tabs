@@ -13,8 +13,9 @@ mod tabs;
 mod toolbar;
 
 use gpui_kit::{
-    AppContext as _, AnyElement, Context, DragMoveEvent, InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AppContext as _, Context, DragMoveEvent, InteractiveElement as _, IntoElement,
+    KeyBinding, MouseButton, ParentElement as _, Render, StatefulInteractiveElement as _,
+    Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::*;
@@ -23,7 +24,11 @@ use crate::theme::Pal;
 use crate::ui::*;
 
 /// The shortcut modifier: Cmd on macOS, Ctrl elsewhere.
-const MOD: &str = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
+const MOD: &str = if cfg!(target_os = "macos") {
+    "cmd"
+} else {
+    "ctrl"
+};
 
 /// A shortcut with the platform modifier. Bindings need a `'static` string; these few are
 /// made once at startup.
@@ -97,34 +102,55 @@ pub fn splitter(p: &Pal, id: &'static str, kind: SplitKind, vertical: bool) -> i
         .items_center()
         .justify_center()
         .hover(move |s| s.bg(hot.opacity(0.25)))
-        .child(div().when(vertical, |d| d.w(px(1.)).h_full()).when(!vertical, |d| d.h(px(1.)).w_full()).bg(line))
+        .child(
+            div()
+                .when(vertical, |d| d.w(px(1.)).h_full())
+                .when(!vertical, |d| d.h(px(1.)).w_full())
+                .bg(line),
+        )
         .on_drag(SplitDrag(kind), |_, _, _, cx| cx.new(|_| Ghost))
 }
 
 /// Registers a container that turns a splitter drag into a new size for `kind`.
-pub fn on_split<E: gpui_kit::InteractiveElement>(e: E, kind: SplitKind, cx: &mut Context<GitTabs>) -> E {
-    e.on_drag_move::<SplitDrag>(cx.listener(move |this, ev: &DragMoveEvent<SplitDrag>, _, cx| {
-        if ev.drag(cx).0 != kind {
-            return;
-        }
-        let (px_pos, origin) = match kind {
-            SplitKind::HistTop => (f32::from(ev.event.position.y), f32::from(ev.bounds.origin.y)),
-            _ => (f32::from(ev.event.position.x), f32::from(ev.bounds.origin.x)),
-        };
-        let v = px_pos - origin;
-        let s = &mut this.sizes;
-        match kind {
-            SplitKind::Side => s.side_bar = v.clamp(150., 420.),
-            SplitKind::Files => s.files = v.clamp(180., 700.),
-            SplitKind::HistTop => s.hist_top = v.clamp(120., 900.),
-            SplitKind::HistFiles => s.hist_files = v.clamp(160., 700.),
-        }
-        this.sizes_dirty = true;
-        cx.notify();
-    }))
+pub fn on_split<E: gpui_kit::InteractiveElement>(
+    e: E,
+    kind: SplitKind,
+    cx: &mut Context<GitTabs>,
+) -> E {
+    e.on_drag_move::<SplitDrag>(
+        cx.listener(move |this, ev: &DragMoveEvent<SplitDrag>, _, cx| {
+            if ev.drag(cx).0 != kind {
+                return;
+            }
+            let (px_pos, origin) = match kind {
+                SplitKind::HistTop => (
+                    f32::from(ev.event.position.y),
+                    f32::from(ev.bounds.origin.y),
+                ),
+                _ => (
+                    f32::from(ev.event.position.x),
+                    f32::from(ev.bounds.origin.x),
+                ),
+            };
+            let v = px_pos - origin;
+            let s = &mut this.sizes;
+            match kind {
+                SplitKind::Side => s.side_bar = v.clamp(150., 420.),
+                SplitKind::Files => s.files = v.clamp(180., 700.),
+                SplitKind::HistTop => s.hist_top = v.clamp(120., 900.),
+                SplitKind::HistFiles => s.hist_files = v.clamp(160., 700.),
+            }
+            this.sizes_dirty = true;
+            cx.notify();
+        }),
+    )
 }
 
-pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) -> impl IntoElement {
+pub fn root(
+    this: &mut GitTabs,
+    window: &mut Window,
+    cx: &mut Context<GitTabs>,
+) -> impl IntoElement {
     let p = this.pal;
     this.window_size = window.viewport_size();
     if let Some(found) = this.pending_first_run.take() {
@@ -143,18 +169,40 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
                 .text_color(p.danger)
                 .child(div().child(err))
                 .child(div().flex_1())
-                .child(btn(&p, "retry", Bk::Normal, true, crate::i18n::t("重試")).on_click(cx.listener(|this, _, _, cx| this.refresh_active(cx))))
+                .child(
+                    btn(&p, "retry", Bk::Normal, true, crate::i18n::t("重試"))
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh_active(cx))),
+                )
                 .into_any_element(),
             Some((View::Changes, _)) => this.render_changes(window, cx),
             Some((View::History, _)) => this.render_history(window, cx),
             _ => this.render_reflog(window, cx),
         };
         let side_w = this.sizes.side_bar;
-        on_split(div().id("main").flex().flex_1().min_h_0().min_w_0(), SplitKind::Side, cx)
-            .child(div().flex_none().w(px(side_w)).h_full().child(this.render_sidebar(window, cx)))
-            .child(splitter(&p, "split-side", SplitKind::Side, true))
-            .child(div().flex_1().min_w_0().min_h_0().flex().flex_col().bg(p.panel).child(content))
-            .into_any_element()
+        on_split(
+            div().id("main").flex().flex_1().min_h_0().min_w_0(),
+            SplitKind::Side,
+            cx,
+        )
+        .child(
+            div()
+                .flex_none()
+                .w(px(side_w))
+                .h_full()
+                .child(this.render_sidebar(window, cx)),
+        )
+        .child(splitter(&p, "split-side", SplitKind::Side, true))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .bg(p.panel)
+                .child(content),
+        )
+        .into_any_element()
     } else {
         div()
             .flex_1()
@@ -164,11 +212,49 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
             .justify_center()
             .gap(px(10.))
             .bg(p.panel)
-            .child(div().size(px(72.)).rounded(px(16.)).bg(p.accent).flex().items_center().justify_center().text_color(gpui_kit::white()).text_size(px(34.)).child(icon(Ico::GitBranch, 36., gpui_kit::white())))
-            .child(div().text_size(px(22.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child("git-tabs"))
-            .child(muted(&p, crate::i18n::t("每個 repo 一個分頁。先加入你的 repo。")))
-            .child(btn(&p, "welcome-add", Bk::Primary, false, crate::i18n::t("＋ 加入 repo")).on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))))
-            .child(div().flex().items_center().gap_1().child(sub(&p, crate::i18n::t("之後可以用"))).child(kbd(&p, crate::ui::mod_name())).child(sub(&p, "+")).child(kbd(&p, "K")).child(sub(&p, crate::i18n::t("搜尋所有指令"))))
+            .child(
+                div()
+                    .size(px(72.))
+                    .rounded(px(16.))
+                    .bg(p.accent)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(gpui_kit::white())
+                    .text_size(px(34.))
+                    .child(icon(Ico::GitBranch, 36., gpui_kit::white())),
+            )
+            .child(
+                div()
+                    .text_size(px(22.))
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .child("git-tabs"),
+            )
+            .child(muted(
+                &p,
+                crate::i18n::t("每個 repo 一個分頁。先加入你的 repo。"),
+            ))
+            .child(
+                btn(
+                    &p,
+                    "welcome-add",
+                    Bk::Primary,
+                    false,
+                    crate::i18n::t("＋ 加入 repo"),
+                )
+                .on_click(cx.listener(|this, _, w, cx| this.open_add_repo(w, cx))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(sub(&p, crate::i18n::t("之後可以用")))
+                    .child(kbd(&p, crate::ui::mod_name()))
+                    .child(sub(&p, "+"))
+                    .child(kbd(&p, "K"))
+                    .child(sub(&p, crate::i18n::t("搜尋所有指令"))),
+            )
             .into_any_element()
     };
     div()
@@ -198,7 +284,9 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
         .on_action(cx.listener(|this, _: &Tab6, _, cx| this.switch_tab(5, cx)))
         .on_action(cx.listener(|this, _: &Tab7, _, cx| this.switch_tab(6, cx)))
         .on_action(cx.listener(|this, _: &Tab8, _, cx| this.switch_tab(7, cx)))
-        .on_action(cx.listener(|this, _: &Tab9, _, cx| this.switch_tab(this.repos.len().saturating_sub(1), cx)))
+        .on_action(cx.listener(|this, _: &Tab9, _, cx| {
+            this.switch_tab(this.repos.len().saturating_sub(1), cx)
+        }))
         .on_action(cx.listener(|this, _: &NextTab, _, cx| {
             let n = this.repos.len();
             if n > 0 {
@@ -222,14 +310,23 @@ pub fn root(this: &mut GitTabs, window: &mut Window, cx: &mut Context<GitTabs>) 
                 this.nav_focus.focus(w, cx);
             }
         }))
-        .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| {
-            if this.sizes_dirty {
-                this.sizes_dirty = false;
-                this.save_prefs();
-            }
-        }))
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|this, _, _, _| {
+                if this.sizes_dirty {
+                    this.sizes_dirty = false;
+                    this.save_prefs();
+                }
+            }),
+        )
         // The tab row is the title bar: it drags the window, and the window buttons sit at its right.
-        .child(gpui_kit::component::TitleBar::new().interactive_children().bg(p.bg).pl(px(6.)).child(this.render_tabs(window, cx)))
+        .child(
+            gpui_kit::component::TitleBar::new()
+                .interactive_children()
+                .bg(p.bg)
+                .pl(px(6.))
+                .child(this.render_tabs(window, cx)),
+        )
         .children(this.render_update_bar(cx))
         .when(has_repo, |d| d.child(this.render_toolbar(window, cx)))
         .child(body)

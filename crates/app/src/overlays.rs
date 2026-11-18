@@ -13,8 +13,24 @@ use crate::model::*;
 impl GitTabs {
     // ----- menus -----
 
-    pub fn open_menu(&mut self, pos: Point<Pixels>, items: Vec<MenuItem>, right: bool, cx: &mut Context<Self>) {
-        crate::debug::log("menu", || format!("open: {}", items.iter().filter(|i| !i.sep).map(|i| i.label.to_string()).collect::<Vec<_>>().join(" | ")));
+    pub fn open_menu(
+        &mut self,
+        pos: Point<Pixels>,
+        items: Vec<MenuItem>,
+        right: bool,
+        cx: &mut Context<Self>,
+    ) {
+        crate::debug::log("menu", || {
+            format!(
+                "open: {}",
+                items
+                    .iter()
+                    .filter(|i| !i.sep)
+                    .map(|i| i.label.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            )
+        });
         self.menu = Some(MenuState { pos, items, right });
         cx.notify();
     }
@@ -45,7 +61,13 @@ impl GitTabs {
     ) {
         self.menu = None;
         crate::debug::log("modal", || format!("confirm: {title}"));
-        self.modal = Some(Modal::Confirm(ConfirmModal { title: title.into(), body, ok: ok.into(), danger, on_ok: Rc::new(on_ok) }));
+        self.modal = Some(Modal::Confirm(ConfirmModal {
+            title: title.into(),
+            body,
+            ok: ok.into(),
+            danger,
+            on_ok: Rc::new(on_ok),
+        }));
         cx.notify();
     }
 
@@ -59,7 +81,12 @@ impl GitTabs {
     ) {
         self.menu = None;
         crate::debug::log("modal", || format!("choice: {title}"));
-        self.modal = Some(Modal::Choice(ChoiceModal { title: title.into(), body: body.into(), choices, on_pick: Rc::new(on_pick) }));
+        self.modal = Some(Modal::Choice(ChoiceModal {
+            title: title.into(),
+            body: body.into(),
+            choices,
+            on_pick: Rc::new(on_pick),
+        }));
         cx.notify();
     }
 
@@ -70,7 +97,8 @@ impl GitTabs {
         ok: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
-        on_ok: impl Fn(&mut GitTabs, HashMap<String, String>, &mut Window, &mut Context<GitTabs>) + 'static,
+        on_ok: impl Fn(&mut GitTabs, HashMap<String, String>, &mut Window, &mut Context<GitTabs>)
+        + 'static,
     ) {
         self.menu = None;
         let mut subs = Vec::new();
@@ -85,11 +113,15 @@ impl GitTabs {
                         s.set_value(val, window, cx);
                         s
                     });
-                    subs.push(cx.subscribe_in(&st, window, |this, _, ev: &InputEvent, window, cx| {
-                        if matches!(ev, InputEvent::PressEnter { .. }) {
-                            this.submit_prompt(window, cx);
-                        }
-                    }));
+                    subs.push(cx.subscribe_in(
+                        &st,
+                        window,
+                        |this, _, ev: &InputEvent, window, cx| {
+                            if matches!(ev, InputEvent::PressEnter { .. }) {
+                                this.submit_prompt(window, cx);
+                            }
+                        },
+                    ));
                     input = Some(st);
                 }
                 FieldKind::Textarea => {
@@ -103,25 +135,53 @@ impl GitTabs {
                 FieldKind::Checkbox => {}
             }
             let checked = spec.kind == FieldKind::Checkbox && spec.value == "1";
-            out.push(PromptField { spec, input, textarea, checked, err: None });
+            out.push(PromptField {
+                spec,
+                input,
+                textarea,
+                checked,
+                err: None,
+            });
         }
         if let Some(first) = out.iter().find_map(|f| f.input.clone()) {
             first.update(cx, |s, cx| s.focus(window, cx));
         }
         crate::debug::log("modal", || format!("prompt: {title}"));
-        self.modal = Some(Modal::Prompt(PromptModal { title: title.into(), ok: ok.into(), fields: out, on_ok: Rc::new(on_ok), _subs: subs }));
+        self.modal = Some(Modal::Prompt(PromptModal {
+            title: title.into(),
+            ok: ok.into(),
+            fields: out,
+            on_ok: Rc::new(on_ok),
+            _subs: subs,
+        }));
         cx.notify();
     }
 
     pub fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(Modal::Prompt(m)) = &mut self.modal else { return };
+        let Some(Modal::Prompt(m)) = &mut self.modal else {
+            return;
+        };
         let mut vals = HashMap::new();
         let mut bad = false;
         for f in m.fields.iter_mut() {
             let v = match f.spec.kind {
-                FieldKind::Text => f.input.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_default(),
-                FieldKind::Textarea => f.textarea.as_ref().map(|i| i.read(cx).value().to_string()).unwrap_or_default(),
-                FieldKind::Checkbox => if f.checked { "1".into() } else { String::new() },
+                FieldKind::Text => f
+                    .input
+                    .as_ref()
+                    .map(|i| i.read(cx).value().to_string())
+                    .unwrap_or_default(),
+                FieldKind::Textarea => f
+                    .textarea
+                    .as_ref()
+                    .map(|i| i.read(cx).value().to_string())
+                    .unwrap_or_default(),
+                FieldKind::Checkbox => {
+                    if f.checked {
+                        "1".into()
+                    } else {
+                        String::new()
+                    }
+                }
             };
             f.err = f.spec.check.and_then(|c| c(&v));
             bad |= f.err.is_some();
@@ -140,21 +200,34 @@ impl GitTabs {
 
     pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder(crate::i18n::t("輸入指令、repo、branch 或 commit（例如：push my-repo）")));
-        input.update(cx, |s, cx| s.focus(window, cx));
-        let sub = cx.subscribe_in(&input, window, |this, s, ev: &InputEvent, window, cx| match ev {
-            InputEvent::Change => {
-                let q = s.read(cx).value().to_string();
-                if let Some(p) = &mut this.palette {
-                    p.query = q;
-                    p.sel = 0;
-                }
-                cx.notify();
-            }
-            InputEvent::PressEnter { .. } => this.run_palette(window, cx),
-            _ => {}
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::i18n::t(
+                "輸入指令、repo、branch 或 commit（例如：push my-repo）",
+            ))
         });
-        self.palette = Some(Palette { input, sel: 0, query: String::new(), _sub: sub });
+        input.update(cx, |s, cx| s.focus(window, cx));
+        let sub = cx.subscribe_in(
+            &input,
+            window,
+            |this, s, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => {
+                    let q = s.read(cx).value().to_string();
+                    if let Some(p) = &mut this.palette {
+                        p.query = q;
+                        p.sel = 0;
+                    }
+                    cx.notify();
+                }
+                InputEvent::PressEnter { .. } => this.run_palette(window, cx),
+                _ => {}
+            },
+        );
+        self.palette = Some(Palette {
+            input,
+            sel: 0,
+            query: String::new(),
+            _sub: sub,
+        });
         cx.notify();
     }
 
@@ -174,7 +247,9 @@ impl GitTabs {
     }
 
     pub fn run_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(sel) = self.palette.as_ref().map(|p| p.sel) else { return };
+        let Some(sel) = self.palette.as_ref().map(|p| p.sel) else {
+            return;
+        };
         let item = self.palette_shown().into_iter().nth(sel);
         self.close_palette(window, cx);
         if let Some(it) = item {
@@ -184,22 +259,42 @@ impl GitTabs {
     }
 
     pub fn palette_shown(&self) -> Vec<PaletteItem> {
-        let q = self.palette.as_ref().map(|p| p.query.clone()).unwrap_or_default();
+        let q = self
+            .palette
+            .as_ref()
+            .map(|p| p.query.clone())
+            .unwrap_or_default();
         let items = self.palette_items();
         if q.trim().is_empty() {
             items.into_iter().take(60).collect()
         } else {
-            items.into_iter().filter(|x| fuzzy(&q, &format!("{} {}", x.title, x.group))).take(60).collect()
+            items
+                .into_iter()
+                .filter(|x| fuzzy(&q, &format!("{} {}", x.title, x.group)))
+                .take(60)
+                .collect()
         }
     }
 
     fn palette_items(&self) -> Vec<PaletteItem> {
-        fn item(title: impl Into<String>, group: impl Into<String>, run: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static) -> PaletteItem {
-            PaletteItem { title: title.into(), group: group.into(), run: Rc::new(run) }
+        fn item(
+            title: impl Into<String>,
+            group: impl Into<String>,
+            run: impl Fn(&mut GitTabs, &mut Window, &mut Context<GitTabs>) + 'static,
+        ) -> PaletteItem {
+            PaletteItem {
+                title: title.into(),
+                group: group.into(),
+                run: Rc::new(run),
+            }
         }
         let mut v: Vec<PaletteItem> = Vec::new();
         for (i, r) in self.repos.iter().enumerate() {
-            v.push(item(crate::i18n::tr("切換到 {}", &[], &[(r.name).to_string()]), "repo", move |t, _, cx| t.switch_tab(i, cx)));
+            v.push(item(
+                crate::i18n::tr("切換到 {}", &[], &[(r.name).to_string()]),
+                "repo",
+                move |t, _, cx| t.switch_tab(i, cx),
+            ));
         }
         if let Some(r) = self.repo() {
             let (p, n) = (r.path.clone(), r.name.clone());
@@ -214,49 +309,130 @@ impl GitTabs {
             }
             each!("Sync", n.clone(), |t, path, cx| t.sync_repo(&path, cx));
             each!("Fetch", n.clone(), |t, path, cx| t.fetch_repo(&path, cx));
-            each!("Pull", n.clone(), |t, path, cx| t.pull_repo(&path, "ff", cx));
-            each!("Pull --rebase", n.clone(), |t, path, cx| t.pull_repo(&path, "rebase", cx));
-            each!("Push", n.clone(), |t, path, cx| t.push_repo(&path, false, cx));
+            each!("Pull", n.clone(), |t, path, cx| t
+                .pull_repo(&path, "ff", cx));
+            each!("Pull --rebase", n.clone(), |t, path, cx| t
+                .pull_repo(&path, "rebase", cx));
+            each!("Push", n.clone(), |t, path, cx| t
+                .push_repo(&path, false, cx));
             v.push(item("Stash", n.clone(), |t, w, cx| t.stash_push(w, cx)));
-            v.push(item(crate::i18n::t("新增 branch"), n.clone(), |t, w, cx| t.new_branch(None, w, cx)));
-            v.push(item(crate::i18n::t("看 changes"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Changes, cx)));
-            v.push(item(crate::i18n::t("看 history"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::History, cx)));
-            v.push(item(crate::i18n::t("檢查更新"), "git-tabs", |t, _, cx| t.check_update(true, cx)));
-            v.push(item(crate::i18n::t("看 Reflog"), crate::i18n::t("檢視"), |t, _, cx| t.set_view(View::Reflog, cx)));
+            v.push(item(
+                crate::i18n::t("新增 branch"),
+                n.clone(),
+                |t, w, cx| t.new_branch(None, w, cx),
+            ));
+            v.push(item(
+                crate::i18n::t("看 changes"),
+                crate::i18n::t("檢視"),
+                |t, _, cx| t.set_view(View::Changes, cx),
+            ));
+            v.push(item(
+                crate::i18n::t("看 history"),
+                crate::i18n::t("檢視"),
+                |t, _, cx| t.set_view(View::History, cx),
+            ));
+            v.push(item(
+                crate::i18n::t("檢查更新"),
+                "git-tabs",
+                |t, _, cx| t.check_update(true, cx),
+            ));
+            v.push(item(
+                crate::i18n::t("看 Reflog"),
+                crate::i18n::t("檢視"),
+                |t, _, cx| t.set_view(View::Reflog, cx),
+            ));
             let ps = p.display().to_string();
             let ps2 = ps.clone();
-            v.push(item(crate::i18n::t("在檔案總管開啟"), n.clone(), move |t, _, cx| t.open_folder(ps.clone(), cx)));
-            v.push(item(crate::i18n::t("開終端機"), n.clone(), move |t, _, cx| t.open_terminal(ps2.clone(), cx)));
-            v.push(item(crate::i18n::t("重新整理"), n.clone(), |t, _, cx| t.refresh_active(cx)));
-            for b in r.refs.iter().flat_map(|x| x.refs.branches.iter()).filter(|b| !b.current) {
+            v.push(item(
+                crate::i18n::t("在檔案總管開啟"),
+                n.clone(),
+                move |t, _, cx| t.open_folder(ps.clone(), cx),
+            ));
+            v.push(item(
+                crate::i18n::t("開終端機"),
+                n.clone(),
+                move |t, _, cx| t.open_terminal(ps2.clone(), cx),
+            ));
+            v.push(item(
+                crate::i18n::t("重新整理"),
+                n.clone(),
+                |t, _, cx| t.refresh_active(cx),
+            ));
+            for b in r
+                .refs
+                .iter()
+                .flat_map(|x| x.refs.branches.iter())
+                .filter(|b| !b.current)
+            {
                 let (path, name) = (p.clone(), b.name.clone());
-                v.push(item(crate::i18n::tr("切換 branch：{}", &[], &[(b.name).to_string()]), n.clone(), move |t, _, cx| t.switch_branch(&path, &name, cx)));
+                v.push(item(
+                    crate::i18n::tr("切換 branch：{}", &[], &[(b.name).to_string()]),
+                    n.clone(),
+                    move |t, _, cx| t.switch_branch(&path, &name, cx),
+                ));
             }
             if !self.cfg.identities.is_empty() {
                 for id in &self.cfg.identities {
                     let key = id.id.clone();
-                    v.push(item(crate::i18n::tr("Identity：{} {}", &[], &[(id.name).to_string(), (id.account).to_string()]), n.clone(), move |t, _, cx| t.set_pin(key.clone(), cx)));
+                    v.push(item(
+                        crate::i18n::tr(
+                            "Identity：{} {}",
+                            &[],
+                            &[(id.name).to_string(), (id.account).to_string()],
+                        ),
+                        n.clone(),
+                        move |t, _, cx| t.set_pin(key.clone(), cx),
+                    ));
                 }
             }
             for (i, x) in self.repos.iter().enumerate() {
-                let up = x.summary.as_ref().filter(|s| s.ahead > 0).map(|s| format!(" (↑{})", s.ahead)).unwrap_or_default();
+                let up = x
+                    .summary
+                    .as_ref()
+                    .filter(|s| s.ahead > 0)
+                    .map(|s| format!(" (↑{})", s.ahead))
+                    .unwrap_or_default();
                 let path = x.path.clone();
-                v.push(item(format!("Push {}{up}", x.name), crate::i18n::t("Remote"), move |t, _, cx| {
-                    t.switch_tab(i, cx);
-                    t.push_repo(&path, false, cx);
-                }));
+                v.push(item(
+                    format!("Push {}{up}", x.name),
+                    crate::i18n::t("Remote"),
+                    move |t, _, cx| {
+                        t.switch_tab(i, cx);
+                        t.push_repo(&path, false, cx);
+                    },
+                ));
             }
             // Commits are searchable too: "fix depth" jumps to that commit.
             for c in r.commits.iter().take(400) {
                 let sha = c.sha.clone();
-                v.push(item(c.subject.clone(), short(&c.sha), move |t, _, cx| t.show_commit(sha.clone(), cx)));
+                v.push(item(c.subject.clone(), short(&c.sha), move |t, _, cx| {
+                    t.show_commit(sha.clone(), cx)
+                }));
             }
         }
-        v.push(item(crate::i18n::t("全部 repo 一起 Fetch"), crate::i18n::t("Remote"), |t, _, cx| t.fetch_all(false, cx)));
-        v.push(item(crate::i18n::t("加入 repo"), "repo", |t, w, cx| t.open_add_repo(w, cx)));
-        v.push(item(crate::i18n::t("開啟設定"), crate::i18n::t("設定"), |t, w, cx| t.open_settings(crate::model::SettingsTab::General, None, w, cx)));
-        v.push(item(crate::i18n::t("Identity 與 SSH key"), crate::i18n::t("設定"), |t, w, cx| t.open_settings(crate::model::SettingsTab::Ids, None, w, cx)));
-        v.push(item(crate::i18n::t("切換深淺色"), crate::i18n::t("外觀"), |t, w, cx| t.cycle_theme(w, cx)));
+        v.push(item(
+            crate::i18n::t("全部 repo 一起 Fetch"),
+            crate::i18n::t("Remote"),
+            |t, _, cx| t.fetch_all(false, cx),
+        ));
+        v.push(item(crate::i18n::t("加入 repo"), "repo", |t, w, cx| {
+            t.open_add_repo(w, cx)
+        }));
+        v.push(item(
+            crate::i18n::t("開啟設定"),
+            crate::i18n::t("設定"),
+            |t, w, cx| t.open_settings(crate::model::SettingsTab::General, None, w, cx),
+        ));
+        v.push(item(
+            crate::i18n::t("Identity 與 SSH key"),
+            crate::i18n::t("設定"),
+            |t, w, cx| t.open_settings(crate::model::SettingsTab::Ids, None, w, cx),
+        ));
+        v.push(item(
+            crate::i18n::t("切換深淺色"),
+            crate::i18n::t("外觀"),
+            |t, w, cx| t.cycle_theme(w, cx),
+        ));
         v
     }
 

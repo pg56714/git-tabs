@@ -78,7 +78,10 @@ fn file(dir: &Path) -> PathBuf {
 }
 
 pub fn load(dir: &Path) -> AppConfig {
-    std::fs::read_to_string(file(dir)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    std::fs::read_to_string(file(dir))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 pub fn save(dir: &Path, cfg: &AppConfig) -> Result<(), String> {
@@ -105,10 +108,23 @@ mod tests {
     #[test]
     fn saving_settings_keeps_the_managed_lines() {
         let dir = tempfile::tempdir().unwrap();
-        let ours = vec![Managed { key: "includeIf.gitdir/i:D:/work/.path".into(), value: "C:/cfg/identities/a.gitconfig".into() }];
-        save(dir.path(), &AppConfig { managed: ours.clone(), ..Default::default() }).unwrap();
+        let ours = vec![Managed {
+            key: "includeIf.gitdir/i:D:/work/.path".into(),
+            value: "C:/cfg/identities/a.gitconfig".into(),
+        }];
+        save(
+            dir.path(),
+            &AppConfig {
+                managed: ours.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         // what the app loaded before the identities were applied
-        let stale = AppConfig { theme: "dark".into(), ..Default::default() };
+        let stale = AppConfig {
+            theme: "dark".into(),
+            ..Default::default()
+        };
         save_settings(dir.path(), &stale).unwrap();
         let now = load(dir.path());
         assert_eq!(now.theme, "dark");

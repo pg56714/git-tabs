@@ -20,7 +20,12 @@ pub fn build(diff: &FileDiff, selected: &HashSet<(usize, usize)>, mode: Mode) ->
     let mut body = String::new();
     let mut delta: i64 = 0;
     for (hi, h) in diff.hunks.iter().enumerate() {
-        if !h.lines.iter().enumerate().any(|(li, l)| l.t != ' ' && selected.contains(&(hi, li))) {
+        if !h
+            .lines
+            .iter()
+            .enumerate()
+            .any(|(li, l)| l.t != ' ' && selected.contains(&(hi, li)))
+        {
             continue;
         }
         let (text, old_n, new_n) = hunk_body(h, hi, selected, mode);
@@ -29,19 +34,40 @@ pub fn build(diff: &FileDiff, selected: &HashSet<(usize, usize)>, mode: Mode) ->
         if new_n == 0 {
             new_start -= 1;
         }
-        body.push_str(&format!("@@ -{},{} +{},{} @@\n", h.old_start, old_n, new_start.max(0), new_n));
+        body.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            h.old_start,
+            old_n,
+            new_start.max(0),
+            new_n
+        ));
         body.push_str(&text);
         delta += new_n as i64 - old_n as i64;
     }
     if body.is_empty() {
         return None;
     }
-    let from = if diff.new_file { "/dev/null".to_string() } else { format!("a/{old}") };
-    let to = if diff.deleted { "/dev/null".to_string() } else { format!("b/{path}") };
-    Some(format!("diff --git a/{old} b/{path}\n--- {from}\n+++ {to}\n{body}"))
+    let from = if diff.new_file {
+        "/dev/null".to_string()
+    } else {
+        format!("a/{old}")
+    };
+    let to = if diff.deleted {
+        "/dev/null".to_string()
+    } else {
+        format!("b/{path}")
+    };
+    Some(format!(
+        "diff --git a/{old} b/{path}\n--- {from}\n+++ {to}\n{body}"
+    ))
 }
 
-fn hunk_body(h: &Hunk, hi: usize, selected: &HashSet<(usize, usize)>, mode: Mode) -> (String, u32, u32) {
+fn hunk_body(
+    h: &Hunk,
+    hi: usize,
+    selected: &HashSet<(usize, usize)>,
+    mode: Mode,
+) -> (String, u32, u32) {
     let mut s = String::new();
     let (mut old_n, mut new_n) = (0u32, 0u32);
     for (li, l) in h.lines.iter().enumerate() {

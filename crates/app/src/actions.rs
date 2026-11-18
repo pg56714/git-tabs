@@ -4,7 +4,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-
 use gitcore::ops::{self, LineAction};
 use gitcore::rewrite::Rewrite;
 use gpui_kit::{ClipboardItem, Context, Window};
@@ -19,25 +18,36 @@ pub fn branch_name_check(v: &str) -> Option<String> {
     if t.is_empty() {
         return Some(crate::i18n::t("輸入 branch 名稱").into());
     }
-    let bad = t.chars().any(|c| c.is_whitespace() || "~^:?*[\\".contains(c)) || t.contains("..") || t.starts_with('-') || t.ends_with('/') || t.ends_with(".lock");
+    let bad = t
+        .chars()
+        .any(|c| c.is_whitespace() || "~^:?*[\\".contains(c))
+        || t.contains("..")
+        || t.starts_with('-')
+        || t.ends_with('/')
+        || t.ends_with(".lock");
     bad.then(|| crate::i18n::t("Branch 名稱不能有空白或 ~ ^ : ? * [ \\ 這些字元").to_string())
 }
 
 fn remote_name_check(v: &str) -> Option<String> {
     let t = v.trim();
-    (t.is_empty() || t.chars().any(|c| c.is_whitespace() || c == '/')).then(|| crate::i18n::t("輸入 remote 名稱（不能有空白或斜線）").to_string())
+    (t.is_empty() || t.chars().any(|c| c.is_whitespace() || c == '/'))
+        .then(|| crate::i18n::t("輸入 remote 名稱（不能有空白或斜線）").to_string())
 }
 
 fn url_check(v: &str) -> Option<String> {
-    (v.trim().is_empty() || v.trim().chars().any(char::is_whitespace)).then(|| crate::i18n::t("輸入網址").to_string())
+    (v.trim().is_empty() || v.trim().chars().any(char::is_whitespace))
+        .then(|| crate::i18n::t("輸入網址").to_string())
 }
 
 fn message_check(v: &str) -> Option<String> {
-    v.trim().is_empty().then(|| crate::i18n::t("輸入 commit 訊息").to_string())
+    v.trim()
+        .is_empty()
+        .then(|| crate::i18n::t("輸入 commit 訊息").to_string())
 }
 
 fn tag_name_check(v: &str) -> Option<String> {
-    (v.trim().is_empty() || v.trim().chars().any(char::is_whitespace)).then(|| crate::i18n::t("輸入 tag 名稱（不能有空白）").to_string())
+    (v.trim().is_empty() || v.trim().chars().any(char::is_whitespace))
+        .then(|| crate::i18n::t("輸入 tag 名稱（不能有空白）").to_string())
 }
 
 fn clean(e: &str) -> String {
@@ -60,46 +70,84 @@ impl GitTabs {
         then: impl FnOnce(&mut GitTabs, &Result<String, String>, &mut Context<GitTabs>) + 'static,
         cx: &mut Context<Self>,
     ) {
-        let Some(r) = self.repo_by_path(path) else { return };
+        let Some(r) = self.repo_by_path(path) else {
+            return;
+        };
         r.busy = Some(label.to_string());
         let (gate, ticket) = self.take_ticket();
         let p = path.to_path_buf();
         let p2 = p.clone();
-        self.work(cx, move || gated(&gate, ticket, || job(&p2)), move |this, res, cx| {
-            if let Some(r) = this.repo_by_path(&p) {
-                r.busy = None;
-            }
-            this.pull_log();
-            match &res {
-                Ok(_) if !quiet => this.ok(ok_msg.unwrap_or_else(|| crate::i18n::tr("{label}完成", &[("label", (label).to_string())], &[])), cx),
-                _ => {}
-            }
-            then(this, &res, cx);
-            if let Err(e) = res {
-                let e = clean(&e);
-                // A merge/rebase/cherry-pick that stops on conflicts isn't an error to dismiss: go resolve them.
-                let hook_path = p.clone();
-                this.refresh_then(&p, cx, move |this, cx| {
-                    let p = hook_path;
-                    let Some(r) = this.repo_by_path(&p) else { return };
-                    let conflicts: Vec<String> = r.status.iter().filter(|f| f.conflicted).map(|f| f.path.clone()).collect();
-                    if r.summary.as_ref().is_some_and(|s| s.state.is_some()) && !conflicts.is_empty() {
-                        let n = conflicts.len();
-                        let was = r.view;
-                        this.toast(crate::i18n::tr("{label}有 {n} 個 conflict 要解決", &[("label", (label).to_string()), ("n", (n).to_string())], &[]), ToastKind::Info, None, cx);
-                        if was != View::Changes {
-                            this.set_view(View::Changes, cx);
+        self.work(
+            cx,
+            move || gated(&gate, ticket, || job(&p2)),
+            move |this, res, cx| {
+                if let Some(r) = this.repo_by_path(&p) {
+                    r.busy = None;
+                }
+                this.pull_log();
+                match &res {
+                    Ok(_) if !quiet => this.ok(
+                        ok_msg.unwrap_or_else(|| {
+                            crate::i18n::tr("{label}完成", &[("label", (label).to_string())], &[])
+                        }),
+                        cx,
+                    ),
+                    _ => {}
+                }
+                then(this, &res, cx);
+                if let Err(e) = res {
+                    let e = clean(&e);
+                    // A merge/rebase/cherry-pick that stops on conflicts isn't an error to dismiss: go resolve them.
+                    let hook_path = p.clone();
+                    this.refresh_then(&p, cx, move |this, cx| {
+                        let p = hook_path;
+                        let Some(r) = this.repo_by_path(&p) else {
+                            return;
+                        };
+                        let conflicts: Vec<String> = r
+                            .status
+                            .iter()
+                            .filter(|f| f.conflicted)
+                            .map(|f| f.path.clone())
+                            .collect();
+                        if r.summary.as_ref().is_some_and(|s| s.state.is_some())
+                            && !conflicts.is_empty()
+                        {
+                            let n = conflicts.len();
+                            let was = r.view;
+                            this.toast(
+                                crate::i18n::tr(
+                                    "{label}有 {n} 個 conflict 要解決",
+                                    &[("label", (label).to_string()), ("n", (n).to_string())],
+                                    &[],
+                                ),
+                                ToastKind::Info,
+                                None,
+                                cx,
+                            );
+                            if was != View::Changes {
+                                this.set_view(View::Changes, cx);
+                            }
+                            this.select(ListKind::U, conflicts[0].clone(), cx);
+                        } else if !matches!(this.modal, Some(Modal::Choice(_))) {
+                            this.toast(
+                                crate::i18n::tr(
+                                    "{label}失敗",
+                                    &[("label", (label).to_string())],
+                                    &[],
+                                ),
+                                ToastKind::Err,
+                                Some(e),
+                                cx,
+                            );
                         }
-                        this.select(ListKind::U, conflicts[0].clone(), cx);
-                    } else if !matches!(this.modal, Some(Modal::Choice(_))) {
-                        this.toast(crate::i18n::tr("{label}失敗", &[("label", (label).to_string())], &[]), ToastKind::Err, Some(e), cx);
-                    }
-                });
-            } else {
-                this.refresh(&p, cx);
-            }
-            cx.notify();
-        });
+                    });
+                } else {
+                    this.refresh(&p, cx);
+                }
+                cx.notify();
+            },
+        );
         cx.notify();
     }
 
@@ -114,17 +162,35 @@ impl GitTabs {
         self.op_with(path, label, false, ok_msg, job, |_, _, _| {}, cx);
     }
 
-    pub fn simple_op(&mut self, path: &Path, op: &'static str, arg: String, label: &'static str, ok: Option<String>, cx: &mut Context<Self>) {
+    pub fn simple_op(
+        &mut self,
+        path: &Path,
+        op: &'static str,
+        arg: String,
+        label: &'static str,
+        ok: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.op(path, label, ok, move |repo| ops::simple(repo, op, &arg), cx);
     }
 
-    fn dispatch_bg(&mut self, cmd: &'static str, args: serde_json::Value, fail: &'static str, cx: &mut Context<Self>) {
+    fn dispatch_bg(
+        &mut self,
+        cmd: &'static str,
+        args: serde_json::Value,
+        fail: &'static str,
+        cx: &mut Context<Self>,
+    ) {
         let ctx = self.ctx.clone();
-        self.work(cx, move || gitcore::dispatch(&ctx, cmd, args), move |this, res, cx| {
-            if let Err(e) = res {
-                this.toast(fail, ToastKind::Err, Some(clean(&e)), cx);
-            }
-        });
+        self.work(
+            cx,
+            move || gitcore::dispatch(&ctx, cmd, args),
+            move |this, res, cx| {
+                if let Err(e) = res {
+                    this.toast(fail, ToastKind::Err, Some(clean(&e)), cx);
+                }
+            },
+        );
     }
 
     // ----- stage / unstage / discard -----
@@ -135,17 +201,30 @@ impl GitTabs {
         if sel.list != from || !moved.contains(&sel.path) {
             return;
         }
-        let list: Vec<Sel> = Self::ordered_files(r).into_iter().filter(|f| f.list == from).collect();
+        let list: Vec<Sel> = Self::ordered_files(r)
+            .into_iter()
+            .filter(|f| f.list == from)
+            .collect();
         let i = list.iter().position(|f| f.path == sel.path).unwrap_or(0);
-        let next = list.iter().skip(i + 1).find(|f| !moved.contains(&f.path)).or_else(|| list[..i].iter().rev().find(|f| !moved.contains(&f.path))).cloned();
+        let next = list
+            .iter()
+            .skip(i + 1)
+            .find(|f| !moved.contains(&f.path))
+            .or_else(|| list[..i].iter().rev().find(|f| !moved.contains(&f.path)))
+            .cloned();
         r.sel = Some(match next {
             Some(n) => n,
-            None => Sel { list: to, path: sel.path },
+            None => Sel {
+                list: to,
+                path: sel.path,
+            },
         });
     }
 
     pub fn stage_files(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         if paths.is_empty() {
             return;
         }
@@ -177,7 +256,9 @@ impl GitTabs {
     }
 
     pub fn unstage_files(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         if paths.is_empty() {
             return;
         }
@@ -214,7 +295,12 @@ impl GitTabs {
 
     pub fn stage_all(&mut self, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let paths: Vec<String> = r.unstaged().iter().filter(|f| !f.conflicted).map(|f| f.path.clone()).collect();
+        let paths: Vec<String> = r
+            .unstaged()
+            .iter()
+            .filter(|f| !f.conflicted)
+            .map(|f| f.path.clone())
+            .collect();
         self.stage_files(paths, cx);
     }
 
@@ -229,7 +315,9 @@ impl GitTabs {
         if self.stored_sel.is_some() && self.apply_selection(false, cx) {
             return;
         }
-        let Some(sel) = self.repo().and_then(|r| r.sel.clone()) else { return };
+        let Some(sel) = self.repo().and_then(|r| r.sel.clone()) else {
+            return;
+        };
         match sel.list {
             ListKind::U => self.stage_files(vec![sel.path], cx),
             ListKind::S => self.unstage_files(vec![sel.path], cx),
@@ -243,23 +331,68 @@ impl GitTabs {
             return;
         }
         let repo = r.path.clone();
-        let untracked = paths.iter().filter(|p| r.status.iter().any(|s| &s.path == *p && s.untracked)).count();
-        let what = if paths.len() == 1 { crate::i18n::tr("`{}` 的修改", &[], &[(paths[0]).to_string()]) } else { crate::i18n::tr("{} 個檔案的修改", &[], &[(paths.len()).to_string()]) };
-        let extra = if untracked > 0 { crate::i18n::tr("\n其中 {untracked} 個是新檔案，會直接**刪除**。", &[("untracked", (untracked).to_string())], &[]) } else { String::new() };
-        self.confirm(crate::i18n::t("Discard 修改？"), crate::i18n::tr("{what}會被丟掉，**無法復原**。{extra}", &[("what", (what).to_string()), ("extra", (extra).to_string())], &[]), crate::i18n::t("Discard"), true, cx, move |this, _, cx| {
-            let paths = paths.clone();
-            this.op(&repo, crate::i18n::t("Discard"), Some(crate::i18n::t("已 Discard").into()), move |r| ops::discard(r, &paths).map(|_| String::new()), cx);
-        });
+        let untracked = paths
+            .iter()
+            .filter(|p| r.status.iter().any(|s| &s.path == *p && s.untracked))
+            .count();
+        let what = if paths.len() == 1 {
+            crate::i18n::tr("`{}` 的修改", &[], &[(paths[0]).to_string()])
+        } else {
+            crate::i18n::tr("{} 個檔案的修改", &[], &[(paths.len()).to_string()])
+        };
+        let extra = if untracked > 0 {
+            crate::i18n::tr(
+                "\n其中 {untracked} 個是新檔案，會直接**刪除**。",
+                &[("untracked", (untracked).to_string())],
+                &[],
+            )
+        } else {
+            String::new()
+        };
+        self.confirm(
+            crate::i18n::t("Discard 修改？"),
+            crate::i18n::tr(
+                "{what}會被丟掉，**無法復原**。{extra}",
+                &[("what", (what).to_string()), ("extra", (extra).to_string())],
+                &[],
+            ),
+            crate::i18n::t("Discard"),
+            true,
+            cx,
+            move |this, _, cx| {
+                let paths = paths.clone();
+                this.op(
+                    &repo,
+                    crate::i18n::t("Discard"),
+                    Some(crate::i18n::t("已 Discard").into()),
+                    move |r| ops::discard(r, &paths).map(|_| String::new()),
+                    cx,
+                );
+            },
+        );
     }
 
     /// Applies the lines picked in the diff view. `discard` asks first.
     pub fn apply_selection(&mut self, discard: bool, cx: &mut Context<Self>) -> bool {
         let Some(r) = self.repo() else { return false };
-        let (Some(sel), Some(fd)) = (r.sel.clone(), r.diff.clone()) else { return false };
-        let Some(range) = self.stored_sel.clone() else { return false };
-        let pairs = crate::diffmap::selected_pairs(&fd, (range.side(), range.start()), (range.end_side(), range.end()));
+        let (Some(sel), Some(fd)) = (r.sel.clone(), r.diff.clone()) else {
+            return false;
+        };
+        let Some(range) = self.stored_sel.clone() else {
+            return false;
+        };
+        let pairs = crate::diffmap::selected_pairs(
+            &fd,
+            (range.side(), range.start()),
+            (range.end_side(), range.end()),
+        );
         if pairs.is_empty() {
-            self.toast(crate::i18n::t("選取的範圍沒有異動的行"), ToastKind::Info, None, cx);
+            self.toast(
+                crate::i18n::t("選取的範圍沒有異動的行"),
+                ToastKind::Info,
+                None,
+                cx,
+            );
             return false;
         }
         let action = if discard {
@@ -275,14 +408,25 @@ impl GitTabs {
 
     pub fn apply_hunk(&mut self, hunk: usize, action: LineAction, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (Some(sel), Some(fd)) = (r.sel.clone(), r.diff.as_ref()) else { return };
+        let (Some(sel), Some(fd)) = (r.sel.clone(), r.diff.as_ref()) else {
+            return;
+        };
         let pairs = crate::diffmap::hunk_pairs(fd, hunk);
         let shown = fd.fingerprint();
         self.apply_lines(sel.path, action, pairs, shown, cx);
     }
 
-    pub fn apply_lines(&mut self, file: String, action: LineAction, pairs: Vec<(usize, usize)>, shown: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+    pub fn apply_lines(
+        &mut self,
+        file: String,
+        action: LineAction,
+        pairs: Vec<(usize, usize)>,
+        shown: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = self.active_path() else {
+            return;
+        };
         if pairs.is_empty() {
             return;
         }
@@ -294,13 +438,33 @@ impl GitTabs {
                 LineAction::Discard => crate::i18n::t("Discard 選取的行"),
             };
             let (p, f, pr, sh) = (path.clone(), file.clone(), pairs.clone(), shown.clone());
-            this.quick(&p, label, |_| {}, move |repo| ops::apply_lines(repo, &f, action, &pr, &sh).map(|_| String::new()), cx);
+            this.quick(
+                &p,
+                label,
+                |_| {},
+                move |repo| ops::apply_lines(repo, &f, action, &pr, &sh).map(|_| String::new()),
+                cx,
+            );
             this.stored_sel = None;
             this.diff.update(cx, |d, cx| d.set_selected_lines(None, cx));
         };
         if action == LineAction::Discard {
-            let file = self.repo().and_then(|r| r.sel.as_ref().map(|s| s.path.clone())).unwrap_or_default();
-            self.confirm(crate::i18n::t("Discard 選取的行？"), crate::i18n::tr("`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。", &[("file", (file).to_string()), ("n", (n).to_string())], &[]), crate::i18n::t("Discard"), true, cx, move |this, _, cx| run(this, cx));
+            let file = self
+                .repo()
+                .and_then(|r| r.sel.as_ref().map(|s| s.path.clone()))
+                .unwrap_or_default();
+            self.confirm(
+                crate::i18n::t("Discard 選取的行？"),
+                crate::i18n::tr(
+                    "`{file}` 選取的 {n} 行修改會被丟掉，**無法復原**。",
+                    &[("file", (file).to_string()), ("n", (n).to_string())],
+                    &[],
+                ),
+                crate::i18n::t("Discard"),
+                true,
+                cx,
+                move |this, _, cx| run(this, cx),
+            );
         } else {
             run(self, cx);
         }
@@ -329,7 +493,11 @@ impl GitTabs {
             cx.notify();
             return;
         }
-        let msg = if desc.is_empty() { subject } else { format!("{subject}\n\n{desc}") };
+        let msg = if desc.is_empty() {
+            subject
+        } else {
+            format!("{subject}\n\n{desc}")
+        };
         let amend = self.amend;
         let repo = r.path.clone();
         let who = self.identity_of(r);
@@ -347,7 +515,19 @@ impl GitTabs {
                 move |this, res, cx| {
                     this.committing = false;
                     if res.is_ok() {
-                        this.ok(crate::i18n::tr("{}：{subj}", &[("subj", (subj).to_string())], &[(if amend { crate::i18n::t("已 amend") } else { crate::i18n::t("已 commit") }).to_string()]), cx);
+                        this.ok(
+                            crate::i18n::tr(
+                                "{}：{subj}",
+                                &[("subj", (subj).to_string())],
+                                &[(if amend {
+                                    crate::i18n::t("已 amend")
+                                } else {
+                                    crate::i18n::t("已 commit")
+                                })
+                                .to_string()],
+                            ),
+                            cx,
+                        );
                         let (subject, desc) = (this.subject.clone(), this.desc.clone());
                         let _ = handle.update(cx, |_, window, cx| {
                             subject.update(cx, |s, cx| s.set_value("", window, cx));
@@ -367,17 +547,44 @@ impl GitTabs {
             // What git would write as the author here: the global config, as nothing in the repo overrides it.
             let cfg_get = |k: &str| {
                 let o = gitcore::runner::run(Some(&r.path), &["config", k], None, false);
-                if o.ok() { o.stdout.trim().to_string() } else { String::new() }
+                if o.ok() {
+                    o.stdout.trim().to_string()
+                } else {
+                    String::new()
+                }
             };
             let (name, email) = (cfg_get("user.name"), cfg_get("user.email"));
-            let who_txt = if name.is_empty() && email.is_empty() { crate::i18n::t("（git 沒有設定名稱和 email）").to_string() } else { format!("{name} <{email}>") };
-            let body = crate::i18n::tr("**{}**（{}）還沒選 identity，會用 git 的全域設定 commit：
+            let who_txt = if name.is_empty() && email.is_empty() {
+                crate::i18n::t("（git 沒有設定名稱和 email）").to_string()
+            } else {
+                format!("{name} <{email}>")
+            };
+            let body = crate::i18n::tr(
+                "**{}**（{}）還沒選 identity，會用 git 的全域設定 commit：
 
 **{}**
 
-可以點工具列的 identity 按鈕把它指定給某個 identity。", &[], &[(r.name).to_string(), (r.summary.as_ref().and_then(|s| s.remote_url.clone()).unwrap_or_else(|| crate::i18n::t("沒有 remote").into())).to_string(), who_txt]);
+可以點工具列的 identity 按鈕把它指定給某個 identity。",
+                &[],
+                &[
+                    (r.name).to_string(),
+                    (r.summary
+                        .as_ref()
+                        .and_then(|s| s.remote_url.clone())
+                        .unwrap_or_else(|| crate::i18n::t("沒有 remote").into()))
+                    .to_string(),
+                    who_txt,
+                ],
+            );
             let go = std::rc::Rc::new(go);
-            self.confirm(crate::i18n::t("這個 repo 還沒選 identity"), body, crate::i18n::t("照樣 commit"), false, cx, move |this, _, cx| go(this, cx));
+            self.confirm(
+                crate::i18n::t("這個 repo 還沒選 identity"),
+                body,
+                crate::i18n::t("照樣 commit"),
+                false,
+                cx,
+                move |this, _, cx| go(this, cx),
+            );
         } else {
             go(self, cx);
         }
@@ -385,19 +592,28 @@ impl GitTabs {
 
     pub fn toggle_amend(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.amend = !self.amend;
-        if self.amend && self.subject.read(cx).value().is_empty() && self.desc.read(cx).value().is_empty() {
-            let Some(path) = self.active_path() else { return };
+        if self.amend
+            && self.subject.read(cx).value().is_empty()
+            && self.desc.read(cx).value().is_empty()
+        {
+            let Some(path) = self.active_path() else {
+                return;
+            };
             let handle = window.window_handle();
-            self.work(cx, move || ops::last_message(&path).unwrap_or_default(), move |this, m, cx| {
-                let mut it = m.splitn(2, '\n');
-                let first = it.next().unwrap_or("").to_string();
-                let rest = it.next().unwrap_or("").trim().to_string();
-                let (s, d) = (this.subject.clone(), this.desc.clone());
-                let _ = handle.update(cx, |_, window, cx| {
-                    s.update(cx, |s, cx| s.set_value(first.clone(), window, cx));
-                    d.update(cx, |s, cx| s.set_value(rest.clone(), window, cx));
-                });
-            });
+            self.work(
+                cx,
+                move || ops::last_message(&path).unwrap_or_default(),
+                move |this, m, cx| {
+                    let mut it = m.splitn(2, '\n');
+                    let first = it.next().unwrap_or("").to_string();
+                    let rest = it.next().unwrap_or("").trim().to_string();
+                    let (s, d) = (this.subject.clone(), this.desc.clone());
+                    let _ = handle.update(cx, |_, window, cx| {
+                        s.update(cx, |s, cx| s.set_value(first.clone(), window, cx));
+                        d.update(cx, |s, cx| s.set_value(rest.clone(), window, cx));
+                    });
+                },
+            );
         }
         cx.notify();
     }
@@ -405,33 +621,70 @@ impl GitTabs {
     // ----- remotes -----
 
     pub fn fetch_repo(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let name = self.repos.iter().find(|r| r.path == path).map(|r| r.name.clone()).unwrap_or_default();
-        self.op(path, "Fetch", Some(crate::i18n::tr("已 fetch {name}", &[("name", (name).to_string())], &[])), |r| ops::fetch(r), cx);
+        let name = self
+            .repos
+            .iter()
+            .find(|r| r.path == path)
+            .map(|r| r.name.clone())
+            .unwrap_or_default();
+        self.op(
+            path,
+            "Fetch",
+            Some(crate::i18n::tr(
+                "已 fetch {name}",
+                &[("name", (name).to_string())],
+                &[],
+            )),
+            |r| ops::fetch(r),
+            cx,
+        );
     }
 
     pub fn pull_repo(&mut self, path: &Path, mode: &'static str, cx: &mut Context<Self>) {
-        let name = self.repos.iter().find(|r| r.path == path).map(|r| r.name.clone()).unwrap_or_default();
+        let name = self
+            .repos
+            .iter()
+            .find(|r| r.path == path)
+            .map(|r| r.name.clone())
+            .unwrap_or_default();
         let p = path.to_path_buf();
         let label = "Pull";
         self.op_with(
             path,
             label,
             false,
-            Some(crate::i18n::tr("已 pull {name}", &[("name", (name).to_string())], &[])),
+            Some(crate::i18n::tr(
+                "已 pull {name}",
+                &[("name", (name).to_string())],
+                &[],
+            )),
             move |r| ops::pull(r, mode),
             move |this, res, cx| {
                 // A diverged branch gets the better question instead of the failure toast (op_with skips it).
                 if let Err(e) = res
                     && mode == "ff"
-                    && ["fast-forward", "diverg", "Not possible"].iter().any(|k| e.to_lowercase().contains(&k.to_lowercase()))
+                    && ["fast-forward", "diverg", "Not possible"]
+                        .iter()
+                        .any(|k| e.to_lowercase().contains(&k.to_lowercase()))
                 {
                     let p = p.clone();
                     this.choose(
                         crate::i18n::t("本地和 remote 各有新的 commit"),
                         crate::i18n::t("沒辦法直接快轉。要用哪種方式 Merge remote 的修改？"),
                         vec![
-                            Choice { value: "rebase", label: crate::i18n::t("Rebase（把我的 commit 接在 remote 後面）").into(), primary: true, danger: false },
-                            Choice { value: "merge", label: crate::i18n::t("Merge（多一個 merge commit）").into(), primary: false, danger: false },
+                            Choice {
+                                value: "rebase",
+                                label: crate::i18n::t("Rebase（把我的 commit 接在 remote 後面）")
+                                    .into(),
+                                primary: true,
+                                danger: false,
+                            },
+                            Choice {
+                                value: "merge",
+                                label: crate::i18n::t("Merge（多一個 merge commit）").into(),
+                                primary: false,
+                                danger: false,
+                            },
                         ],
                         cx,
                         move |this, pick, _, cx| {
@@ -446,10 +699,33 @@ impl GitTabs {
     }
 
     pub fn push_repo(&mut self, path: &Path, force: bool, cx: &mut Context<Self>) {
-        let (name, branch) = self.repos.iter().find(|r| r.path == path).map(|r| (r.name.clone(), r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_default())).unwrap_or_default();
+        let (name, branch) = self
+            .repos
+            .iter()
+            .find(|r| r.path == path)
+            .map(|r| {
+                (
+                    r.name.clone(),
+                    r.summary
+                        .as_ref()
+                        .and_then(|s| s.branch.clone())
+                        .unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default();
         let p = path.to_path_buf();
         let run = move |this: &mut GitTabs, cx: &mut Context<GitTabs>| {
-            this.op(&p, "Push", Some(crate::i18n::tr("已 push {name}", &[("name", (name).to_string())], &[])), move |r| ops::push(r, force), cx);
+            this.op(
+                &p,
+                "Push",
+                Some(crate::i18n::tr(
+                    "已 push {name}",
+                    &[("name", (name).to_string())],
+                    &[],
+                )),
+                move |r| ops::push(r, force),
+                cx,
+            );
         };
         if force {
             self.confirm(
@@ -466,7 +742,12 @@ impl GitTabs {
     }
 
     pub fn sync_repo(&mut self, path: &Path, cx: &mut Context<Self>) {
-        let name = self.repos.iter().find(|r| r.path == path).map(|r| r.name.clone()).unwrap_or_default();
+        let name = self
+            .repos
+            .iter()
+            .find(|r| r.path == path)
+            .map(|r| r.name.clone())
+            .unwrap_or_default();
         self.op_with(
             path,
             "Sync",
@@ -486,8 +767,31 @@ impl GitTabs {
             move |this, res, cx| match res {
                 Ok(v) => {
                     let mut it = v.split('\u{1f}');
-                    let (b, a): (u32, u32) = (it.next().and_then(|x| x.parse().ok()).unwrap_or(0), it.next().and_then(|x| x.parse().ok()).unwrap_or(0));
-                    this.ok(crate::i18n::tr("{name} 已 Sync{}{}", &[("name", (name).to_string())], &[(if b > 0 { crate::i18n::tr("，拉下 {b}", &[("b", (b).to_string())], &[]) } else { String::new() }).to_string(), (if a > 0 { crate::i18n::tr("，推上 {a}", &[("a", (a).to_string())], &[]) } else { String::new() }).to_string()]), cx);
+                    let (b, a): (u32, u32) = (
+                        it.next().and_then(|x| x.parse().ok()).unwrap_or(0),
+                        it.next().and_then(|x| x.parse().ok()).unwrap_or(0),
+                    );
+                    this.ok(
+                        crate::i18n::tr(
+                            "{name} 已 Sync{}{}",
+                            &[("name", (name).to_string())],
+                            &[
+                                (if b > 0 {
+                                    crate::i18n::tr("，拉下 {b}", &[("b", (b).to_string())], &[])
+                                } else {
+                                    String::new()
+                                })
+                                .to_string(),
+                                (if a > 0 {
+                                    crate::i18n::tr("，推上 {a}", &[("a", (a).to_string())], &[])
+                                } else {
+                                    String::new()
+                                })
+                                .to_string(),
+                            ],
+                        ),
+                        cx,
+                    );
                 }
                 Err(_) => {
                     this.toasts.pop();
@@ -501,20 +805,27 @@ impl GitTabs {
         let paths: Vec<PathBuf> = self.repos.iter().map(|r| r.path.clone()).collect();
         let n = paths.len();
         let p2 = paths.clone();
-        self.work(cx, move || p2.iter().for_each(|p| drop(ops::fetch(p))), move |this, _, cx| {
-            this.pull_log();
-            let active = this.active_path();
-            for p in paths {
-                if Some(&p) == active.as_ref() {
-                    this.refresh(&p, cx);
-                } else {
-                    this.refresh_summary(&p, cx);
+        self.work(
+            cx,
+            move || p2.iter().for_each(|p| drop(ops::fetch(p))),
+            move |this, _, cx| {
+                this.pull_log();
+                let active = this.active_path();
+                for p in paths {
+                    if Some(&p) == active.as_ref() {
+                        this.refresh(&p, cx);
+                    } else {
+                        this.refresh_summary(&p, cx);
+                    }
                 }
-            }
-            if !quiet {
-                this.ok(crate::i18n::tr("已 fetch {n} 個 repo", &[("n", (n).to_string())], &[]), cx);
-            }
-        });
+                if !quiet {
+                    this.ok(
+                        crate::i18n::tr("已 fetch {n} 個 repo", &[("n", (n).to_string())], &[]),
+                        cx,
+                    );
+                }
+            },
+        );
     }
 
     // ----- branches, tags, stash -----
@@ -522,16 +833,35 @@ impl GitTabs {
     pub fn switch_branch(&mut self, path: &Path, name: &str, cx: &mut Context<Self>) {
         let n = name.to_string();
         let ok = crate::i18n::tr("已切換到 {name}", &[("name", (name).to_string())], &[]);
-        self.op(path, crate::i18n::t("切換 branch"), Some(ok), move |r| ops::switch(r, &n), cx);
+        self.op(
+            path,
+            crate::i18n::t("切換 branch"),
+            Some(ok),
+            move |r| ops::switch(r, &n),
+            cx,
+        );
     }
 
-    pub fn new_branch(&mut self, from: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn new_branch(
+        &mut self,
+        from: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
-        let from = from.or_else(|| r.summary.as_ref().and_then(|s| s.branch.clone())).unwrap_or_else(|| "HEAD".into());
+        let from = from
+            .or_else(|| r.summary.as_ref().and_then(|s| s.branch.clone()))
+            .unwrap_or_else(|| "HEAD".into());
         self.prompt(
             crate::i18n::t("新增 branch"),
-            vec![FieldSpec::text("name", crate::i18n::t("名稱")).placeholder("feat/my-change").check(branch_name_check), FieldSpec::text("from", crate::i18n::t("從")).value(from), FieldSpec::checkbox("checkout", crate::i18n::t("建好就切換過去"), true)],
+            vec![
+                FieldSpec::text("name", crate::i18n::t("名稱"))
+                    .placeholder("feat/my-change")
+                    .check(branch_name_check),
+                FieldSpec::text("from", crate::i18n::t("從")).value(from),
+                FieldSpec::checkbox("checkout", crate::i18n::t("建好就切換過去"), true),
+            ],
             crate::i18n::t("建立"),
             window,
             cx,
@@ -540,16 +870,35 @@ impl GitTabs {
                 let from = v["from"].trim().to_string();
                 let checkout = v.get("checkout").is_some_and(|x| x == "1");
                 let ok = crate::i18n::tr("已建立 {name}", &[("name", (name).to_string())], &[]);
-                this.op(&path, crate::i18n::t("建立 branch"), Some(ok), move |r| ops::create_branch(r, &name, Some(&from).filter(|f| !f.is_empty()).map(|f| f.as_str()), checkout), cx);
+                this.op(
+                    &path,
+                    crate::i18n::t("建立 branch"),
+                    Some(ok),
+                    move |r| {
+                        ops::create_branch(
+                            r,
+                            &name,
+                            Some(&from).filter(|f| !f.is_empty()).map(|f| f.as_str()),
+                            checkout,
+                        )
+                    },
+                    cx,
+                );
             },
         );
     }
 
     pub fn rename_branch(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         self.prompt(
             &crate::i18n::tr("重新命名 {name}", &[("name", name.clone())], &[]),
-            vec![FieldSpec::text("name", crate::i18n::t("新名稱")).value(name.clone()).check(branch_name_check)],
+            vec![
+                FieldSpec::text("name", crate::i18n::t("新名稱"))
+                    .value(name.clone())
+                    .check(branch_name_check),
+            ],
             crate::i18n::t("重新命名"),
             window,
             cx,
@@ -560,20 +909,45 @@ impl GitTabs {
                 }
                 let ok = crate::i18n::tr("已改名為 {new}", &[("new", new.clone())], &[]);
                 let old = name.clone();
-                this.op(&path, crate::i18n::t("重新命名 branch"), Some(ok), move |r| ops::rename_branch(r, &old, &new), cx);
+                this.op(
+                    &path,
+                    crate::i18n::t("重新命名 branch"),
+                    Some(ok),
+                    move |r| ops::rename_branch(r, &old, &new),
+                    cx,
+                );
             },
         );
     }
 
     /// Deletes `origin/feat/x` on its remote, after asking.
     pub fn delete_remote_branch(&mut self, full: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        let body = crate::i18n::tr("從 remote 刪除 **{full}**，其他人之後也拿不到它。本地的 branch 不受影響。", &[("full", full.clone())], &[]);
-        self.confirm(crate::i18n::t("刪除 remote branch？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
-            let f = full.clone();
-            let ok = crate::i18n::tr("已從 remote 刪除 {full}", &[("full", full.clone())], &[]);
-            this.op(&path, crate::i18n::t("刪除 remote branch"), Some(ok), move |r| ops::delete_remote_branch(r, &f), cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        let body = crate::i18n::tr(
+            "從 remote 刪除 **{full}**，其他人之後也拿不到它。本地的 branch 不受影響。",
+            &[("full", full.clone())],
+            &[],
+        );
+        self.confirm(
+            crate::i18n::t("刪除 remote branch？"),
+            body,
+            crate::i18n::t("刪除"),
+            true,
+            cx,
+            move |this, _, cx| {
+                let f = full.clone();
+                let ok = crate::i18n::tr("已從 remote 刪除 {full}", &[("full", full.clone())], &[]);
+                this.op(
+                    &path,
+                    crate::i18n::t("刪除 remote branch"),
+                    Some(ok),
+                    move |r| ops::delete_remote_branch(r, &f),
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn add_remote(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -584,8 +958,13 @@ impl GitTabs {
         self.prompt(
             crate::i18n::t("新增 remote"),
             vec![
-                FieldSpec::text("name", crate::i18n::t("名稱")).value(if first { "origin" } else { "" }).placeholder("upstream").check(remote_name_check),
-                FieldSpec::text("url", crate::i18n::t("網址")).placeholder("git@github.com:owner/repo.git").check(url_check),
+                FieldSpec::text("name", crate::i18n::t("名稱"))
+                    .value(if first { "origin" } else { "" })
+                    .placeholder("upstream")
+                    .check(remote_name_check),
+                FieldSpec::text("url", crate::i18n::t("網址"))
+                    .placeholder("git@github.com:owner/repo.git")
+                    .check(url_check),
             ],
             crate::i18n::t("新增"),
             window,
@@ -612,30 +991,67 @@ impl GitTabs {
         );
     }
 
-    pub fn edit_remote_url(&mut self, name: String, url: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+    pub fn edit_remote_url(
+        &mut self,
+        name: String,
+        url: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = self.active_path() else {
+            return;
+        };
         self.prompt(
             &crate::i18n::tr("{name} 的網址", &[("name", name.clone())], &[]),
-            vec![FieldSpec::text("url", crate::i18n::t("網址")).value(url).check(url_check)],
+            vec![
+                FieldSpec::text("url", crate::i18n::t("網址"))
+                    .value(url)
+                    .check(url_check),
+            ],
             crate::i18n::t("儲存"),
             window,
             cx,
             move |this, v, _, cx| {
                 let (n, url) = (name.clone(), v["url"].trim().to_string());
                 let ok = crate::i18n::tr("已更新 {name} 的網址", &[("name", name.clone())], &[]);
-                this.op(&path, crate::i18n::t("改 remote 網址"), Some(ok), move |r| ops::remote_set_url(r, &n, &url), cx);
+                this.op(
+                    &path,
+                    crate::i18n::t("改 remote 網址"),
+                    Some(ok),
+                    move |r| ops::remote_set_url(r, &n, &url),
+                    cx,
+                );
             },
         );
     }
 
     pub fn remove_remote(&mut self, name: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        let body = crate::i18n::tr("移除 **{name}** 和它在本地的 remote branch 紀錄。remote 上的東西不會被刪。", &[("name", name.clone())], &[]);
-        self.confirm(crate::i18n::t("移除 remote？"), body, crate::i18n::t("移除"), true, cx, move |this, _, cx| {
-            let n = name.clone();
-            let ok = crate::i18n::tr("已移除 {name}", &[("name", name.clone())], &[]);
-            this.op(&path, crate::i18n::t("移除 remote"), Some(ok), move |r| ops::remote_remove(r, &n), cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        let body = crate::i18n::tr(
+            "移除 **{name}** 和它在本地的 remote branch 紀錄。remote 上的東西不會被刪。",
+            &[("name", name.clone())],
+            &[],
+        );
+        self.confirm(
+            crate::i18n::t("移除 remote？"),
+            body,
+            crate::i18n::t("移除"),
+            true,
+            cx,
+            move |this, _, cx| {
+                let n = name.clone();
+                let ok = crate::i18n::tr("已移除 {name}", &[("name", name.clone())], &[]);
+                this.op(
+                    &path,
+                    crate::i18n::t("移除 remote"),
+                    Some(ok),
+                    move |r| ops::remote_remove(r, &n),
+                    cx,
+                );
+            },
+        );
     }
 
     /// Shows what a stash holds in the history view's detail pane: a stash is a commit, so its
@@ -655,74 +1071,203 @@ impl GitTabs {
     pub fn delete_branch(&mut self, name: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
-        let upstream = r.refs.as_ref().and_then(|x| x.refs.branches.iter().find(|b| b.name == name)).and_then(|b| b.upstream.clone());
-        let body = crate::i18n::tr("刪除本地 branch **{name}**{}。", &[("name", (name).to_string())], &[(upstream.map(|u| crate::i18n::tr("（remote 的 {u} 不會被刪）", &[("u", (u).to_string())], &[])).unwrap_or_default()).to_string()]);
-        self.confirm(crate::i18n::t("刪除 branch？"), body, crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
-            let (n1, p1, n2) = (name.clone(), path.clone(), name.clone());
-            let p_op = p1.clone();
-            this.op_with(
-                &p_op,
-                crate::i18n::t("刪除 branch"),
-                true,
-                None,
-                move |r| ops::delete_branch(r, &n1, false),
-                move |this, res, cx| {
-                    if res.is_ok() {
-                        this.ok(crate::i18n::tr("已刪除 {n2}", &[("n2", (n2).to_string())], &[]), cx);
-                        return;
-                    }
-                    this.toasts.pop();
-                    let (n3, p3) = (n2.clone(), p1.clone());
-                    this.confirm(crate::i18n::t("Branch 還沒 Merge"), crate::i18n::tr("**{n2}** 有還沒 Merge 的 commit，強制刪除後只能從 Reflog 找回。", &[("n2", (n2).to_string())], &[]), crate::i18n::t("強制刪除"), true, cx, move |this, _, cx| {
-                        let n4 = n3.clone();
-                        this.op(&p3, crate::i18n::t("刪除 branch"), Some(crate::i18n::tr("已刪除 {n3}", &[("n3", (n3).to_string())], &[])), move |r| ops::delete_branch(r, &n4, true), cx);
-                    });
-                },
-                cx,
-            );
-        });
+        let upstream = r
+            .refs
+            .as_ref()
+            .and_then(|x| x.refs.branches.iter().find(|b| b.name == name))
+            .and_then(|b| b.upstream.clone());
+        let body = crate::i18n::tr(
+            "刪除本地 branch **{name}**{}。",
+            &[("name", (name).to_string())],
+            &[(upstream
+                .map(|u| {
+                    crate::i18n::tr("（remote 的 {u} 不會被刪）", &[("u", (u).to_string())], &[])
+                })
+                .unwrap_or_default())
+            .to_string()],
+        );
+        self.confirm(
+            crate::i18n::t("刪除 branch？"),
+            body,
+            crate::i18n::t("刪除"),
+            true,
+            cx,
+            move |this, _, cx| {
+                let (n1, p1, n2) = (name.clone(), path.clone(), name.clone());
+                let p_op = p1.clone();
+                this.op_with(
+                    &p_op,
+                    crate::i18n::t("刪除 branch"),
+                    true,
+                    None,
+                    move |r| ops::delete_branch(r, &n1, false),
+                    move |this, res, cx| {
+                        if res.is_ok() {
+                            this.ok(
+                                crate::i18n::tr("已刪除 {n2}", &[("n2", (n2).to_string())], &[]),
+                                cx,
+                            );
+                            return;
+                        }
+                        this.toasts.pop();
+                        let (n3, p3) = (n2.clone(), p1.clone());
+                        this.confirm(
+                            crate::i18n::t("Branch 還沒 Merge"),
+                            crate::i18n::tr(
+                                "**{n2}** 有還沒 Merge 的 commit，強制刪除後只能從 Reflog 找回。",
+                                &[("n2", (n2).to_string())],
+                                &[],
+                            ),
+                            crate::i18n::t("強制刪除"),
+                            true,
+                            cx,
+                            move |this, _, cx| {
+                                let n4 = n3.clone();
+                                this.op(
+                                    &p3,
+                                    crate::i18n::t("刪除 branch"),
+                                    Some(crate::i18n::tr(
+                                        "已刪除 {n3}",
+                                        &[("n3", (n3).to_string())],
+                                        &[],
+                                    )),
+                                    move |r| ops::delete_branch(r, &n4, true),
+                                    cx,
+                                );
+                            },
+                        );
+                    },
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn merge_into(&mut self, name: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (path, cur) = (r.path.clone(), r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_else(|| "HEAD".into()));
-        self.confirm("Merge", crate::i18n::tr("把 **{name}** merge 進目前的 **{cur}**？", &[("name", (name).to_string()), ("cur", (cur).to_string())], &[]), "Merge", false, cx, move |this, _, cx| {
-            this.simple_op(&path, "merge", name.clone(), "Merge", Some(crate::i18n::tr("已把 {name} merge 進 {cur}", &[("name", (name).to_string()), ("cur", (cur).to_string())], &[])), cx);
-        });
+        let (path, cur) = (
+            r.path.clone(),
+            r.summary
+                .as_ref()
+                .and_then(|s| s.branch.clone())
+                .unwrap_or_else(|| "HEAD".into()),
+        );
+        self.confirm(
+            "Merge",
+            crate::i18n::tr(
+                "把 **{name}** merge 進目前的 **{cur}**？",
+                &[("name", (name).to_string()), ("cur", (cur).to_string())],
+                &[],
+            ),
+            "Merge",
+            false,
+            cx,
+            move |this, _, cx| {
+                this.simple_op(
+                    &path,
+                    "merge",
+                    name.clone(),
+                    "Merge",
+                    Some(crate::i18n::tr(
+                        "已把 {name} merge 進 {cur}",
+                        &[("name", (name).to_string()), ("cur", (cur).to_string())],
+                        &[],
+                    )),
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn rebase_onto(&mut self, name: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (path, cur) = (r.path.clone(), r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_else(|| "HEAD".into()));
-        self.confirm("Rebase", crate::i18n::tr("把目前的 **{cur}** rebase 到 **{name}** 上？已經 push 過的 commit 會被改寫。", &[("cur", (cur).to_string()), ("name", (name).to_string())], &[]), "Rebase", false, cx, move |this, _, cx| {
-            this.simple_op(&path, "rebase", name.clone(), "Rebase", None, cx);
-        });
+        let (path, cur) = (
+            r.path.clone(),
+            r.summary
+                .as_ref()
+                .and_then(|s| s.branch.clone())
+                .unwrap_or_else(|| "HEAD".into()),
+        );
+        self.confirm(
+            "Rebase",
+            crate::i18n::tr(
+                "把目前的 **{cur}** rebase 到 **{name}** 上？已經 push 過的 commit 會被改寫。",
+                &[("cur", (cur).to_string()), ("name", (name).to_string())],
+                &[],
+            ),
+            "Rebase",
+            false,
+            cx,
+            move |this, _, cx| {
+                this.simple_op(&path, "rebase", name.clone(), "Rebase", None, cx);
+            },
+        );
     }
 
     pub fn cherry_pick(&mut self, sha: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         let ok = crate::i18n::tr("已 cherry-pick {}", &[], &[(short(&sha)).to_string()]);
         self.simple_op(&path, "cherry-pick", sha, "Cherry-pick", Some(ok), cx);
     }
 
     pub fn revert(&mut self, sha: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        self.confirm("Revert", crate::i18n::tr("新增一個 commit 來抵銷 `{}` 的修改？", &[], &[(short(&sha)).to_string()]), "Revert", false, cx, move |this, _, cx| {
-            let ok = crate::i18n::tr("已 revert {}", &[], &[(short(&sha)).to_string()]);
-            this.simple_op(&path, "revert", sha.clone(), "Revert", Some(ok), cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        self.confirm(
+            "Revert",
+            crate::i18n::tr(
+                "新增一個 commit 來抵銷 `{}` 的修改？",
+                &[],
+                &[(short(&sha)).to_string()],
+            ),
+            "Revert",
+            false,
+            cx,
+            move |this, _, cx| {
+                let ok = crate::i18n::tr("已 revert {}", &[], &[(short(&sha)).to_string()]);
+                this.simple_op(&path, "revert", sha.clone(), "Revert", Some(ok), cx);
+            },
+        );
     }
 
     pub fn reset_to(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (path, branch) = (r.path.clone(), r.summary.as_ref().and_then(|s| s.branch.clone()).unwrap_or_else(|| "HEAD".into()));
+        let (path, branch) = (
+            r.path.clone(),
+            r.summary
+                .as_ref()
+                .and_then(|s| s.branch.clone())
+                .unwrap_or_else(|| "HEAD".into()),
+        );
         self.choose(
-            &crate::i18n::tr("Reset {branch} 到 {}", &[("branch", (branch).to_string())], &[(short(&sha)).to_string()]),
+            &crate::i18n::tr(
+                "Reset {branch} 到 {}",
+                &[("branch", (branch).to_string())],
+                &[(short(&sha)).to_string()],
+            ),
             crate::i18n::t("選擇怎麼處理目前的修改："),
             vec![
-                Choice { value: "soft", label: crate::i18n::t("soft：保留修改，而且保持已 stage").into(), primary: false, danger: false },
-                Choice { value: "mixed", label: crate::i18n::t("mixed：保留修改，取消 stage").into(), primary: true, danger: false },
-                Choice { value: "hard", label: crate::i18n::t("hard：丟掉所有修改（無法復原）").into(), primary: false, danger: true },
+                Choice {
+                    value: "soft",
+                    label: crate::i18n::t("soft：保留修改，而且保持已 stage").into(),
+                    primary: false,
+                    danger: false,
+                },
+                Choice {
+                    value: "mixed",
+                    label: crate::i18n::t("mixed：保留修改，取消 stage").into(),
+                    primary: true,
+                    danger: false,
+                },
+                Choice {
+                    value: "hard",
+                    label: crate::i18n::t("hard：丟掉所有修改（無法復原）").into(),
+                    primary: false,
+                    danger: true,
+                },
             ],
             cx,
             move |this, mode, _, cx| {
@@ -734,12 +1279,23 @@ impl GitTabs {
                             "hard" => "reset-hard",
                             _ => "reset-mixed",
                         };
-                        let ok = crate::i18n::tr("已 reset --{mode} 到 {}", &[("mode", (mode).to_string())], &[(short(&sha)).to_string()]);
+                        let ok = crate::i18n::tr(
+                            "已 reset --{mode} 到 {}",
+                            &[("mode", (mode).to_string())],
+                            &[(short(&sha)).to_string()],
+                        );
                         this.simple_op(&path, op, sha.clone(), "Reset", Some(ok), cx);
                     }
                 };
                 if mode == "hard" {
-                    this.confirm(crate::i18n::t("確定 hard reset？"), crate::i18n::t("所有還沒 commit 的修改都會消失，**無法復原**。").into(), "Hard reset", true, cx, move |this, _, cx| run(this, cx));
+                    this.confirm(
+                        crate::i18n::t("確定 hard reset？"),
+                        crate::i18n::t("所有還沒 commit 的修改都會消失，**無法復原**。").into(),
+                        "Hard reset",
+                        true,
+                        cx,
+                        move |this, _, cx| run(this, cx),
+                    );
                 } else {
                     run(this, cx);
                 }
@@ -748,19 +1304,36 @@ impl GitTabs {
     }
 
     pub fn checkout_commit(&mut self, sha: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        let commit = self.repo().and_then(|r| r.commits.iter().find(|c| c.sha == sha)).cloned();
-        let subject = commit.as_ref().map(|c| c.subject.clone()).unwrap_or_default();
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        let commit = self
+            .repo()
+            .and_then(|r| r.commits.iter().find(|c| c.sha == sha))
+            .cloned();
+        let subject = commit
+            .as_ref()
+            .map(|c| c.subject.clone())
+            .unwrap_or_default();
         // A commit that carries branch labels is checked out as that branch, not as a bare commit
         // (which would leave HEAD detached with the branch still behind): the checked-out branch
         // means there is nothing to do, a local branch is switched to, a remote branch gives its
         // local branch (made if it does not exist), as Fork's Checkout does.
         if let Some(c) = &commit {
             if c.refs.iter().any(|x| x.kind == "head") {
-                self.toast(crate::i18n::t("已經在這個 branch 上"), ToastKind::Info, None, cx);
+                self.toast(
+                    crate::i18n::t("已經在這個 branch 上"),
+                    ToastKind::Info,
+                    None,
+                    cx,
+                );
                 return;
             }
-            let pick = c.refs.iter().find(|x| x.kind == "branch").or_else(|| c.refs.iter().find(|x| x.kind == "remote"));
+            let pick = c
+                .refs
+                .iter()
+                .find(|x| x.kind == "branch")
+                .or_else(|| c.refs.iter().find(|x| x.kind == "remote"));
             if let Some(label) = pick {
                 self.switch_branch(&path, &label.name.clone(), cx);
                 return;
@@ -783,61 +1356,168 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
         // The whole message when this commit's details are the ones on screen, else its title.
-        let msg = r.detail.as_ref().filter(|d| d.sha == sha).map(|d| d.message.clone()).or_else(|| r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone())).unwrap_or_default();
+        let msg = r
+            .detail
+            .as_ref()
+            .filter(|d| d.sha == sha)
+            .map(|d| d.message.clone())
+            .or_else(|| {
+                r.commits
+                    .iter()
+                    .find(|c| c.sha == sha)
+                    .map(|c| c.subject.clone())
+            })
+            .unwrap_or_default();
         self.prompt(
-            &crate::i18n::tr("改 {} 的訊息（之後的 commit 會跟著重寫）", &[], &[short(&sha)]),
-            vec![FieldSpec::textarea("message", crate::i18n::t("訊息")).value(msg).check(message_check)],
+            &crate::i18n::tr(
+                "改 {} 的訊息（之後的 commit 會跟著重寫）",
+                &[],
+                &[short(&sha)],
+            ),
+            vec![
+                FieldSpec::textarea("message", crate::i18n::t("訊息"))
+                    .value(msg)
+                    .check(message_check),
+            ],
             crate::i18n::t("改寫"),
             window,
             cx,
             move |this, v, _, cx| {
                 let how = Rewrite::Reword(v["message"].trim().to_string());
-                this.rewrite_commit(&path, sha.clone(), how, crate::i18n::t("改 commit 訊息"), crate::i18n::t("已改寫訊息。這條 branch push 過的話，下次要強制 push"), cx);
+                this.rewrite_commit(
+                    &path,
+                    sha.clone(),
+                    how,
+                    crate::i18n::t("改 commit 訊息"),
+                    crate::i18n::t("已改寫訊息。這條 branch push 過的話，下次要強制 push"),
+                    cx,
+                );
             },
         );
     }
 
     /// Folds a commit into the one before it, after asking.
     pub fn squash_commit(&mut self, sha: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        let body = crate::i18n::tr("把 `{}` 併進它前面那個 commit，兩邊的訊息都留著。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha)]);
-        self.confirm(crate::i18n::t("併入上一個 commit？"), body, crate::i18n::t("併入"), false, cx, move |this, _, cx| {
-            this.rewrite_commit(&path, sha.clone(), Rewrite::Squash, crate::i18n::t("併入上一個 commit"), crate::i18n::t("已併入上一個 commit"), cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        let body = crate::i18n::tr(
+            "把 `{}` 併進它前面那個 commit，兩邊的訊息都留著。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。",
+            &[],
+            &[short(&sha)],
+        );
+        self.confirm(
+            crate::i18n::t("併入上一個 commit？"),
+            body,
+            crate::i18n::t("併入"),
+            false,
+            cx,
+            move |this, _, cx| {
+                this.rewrite_commit(
+                    &path,
+                    sha.clone(),
+                    Rewrite::Squash,
+                    crate::i18n::t("併入上一個 commit"),
+                    crate::i18n::t("已併入上一個 commit"),
+                    cx,
+                );
+            },
+        );
     }
 
     /// Removes a commit from the branch, after asking.
     pub fn drop_commit(&mut self, sha: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
-        let subject = r.commits.iter().find(|c| c.sha == sha).map(|c| c.subject.clone()).unwrap_or_default();
-        let body = crate::i18n::tr("`{}`（{}）會從這條 branch 消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。", &[], &[short(&sha), subject]);
-        self.confirm(crate::i18n::t("丟掉這個 commit？"), body, crate::i18n::t("丟掉"), true, cx, move |this, _, cx| {
-            this.rewrite_commit(&path, sha.clone(), Rewrite::Drop, crate::i18n::t("丟掉 commit"), crate::i18n::t("已丟掉那個 commit"), cx);
-        });
+        let subject = r
+            .commits
+            .iter()
+            .find(|c| c.sha == sha)
+            .map(|c| c.subject.clone())
+            .unwrap_or_default();
+        let body = crate::i18n::tr(
+            "`{}`（{}）會從這條 branch 消失，它改的內容也一起消失。\n\n之後的 commit 會跟著重寫；已經 push 過的話，之後要強制 push。",
+            &[],
+            &[short(&sha), subject],
+        );
+        self.confirm(
+            crate::i18n::t("丟掉這個 commit？"),
+            body,
+            crate::i18n::t("丟掉"),
+            true,
+            cx,
+            move |this, _, cx| {
+                this.rewrite_commit(
+                    &path,
+                    sha.clone(),
+                    Rewrite::Drop,
+                    crate::i18n::t("丟掉 commit"),
+                    crate::i18n::t("已丟掉那個 commit"),
+                    cx,
+                );
+            },
+        );
     }
 
-    fn rewrite_commit(&mut self, path: &Path, sha: String, how: Rewrite, label: &'static str, ok: &str, cx: &mut Context<Self>) {
+    fn rewrite_commit(
+        &mut self,
+        path: &Path,
+        sha: String,
+        how: Rewrite,
+        label: &'static str,
+        ok: &str,
+        cx: &mut Context<Self>,
+    ) {
         // Git calls this program back as its editor while it rewrites (gitcore::rewrite).
         let exe = match std::env::current_exe() {
             Ok(exe) => exe,
-            Err(e) => return self.toast(crate::i18n::t("找不到程式本身的位置"), ToastKind::Err, Some(e.to_string()), cx),
+            Err(e) => {
+                return self.toast(
+                    crate::i18n::t("找不到程式本身的位置"),
+                    ToastKind::Err,
+                    Some(e.to_string()),
+                    cx,
+                );
+            }
         };
-        self.op(path, label, Some(ok.to_string()), move |r| gitcore::rewrite::rewrite(r, &exe, &sha, &how), cx);
+        self.op(
+            path,
+            label,
+            Some(ok.to_string()),
+            move |r| gitcore::rewrite::rewrite(r, &exe, &sha, &how),
+            cx,
+        );
     }
 
     pub fn create_tag(&mut self, sha: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         self.prompt(
             &crate::i18n::tr("在 {} 加 Tag", &[], &[(short(&sha)).to_string()]),
-            vec![FieldSpec::text("name", crate::i18n::t("名稱")).placeholder("v1.0.0").check(tag_name_check), FieldSpec::textarea("message", crate::i18n::t("說明（可留空）"))],
+            vec![
+                FieldSpec::text("name", crate::i18n::t("名稱"))
+                    .placeholder("v1.0.0")
+                    .check(tag_name_check),
+                FieldSpec::textarea("message", crate::i18n::t("說明（可留空）")),
+            ],
             crate::i18n::t("確定"),
             window,
             cx,
             move |this, v, _, cx| {
-                let (name, msg, sha) = (v["name"].trim().to_string(), v["message"].clone(), sha.clone());
+                let (name, msg, sha) = (
+                    v["name"].trim().to_string(),
+                    v["message"].clone(),
+                    sha.clone(),
+                );
                 let ok = crate::i18n::tr("已加上 {name}", &[("name", (name).to_string())], &[]);
-                this.op(&path, crate::i18n::t("加 Tag"), Some(ok), move |r| ops::tag(r, &name, &sha, &msg), cx);
+                this.op(
+                    &path,
+                    crate::i18n::t("加 Tag"),
+                    Some(ok),
+                    move |r| ops::tag(r, &name, &sha, &msg),
+                    cx,
+                );
             },
         );
     }
@@ -845,44 +1525,116 @@ impl GitTabs {
     pub fn stash_push(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         if r.status.is_empty() {
-            self.toast(crate::i18n::t("沒有修改可以 stash"), ToastKind::Info, None, cx);
+            self.toast(
+                crate::i18n::t("沒有修改可以 stash"),
+                ToastKind::Info,
+                None,
+                cx,
+            );
             return;
         }
         let path = r.path.clone();
         self.prompt(
             crate::i18n::t("Stash 目前的修改"),
-            vec![FieldSpec::text("message", crate::i18n::t("說明（可留空）")).placeholder(crate::i18n::t("做到一半的 xxx")), FieldSpec::checkbox("untracked", crate::i18n::t("包含新檔案"), true)],
+            vec![
+                FieldSpec::text("message", crate::i18n::t("說明（可留空）"))
+                    .placeholder(crate::i18n::t("做到一半的 xxx")),
+                FieldSpec::checkbox("untracked", crate::i18n::t("包含新檔案"), true),
+            ],
             "Stash",
             window,
             cx,
             move |this, v, _, cx| {
-                let (msg, untracked) = (v["message"].clone(), v.get("untracked").is_some_and(|x| x == "1"));
-                this.op(&path, "Stash", Some(crate::i18n::t("已 stash").into()), move |r| ops::stash_push(r, &msg, untracked), cx);
+                let (msg, untracked) = (
+                    v["message"].clone(),
+                    v.get("untracked").is_some_and(|x| x == "1"),
+                );
+                this.op(
+                    &path,
+                    "Stash",
+                    Some(crate::i18n::t("已 stash").into()),
+                    move |r| ops::stash_push(r, &msg, untracked),
+                    cx,
+                );
             },
         );
     }
 
     pub fn stash_drop(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        self.confirm(crate::i18n::t("刪除 stash？"), crate::i18n::t("刪除後無法復原。").into(), crate::i18n::t("刪除"), true, cx, move |this, _, cx| {
-            this.simple_op(&path, "stash-drop", index.to_string(), crate::i18n::t("刪除 stash"), Some(crate::i18n::t("已刪除 stash").into()), cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        self.confirm(
+            crate::i18n::t("刪除 stash？"),
+            crate::i18n::t("刪除後無法復原。").into(),
+            crate::i18n::t("刪除"),
+            true,
+            cx,
+            move |this, _, cx| {
+                this.simple_op(
+                    &path,
+                    "stash-drop",
+                    index.to_string(),
+                    crate::i18n::t("刪除 stash"),
+                    Some(crate::i18n::t("已刪除 stash").into()),
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn abort_or_continue(&mut self, what: &'static str, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
-        let (path, state) = (r.path.clone(), r.summary.as_ref().and_then(|s| s.state).unwrap_or("").to_string());
+        let (path, state) = (
+            r.path.clone(),
+            r.summary
+                .as_ref()
+                .and_then(|s| s.state)
+                .unwrap_or("")
+                .to_string(),
+        );
         if what == "abort" {
-            self.confirm(&crate::i18n::tr("中止 {state}？", &[("state", (state).to_string())], &[]), crate::i18n::t("會回到開始之前的狀態，解到一半的 conflict 會被丟掉。").into(), crate::i18n::t("中止"), true, cx, move |this, _, cx| {
-                this.simple_op(&path, "abort", String::new(), crate::i18n::t("中止"), Some(crate::i18n::tr("已中止 {state}", &[("state", (state).to_string())], &[])), cx);
-            });
+            self.confirm(
+                &crate::i18n::tr("中止 {state}？", &[("state", (state).to_string())], &[]),
+                crate::i18n::t("會回到開始之前的狀態，解到一半的 conflict 會被丟掉。").into(),
+                crate::i18n::t("中止"),
+                true,
+                cx,
+                move |this, _, cx| {
+                    this.simple_op(
+                        &path,
+                        "abort",
+                        String::new(),
+                        crate::i18n::t("中止"),
+                        Some(crate::i18n::tr(
+                            "已中止 {state}",
+                            &[("state", (state).to_string())],
+                            &[],
+                        )),
+                        cx,
+                    );
+                },
+            );
         } else {
-            self.simple_op(&path, "continue", String::new(), crate::i18n::t("繼續"), Some(crate::i18n::tr("已完成 {state}", &[("state", (state).to_string())], &[])), cx);
+            self.simple_op(
+                &path,
+                "continue",
+                String::new(),
+                crate::i18n::t("繼續"),
+                Some(crate::i18n::tr(
+                    "已完成 {state}",
+                    &[("state", (state).to_string())],
+                    &[],
+                )),
+                cx,
+            );
         }
     }
 
     pub fn resolve_conflict(&mut self, file: String, how: &'static str, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         let (label, name) = (
             match how {
                 "use-ours" => crate::i18n::t("用我的版本"),
@@ -892,9 +1644,26 @@ impl GitTabs {
             file.rsplit('/').next().unwrap_or(&file).to_string(),
         );
         let p = path.clone();
-        self.op_with(&path, label, false, Some(crate::i18n::tr("已解決 {name}", &[("name", (name).to_string())], &[])), move |r| ops::simple(r, how, &file), move |_, _, _| {}, cx);
+        self.op_with(
+            &path,
+            label,
+            false,
+            Some(crate::i18n::tr(
+                "已解決 {name}",
+                &[("name", (name).to_string())],
+                &[],
+            )),
+            move |r| ops::simple(r, how, &file),
+            move |_, _, _| {},
+            cx,
+        );
         self.refresh_then(&p, cx, |this, cx| {
-            let next = this.repo().and_then(|r| r.unstaged().iter().find(|f| f.conflicted).map(|f| f.path.clone()));
+            let next = this.repo().and_then(|r| {
+                r.unstaged()
+                    .iter()
+                    .find(|f| f.conflicted)
+                    .map(|f| f.path.clone())
+            });
             if let Some(n) = next {
                 this.select(ListKind::U, n, cx);
             }
@@ -905,42 +1674,77 @@ impl GitTabs {
     pub fn set_pin(&mut self, id: String, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let (path, name) = (r.path.clone(), r.name.clone());
-        let Some(ident) = self.cfg.identities.iter().find(|x| x.id == id).cloned() else { return };
+        let Some(ident) = self.cfg.identities.iter().find(|x| x.id == id).cloned() else {
+            return;
+        };
         let label = crate::i18n::t("改用 identity");
         let ctx = self.ctx.clone();
-        let msg = crate::i18n::tr("{name} 改用 {}", &[("name", (name).to_string())], &[(ident.name).to_string()]);
+        let msg = crate::i18n::tr(
+            "{name} 改用 {}",
+            &[("name", (name).to_string())],
+            &[(ident.name).to_string()],
+        );
         let v = json!({ "repo": path.display().to_string(), "identity": ident });
-        self.op_with(&path, label, true, None, move |_| gitcore::dispatch(&ctx, "identity_pin", v).map(|_| String::new()), move |this, res, cx| {
-            if res.is_ok() {
-                let p = this.repo().map(|r| r.path.display().to_string()).unwrap_or_default();
-                if let Some(e) = this.cfg.repos.iter_mut().find(|x| x.path == p) {
-                    e.pin = Some(id.clone());
+        self.op_with(
+            &path,
+            label,
+            true,
+            None,
+            move |_| gitcore::dispatch(&ctx, "identity_pin", v).map(|_| String::new()),
+            move |this, res, cx| {
+                if res.is_ok() {
+                    let p = this
+                        .repo()
+                        .map(|r| r.path.display().to_string())
+                        .unwrap_or_default();
+                    if let Some(e) = this.cfg.repos.iter_mut().find(|x| x.path == p) {
+                        e.pin = Some(id.clone());
+                    }
+                    this.save_config();
+                    this.ok(msg, cx);
                 }
-                this.save_config();
-                this.ok(msg, cx);
-            }
-        }, cx);
+            },
+            cx,
+        );
     }
 
     // ----- opening things -----
 
     pub fn open_folder(&mut self, path: String, cx: &mut Context<Self>) {
-        self.dispatch_bg("open_folder", json!({ "path": path }), crate::i18n::t("打不開資料夾"), cx);
+        self.dispatch_bg(
+            "open_folder",
+            json!({ "path": path }),
+            crate::i18n::t("打不開資料夾"),
+            cx,
+        );
     }
 
     pub fn open_terminal(&mut self, path: String, cx: &mut Context<Self>) {
-        self.dispatch_bg("open_terminal", json!({ "path": path }), crate::i18n::t("打不開終端機"), cx);
+        self.dispatch_bg(
+            "open_terminal",
+            json!({ "path": path }),
+            crate::i18n::t("打不開終端機"),
+            cx,
+        );
     }
 
     pub fn open_file(&mut self, rel: &str, cx: &mut Context<Self>) {
         let Some(r) = self.repo() else { return };
         let full = format!("{}/{}", r.path.display(), rel).replace('/', "\\");
-        self.dispatch_bg("open_file", json!({ "path": full }), crate::i18n::t("打不開檔案"), cx);
+        self.dispatch_bg(
+            "open_file",
+            json!({ "path": full }),
+            crate::i18n::t("打不開檔案"),
+            cx,
+        );
     }
 
     pub fn copy(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.ok(crate::i18n::tr("已複製 {what}", &[("what", (what).to_string())], &[]), cx);
+        self.ok(
+            crate::i18n::tr("已複製 {what}", &[("what", (what).to_string())], &[]),
+            cx,
+        );
     }
 
     pub fn open_url(&mut self, url: &str, cx: &mut Context<Self>) {
@@ -975,7 +1779,12 @@ impl GitTabs {
         }
         let Some(r) = self.repo_mut() else { return };
         let Some(ix) = r.commits.iter().position(|c| c.sha == sha) else {
-            self.toast(crate::i18n::t("這個 commit 不在目前載入的 history 裡"), ToastKind::Info, None, cx);
+            self.toast(
+                crate::i18n::t("這個 commit 不在目前載入的 history 裡"),
+                ToastKind::Info,
+                None,
+                cx,
+            );
             return;
         };
         // Folded away under a merge: unfold, so there is a row to jump to.
@@ -983,9 +1792,14 @@ impl GitTabs {
             r.collapsed.clear();
             Self::relayout(r, false);
         }
-        let row = r.shown.as_ref().map_or(Some(ix), |v| v.iter().position(|x| *x == ix)).unwrap_or(ix);
+        let row = r
+            .shown
+            .as_ref()
+            .map_or(Some(ix), |v| v.iter().position(|x| *x == ix))
+            .unwrap_or(ix);
         // Jump to it: scroll the history so the commit sits in the middle of the list.
-        self.commit_scroll.scroll_to_item(row, gpui_kit::ScrollStrategy::Center);
+        self.commit_scroll
+            .scroll_to_item(row, gpui_kit::ScrollStrategy::Center);
         let Some(r) = self.repo_mut() else { return };
         r.sel_commit = Some(sha);
         let p = r.path.clone();
@@ -998,12 +1812,23 @@ impl GitTabs {
         let Some(r) = self.repo() else { return };
         let path = r.path.clone();
         // Next to the repo unless a folder is given: `<parent>/<repo>-<branch>`.
-        let base = path.parent().map(|p| p.join(&r.name)).unwrap_or_else(|| path.clone()).display().to_string();
+        let base = path
+            .parent()
+            .map(|p| p.join(&r.name))
+            .unwrap_or_else(|| path.clone())
+            .display()
+            .to_string();
         self.prompt(
             crate::i18n::t("新增 worktree"),
             vec![
-                FieldSpec::text("branch", crate::i18n::t("要放哪個 branch")).placeholder("feat/my-change").check(branch_name_check),
-                FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr("留空就用 {}-<branch>", &[], &[base.clone()])),
+                FieldSpec::text("branch", crate::i18n::t("要放哪個 branch"))
+                    .placeholder("feat/my-change")
+                    .check(branch_name_check),
+                FieldSpec::text("dir", crate::i18n::t("資料夾")).placeholder(&crate::i18n::tr(
+                    "留空就用 {}-<branch>",
+                    &[],
+                    &[base.clone()],
+                )),
                 FieldSpec::checkbox("open", crate::i18n::t("建好就開成新分頁"), true),
             ],
             crate::i18n::t("建立"),
@@ -1037,9 +1862,17 @@ impl GitTabs {
 
     /// Fetches a submodule (if need be) and checks out the commit the repo records for it.
     pub fn update_submodule(&mut self, rel: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
+        let Some(path) = self.active_path() else {
+            return;
+        };
         let ok = crate::i18n::tr("已更新 {rel}", &[("rel", rel.clone())], &[]);
-        self.op(&path, crate::i18n::t("更新 submodule"), Some(ok), move |r| ops::submodule_update(r, &rel), cx);
+        self.op(
+            &path,
+            crate::i18n::t("更新 submodule"),
+            Some(ok),
+            move |r| ops::submodule_update(r, &rel),
+            cx,
+        );
     }
 
     pub fn open_worktree(&mut self, path: String, cx: &mut Context<Self>) {
@@ -1047,18 +1880,41 @@ impl GitTabs {
     }
 
     pub fn remove_worktree(&mut self, wt: String, cx: &mut Context<Self>) {
-        let Some(path) = self.active_path() else { return };
-        self.confirm(crate::i18n::t("移除 worktree？"), crate::i18n::tr("移除 `{wt}`。branch 本身會保留。有 changes 時 git 會拒絕。", &[("wt", (wt).to_string())], &[]), crate::i18n::t("移除"), true, cx, move |this, _, cx| {
-            let (arg, gone) = (wt.clone(), wt.clone());
-            this.op_with(&path, crate::i18n::t("移除 worktree"), false, None, move |r| ops::simple(r, "worktree-remove", &arg), move |this, res, cx| {
-                // Its folder is gone, so a tab that showed it has nothing left to show.
-                if res.is_ok()
-                    && let Some(i) = this.repos.iter().position(|r| crate::format::same_path(&r.path.display().to_string(), &gone))
-                {
-                    this.close_repo(i, cx);
-                }
-            }, cx);
-        });
+        let Some(path) = self.active_path() else {
+            return;
+        };
+        self.confirm(
+            crate::i18n::t("移除 worktree？"),
+            crate::i18n::tr(
+                "移除 `{wt}`。branch 本身會保留。有 changes 時 git 會拒絕。",
+                &[("wt", (wt).to_string())],
+                &[],
+            ),
+            crate::i18n::t("移除"),
+            true,
+            cx,
+            move |this, _, cx| {
+                let (arg, gone) = (wt.clone(), wt.clone());
+                this.op_with(
+                    &path,
+                    crate::i18n::t("移除 worktree"),
+                    false,
+                    None,
+                    move |r| ops::simple(r, "worktree-remove", &arg),
+                    move |this, res, cx| {
+                        // Its folder is gone, so a tab that showed it has nothing left to show.
+                        if res.is_ok()
+                            && let Some(i) = this.repos.iter().position(|r| {
+                                crate::format::same_path(&r.path.display().to_string(), &gone)
+                            })
+                        {
+                            this.close_repo(i, cx);
+                        }
+                    },
+                    cx,
+                );
+            },
+        );
     }
 
     pub fn set_hist_tab(&mut self, t: HistTab, cx: &mut Context<Self>) {
@@ -1077,40 +1933,78 @@ impl GitTabs {
 
     pub fn add_repos(&mut self, paths: Vec<(PathBuf, Option<String>)>, cx: &mut Context<Self>) {
         let ctx = self.ctx.clone();
-        self.work(cx, move || paths.into_iter().map(|(p, pin)| (ops::toplevel(&p), pin)).collect::<Vec<_>>(), move |this, tops, cx| {
-            let mut added = 0usize;
-            let mut last = None;
-            for (t, pin) in tops {
-                match t {
-                    Ok(top) => {
-                        let same = |a: &Path, b: &Path| a.display().to_string().replace('/', "\\").to_lowercase() == b.display().to_string().replace('/', "\\").to_lowercase();
-                        if this.repos.iter().any(|r| same(&r.path, &top)) {
-                            continue;
+        self.work(
+            cx,
+            move || {
+                paths
+                    .into_iter()
+                    .map(|(p, pin)| (ops::toplevel(&p), pin))
+                    .collect::<Vec<_>>()
+            },
+            move |this, tops, cx| {
+                let mut added = 0usize;
+                let mut last = None;
+                for (t, pin) in tops {
+                    match t {
+                        Ok(top) => {
+                            let same = |a: &Path, b: &Path| {
+                                a.display().to_string().replace('/', "\\").to_lowercase()
+                                    == b.display().to_string().replace('/', "\\").to_lowercase()
+                            };
+                            if this.repos.iter().any(|r| same(&r.path, &top)) {
+                                continue;
+                            }
+                            this.repos.push(RepoState::new(top.clone()));
+                            this.cfg.repos.push(gitcore::config::RepoEntry {
+                                path: top.display().to_string(),
+                                pin: pin.clone(),
+                            });
+                            if let Some(ident) = pin
+                                .as_ref()
+                                .and_then(|p| this.cfg.identities.iter().find(|i| &i.id == p))
+                                .cloned()
+                            {
+                                let (c, v) = (
+                                    ctx.clone(),
+                                    json!({ "repo": top.display().to_string(), "identity": ident }),
+                                );
+                                this.work(
+                                    cx,
+                                    move || drop(gitcore::dispatch(&c, "identity_pin", v)),
+                                    |_, _, _| {},
+                                );
+                            }
+                            last = Some(top);
+                            added += 1;
                         }
-                        this.repos.push(RepoState::new(top.clone()));
-                        this.cfg.repos.push(gitcore::config::RepoEntry { path: top.display().to_string(), pin: pin.clone() });
-                        if let Some(ident) = pin.as_ref().and_then(|p| this.cfg.identities.iter().find(|i| &i.id == p)).cloned() {
-                            let (c, v) = (ctx.clone(), json!({ "repo": top.display().to_string(), "identity": ident }));
-                            this.work(cx, move || drop(gitcore::dispatch(&c, "identity_pin", v)), |_, _, _| {});
-                        }
-                        last = Some(top);
-                        added += 1;
+                        Err(e) => this.toast(
+                            crate::i18n::t("不是 git repo"),
+                            ToastKind::Err,
+                            Some(clean(&e)),
+                            cx,
+                        ),
                     }
-                    Err(e) => this.toast(crate::i18n::t("不是 git repo"), ToastKind::Err, Some(clean(&e)), cx),
                 }
-            }
-            if added > 0 {
-                this.active = this.repos.len() - 1;
-                this.save_config();
-                this.watch(cx);
-                if let Some(p) = last {
-                    this.set_view(View::History, cx);
-                    this.open_repo(&p, cx);
+                if added > 0 {
+                    this.active = this.repos.len() - 1;
+                    this.save_config();
+                    this.watch(cx);
+                    if let Some(p) = last {
+                        this.set_view(View::History, cx);
+                        this.open_repo(&p, cx);
+                    }
+                    this.ok(
+                        crate::i18n::tr(
+                            "已加入 {added} 個 repo",
+                            &[("added", (added).to_string())],
+                            &[],
+                        ),
+                        cx,
+                    );
                 }
-                this.ok(crate::i18n::tr("已加入 {added} 個 repo", &[("added", (added).to_string())], &[]), cx);
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn close_repo(&mut self, i: usize, cx: &mut Context<Self>) {

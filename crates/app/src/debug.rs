@@ -19,9 +19,21 @@ fn target() -> &'static Option<std::path::PathBuf> {
 /// `debug::log("menu", format!(...))`; the message is only built when logging is on.
 pub fn log(kind: &str, msg: impl FnOnce() -> String) {
     let Some(path) = target() else { return };
-    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
-    let line = format!("{}.{:03} {:<8} {}\n", ms / 1000, ms % 1000, kind, msg().replace('\n', "\\n"));
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    let line = format!(
+        "{}.{:03} {:<8} {}\n",
+        ms / 1000,
+        ms % 1000,
+        kind,
+        msg().replace('\n', "\\n")
+    );
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = f.write_all(line.as_bytes());
     }
 }

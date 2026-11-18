@@ -1,8 +1,9 @@
 //! Small hand-built widgets for buttons, chips and badges.
 
 use gpui_kit::{
-    AnyElement, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, IntoElement, ParentElement as _, SharedString, Stateful,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use crate::theme::Pal;
@@ -17,7 +18,13 @@ pub enum Bk {
 }
 
 /// `.btn` / `.btn.sm`
-pub fn btn(p: &Pal, id: impl Into<ElementId>, kind: Bk, small: bool, label: impl IntoElement) -> Stateful<Div> {
+pub fn btn(
+    p: &Pal,
+    id: impl Into<ElementId>,
+    kind: Bk,
+    small: bool,
+    label: impl IntoElement,
+) -> Stateful<Div> {
     let (bg, fg, border) = match kind {
         Bk::Normal => (p.panel, p.text, p.border_strong),
         Bk::Primary => (p.accent, gpui_kit::white(), Hsla::transparent_black()),
@@ -25,7 +32,11 @@ pub fn btn(p: &Pal, id: impl Into<ElementId>, kind: Bk, small: bool, label: impl
         Bk::Ghost => (Hsla::transparent_black(), p.text, Hsla::transparent_black()),
         Bk::On => (p.accent_bg, p.accent_tx, Hsla::transparent_black()),
     };
-    let hover = if matches!(kind, Bk::Primary | Bk::Danger) { bg } else { p.hover };
+    let hover = if matches!(kind, Bk::Primary | Bk::Danger) {
+        bg
+    } else {
+        p.hover
+    };
     div()
         .id(id)
         .flex()
@@ -45,7 +56,11 @@ pub fn btn(p: &Pal, id: impl Into<ElementId>, kind: Bk, small: bool, label: impl
         .cursor_pointer()
         .hover(move |s| {
             let s = s.bg(hover);
-            if matches!(kind, Bk::Primary | Bk::Danger) { s.opacity(0.92) } else { s }
+            if matches!(kind, Bk::Primary | Bk::Danger) {
+                s.opacity(0.92)
+            } else {
+                s
+            }
         })
         .child(label)
 }
@@ -64,7 +79,10 @@ pub fn icon_btn(p: &Pal, id: impl Into<ElementId>, ico: Ico) -> Stateful<Div> {
 
 /// `.sub`
 pub fn sub(p: &Pal, s: impl Into<SharedString>) -> Div {
-    div().text_size(px(11.5)).text_color(p.faint).child(s.into())
+    div()
+        .text_size(px(11.5))
+        .text_color(p.faint)
+        .child(s.into())
 }
 
 pub fn muted(p: &Pal, s: impl Into<SharedString>) -> Div {
@@ -73,7 +91,12 @@ pub fn muted(p: &Pal, s: impl Into<SharedString>) -> Div {
 
 /// `.sep`
 pub fn sep(p: &Pal) -> Div {
-    div().w(px(1.)).h(px(20.)).mx(px(2.)).flex_none().bg(p.border)
+    div()
+        .w(px(1.))
+        .h(px(20.))
+        .mx(px(2.))
+        .flex_none()
+        .bg(p.border)
 }
 
 /// `.st` status letter badge
@@ -117,9 +140,47 @@ pub use gpui_kit::assets::IconName as Ico;
 gpui_kit::assets::icon_assets!(
     ExtraIcons,
     [
-        Archive, ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Cloud, CloudDownload, Copy, Ellipsis, File, FileClock, FilePenLine, Folder, FolderGit2, FolderOpen, GitBranch, GitBranchPlus,
-        Check, GitCommitVertical, Github, ListFilter, Moon, Package, Plus, RefreshCw, RotateCcw, ScrollText, Search, Settings, Square, SquareCheck, SquarePen,
-        SquareTerminal, Sun, SunMoon, Tag, TextWrap, Trash, User, X
+        Archive,
+        ArrowDownLeft,
+        ArrowUpRight,
+        ChevronDown,
+        ChevronLeft,
+        ChevronRight,
+        Cloud,
+        CloudDownload,
+        Copy,
+        Ellipsis,
+        File,
+        FileClock,
+        FilePenLine,
+        Folder,
+        FolderGit2,
+        FolderOpen,
+        GitBranch,
+        GitBranchPlus,
+        Check,
+        GitCommitVertical,
+        Github,
+        ListFilter,
+        Moon,
+        Package,
+        Plus,
+        RefreshCw,
+        RotateCcw,
+        ScrollText,
+        Search,
+        Settings,
+        Square,
+        SquareCheck,
+        SquarePen,
+        SquareTerminal,
+        Sun,
+        SunMoon,
+        Tag,
+        TextWrap,
+        Trash,
+        User,
+        X
     ]
 );
 
@@ -144,12 +205,20 @@ impl gpui_kit::AssetSource for AppAssets {
 
 /// An icon in one colour.
 pub fn icon(name: Ico, size: f32, color: Hsla) -> gpui_kit::Svg {
-    gpui_kit::svg().path(name.path()).size(px(size)).flex_none().text_color(color)
+    gpui_kit::svg()
+        .path(name.path())
+        .size(px(size))
+        .flex_none()
+        .text_color(color)
 }
 
 /// A check box, ticked or not.
 pub fn check_box(p: &Pal, on: bool) -> gpui_kit::Svg {
-    icon(if on { Ico::SquareCheck } else { Ico::Square }, 15., if on { p.accent } else { p.muted })
+    icon(
+        if on { Ico::SquareCheck } else { Ico::Square },
+        15.,
+        if on { p.accent } else { p.muted },
+    )
 }
 
 /// A remote's icon: a cloud for every host, as Fork draws it.
@@ -162,7 +231,11 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
     let (lf, lb, rf, rb) = ref_colors(p);
     // A commit the checked-out branch does not have: its labels fade with its text, as in Fork.
     let fade = |c: Hsla| if dim { c.opacity(0.4) } else { c };
-    let (ink, ink2) = if dim { (p.faint, p.faint) } else { (p.text, p.accent) };
+    let (ink, ink2) = if dim {
+        (p.faint, p.faint)
+    } else {
+        (p.text, p.accent)
+    };
     let (bg, border) = match kind {
         "remote" => (rf, rb),
         "tag" => (p.accent_bg, p.accent),
@@ -184,7 +257,16 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
             .bg(bg)
             .text_color(ink)
             .text_size(px(12.))
-            .child(div().h_full().flex().items_center().px(px(4.)).border_r_1().border_color(border).child(icon(Ico::Tag, 12., ink2)))
+            .child(
+                div()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .px(px(4.))
+                    .border_r_1()
+                    .border_color(border)
+                    .child(icon(Ico::Tag, 12., ink2)),
+            )
             .child(div().px(px(6.)).child(name.to_string()));
     }
     let mark: Option<AnyElement> = match kind {
@@ -193,7 +275,11 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
         "tag" => Some(icon(Ico::Tag, 12., ink2).into_any_element()),
         _ => None,
     };
-    let shown = if kind == "detached" { String::new() } else { name.to_string() };
+    let shown = if kind == "detached" {
+        String::new()
+    } else {
+        name.to_string()
+    };
     div()
         .flex_none()
         .px(px(6.))
@@ -205,7 +291,11 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
         .rounded(px(5.))
         .border(px(1.5))
         .border_color(border)
-        .font_weight(if kind == "tag" { FontWeight::NORMAL } else { FontWeight::SEMIBOLD })
+        .font_weight(if kind == "tag" {
+            FontWeight::NORMAL
+        } else {
+            FontWeight::SEMIBOLD
+        })
         .bg(bg)
         .text_color(ink)
         .text_size(px(12.))
@@ -217,7 +307,11 @@ pub fn ref_pill(p: &Pal, name: &str, kind: &str, dim: bool) -> Div {
 pub enum RefView<'a> {
     /// A local branch. `remotes` counts the remotes whose branch of the same name sits on this
     /// commit too: they are drawn as an icon in front of the name instead of as labels of their own.
-    Branch { name: &'a str, current: bool, remotes: usize },
+    Branch {
+        name: &'a str,
+        current: bool,
+        remotes: usize,
+    },
     /// HEAD without a branch.
     Detached,
     Remote(&'a str),
@@ -234,17 +328,36 @@ pub fn ref_views(refs: &[gitcore::parse::RefLabel]) -> Vec<RefView<'_>> {
         out.push(RefView::Detached);
     }
     for current in [true, false] {
-        for x in refs.iter().filter(|x| local(x) && (x.kind == "head") == current) {
-            let remotes = refs.iter().filter(|y| y.kind == "remote" && branch_of(&y.name).as_deref() == Some(x.name.as_str())).count();
-            out.push(RefView::Branch { name: &x.name, current, remotes });
+        for x in refs
+            .iter()
+            .filter(|x| local(x) && (x.kind == "head") == current)
+        {
+            let remotes = refs
+                .iter()
+                .filter(|y| {
+                    y.kind == "remote" && branch_of(&y.name).as_deref() == Some(x.name.as_str())
+                })
+                .count();
+            out.push(RefView::Branch {
+                name: &x.name,
+                current,
+                remotes,
+            });
         }
     }
     for y in refs.iter().filter(|y| y.kind == "remote") {
-        if !refs.iter().any(|x| local(x) && branch_of(&y.name).as_deref() == Some(x.name.as_str())) {
+        if !refs
+            .iter()
+            .any(|x| local(x) && branch_of(&y.name).as_deref() == Some(x.name.as_str()))
+        {
             out.push(RefView::Remote(&y.name));
         }
     }
-    out.extend(refs.iter().filter(|x| x.kind == "tag").map(|x| RefView::Tag(&x.name)));
+    out.extend(
+        refs.iter()
+            .filter(|x| x.kind == "tag")
+            .map(|x| RefView::Tag(&x.name)),
+    );
     out
 }
 
@@ -324,7 +437,14 @@ pub fn empty(p: &Pal, big: &str, msg: &str, sub_msg: Option<&str>) -> AnyElement
         .gap_1()
         .p(px(40.))
         .text_color(p.muted)
-        .when(!big.is_empty(), |d| d.child(div().text_size(px(30.)).text_color(p.faint).child(big.to_string())))
+        .when(!big.is_empty(), |d| {
+            d.child(
+                div()
+                    .text_size(px(30.))
+                    .text_color(p.faint)
+                    .child(big.to_string()),
+            )
+        })
         .child(msg.to_string())
         .when_some(sub_msg, |d, s| d.child(sub(p, s.to_string())))
         .into_any_element()
@@ -339,10 +459,18 @@ pub fn rich(p: &Pal, s: &str) -> AnyElement {
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '*' && chars.get(i + 1) == Some(&'*') {
-            if let Some(end) = (i + 2..chars.len().saturating_sub(1)).find(|&j| chars[j] == '*' && chars[j + 1] == '*') {
+            if let Some(end) = (i + 2..chars.len().saturating_sub(1))
+                .find(|&j| chars[j] == '*' && chars[j + 1] == '*')
+            {
                 let start = out.len();
                 out.extend(&chars[i + 2..end]);
-                hl.push((start..out.len(), HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }));
+                hl.push((
+                    start..out.len(),
+                    HighlightStyle {
+                        font_weight: Some(FontWeight::BOLD),
+                        ..Default::default()
+                    },
+                ));
                 i = end + 2;
                 continue;
             }
@@ -352,14 +480,24 @@ pub fn rich(p: &Pal, s: &str) -> AnyElement {
         {
             let start = out.len();
             out.extend(&chars[i + 1..end]);
-            hl.push((start..out.len(), HighlightStyle { background_color: Some(p.panel2), color: Some(p.accent_tx), ..Default::default() }));
+            hl.push((
+                start..out.len(),
+                HighlightStyle {
+                    background_color: Some(p.panel2),
+                    color: Some(p.accent_tx),
+                    ..Default::default()
+                },
+            ));
             i = end + 1;
             continue;
         }
         out.push(chars[i]);
         i += 1;
     }
-    div().text_color(p.text).child(StyledText::new(out).with_highlights(hl)).into_any_element()
+    div()
+        .text_color(p.text)
+        .child(StyledText::new(out).with_highlights(hl))
+        .into_any_element()
 }
 
 /// `.tooltip_text("...")` on any stateful div.
@@ -370,13 +508,19 @@ pub trait TipExt: Sized {
 impl TipExt for Stateful<Div> {
     fn tooltip_text(self, t: impl Into<SharedString>) -> Self {
         let t: SharedString = t.into();
-        self.tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(t.clone()).build(window, cx))
+        self.tooltip(move |window, cx| {
+            gpui_kit::component::tooltip::Tooltip::new(t.clone()).build(window, cx)
+        })
     }
 }
 
 /// How the shortcut modifier is written on this system.
 pub fn mod_name() -> &'static str {
-    if cfg!(target_os = "macos") { "⌘" } else { "Ctrl" }
+    if cfg!(target_os = "macos") {
+        "⌘"
+    } else {
+        "Ctrl"
+    }
 }
 
 /// A 12x12 icon drawn from strokes, so it sits
@@ -419,29 +563,57 @@ mod tests {
     use gitcore::parse::RefLabel;
 
     fn l(name: &str, kind: &'static str) -> RefLabel {
-        RefLabel { name: name.into(), kind }
+        RefLabel {
+            name: name.into(),
+            kind,
+        }
     }
 
     #[test]
     fn a_remote_branch_joins_its_local_branch_whatever_order_git_lists_them_in() {
         // git lists `tag: v1, origin/main, main`: the remote comes before the local branch
-        let refs = [l("v1", "tag"), l("origin/main", "remote"), l("main", "branch"), l("origin/fix/x", "remote")];
+        let refs = [
+            l("v1", "tag"),
+            l("origin/main", "remote"),
+            l("main", "branch"),
+            l("origin/fix/x", "remote"),
+        ];
         let got: Vec<String> = ref_views(&refs)
             .iter()
             .map(|v| match v {
-                RefView::Branch { name, current, remotes } => format!("branch {name} {current} {remotes}"),
+                RefView::Branch {
+                    name,
+                    current,
+                    remotes,
+                } => format!("branch {name} {current} {remotes}"),
                 RefView::Detached => "detached".into(),
                 RefView::Remote(n) => format!("remote {n}"),
                 RefView::Tag(n) => format!("tag {n}"),
             })
             .collect();
-        assert_eq!(got, ["branch main false 1", "remote origin/fix/x", "tag v1"]);
+        assert_eq!(
+            got,
+            ["branch main false 1", "remote origin/fix/x", "tag v1"]
+        );
     }
 
     #[test]
     fn the_checked_out_branch_comes_first() {
-        let refs = [l("main", "branch"), l("origin/dev", "remote"), l("dev", "head")];
-        let got: Vec<&str> = ref_views(&refs).iter().filter_map(|v| if let RefView::Branch { name, .. } = v { Some(*name) } else { None }).collect();
+        let refs = [
+            l("main", "branch"),
+            l("origin/dev", "remote"),
+            l("dev", "head"),
+        ];
+        let got: Vec<&str> = ref_views(&refs)
+            .iter()
+            .filter_map(|v| {
+                if let RefView::Branch { name, .. } = v {
+                    Some(*name)
+                } else {
+                    None
+                }
+            })
+            .collect();
         assert_eq!(got, ["dev", "main"]);
     }
 }

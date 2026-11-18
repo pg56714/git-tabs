@@ -82,7 +82,13 @@ pub fn parse_release(json: &str) -> Result<Release, String> {
 
 fn curl() -> Command {
     let mut c = Command::new("curl");
-    c.args(["-fsSL", "-H", "User-Agent: git-tabs", "-H", "Accept: application/vnd.github+json"]);
+    c.args([
+        "-fsSL",
+        "-H",
+        "User-Agent: git-tabs",
+        "-H",
+        "Accept: application/vnd.github+json",
+    ]);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -92,8 +98,15 @@ fn curl() -> Command {
 }
 
 fn fetch_text(url: &str) -> Result<String, String> {
-    let o = curl().args(["--max-time", "30", url]).output().map_err(|e| format!("找不到 curl：{e}"))?;
-    if o.status.success() { Ok(String::from_utf8_lossy(&o.stdout).into_owned()) } else { Err(String::from_utf8_lossy(&o.stderr).trim().to_string()) }
+    let o = curl()
+        .args(["--max-time", "30", url])
+        .output()
+        .map_err(|e| format!("找不到 curl：{e}"))?;
+    if o.status.success() {
+        Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(&o.stderr).trim().to_string())
+    }
 }
 
 /// The checksum of `name` in the text of a `SHA256SUMS` file (`<hex>  <name>` per line).
@@ -116,9 +129,13 @@ fn sha256_hex(p: &Path) -> Result<String, String> {
 /// (made before it existed) is accepted; one that has it but does not list this file, or lists a
 /// different checksum, is refused.
 fn verify(rel: &Release, asset: &Asset, file: &Path) -> Result<(), String> {
-    let Some(sums) = rel.assets.iter().find(|a| a.name == "SHA256SUMS") else { return Ok(()) };
-    let text = fetch_text(&sums.browser_download_url).map_err(|e| format!("無法取得 SHA256SUMS：{e}"))?;
-    let want = expected_sum(&text, &asset.name).ok_or_else(|| format!("SHA256SUMS 沒有列出 {}", asset.name))?;
+    let Some(sums) = rel.assets.iter().find(|a| a.name == "SHA256SUMS") else {
+        return Ok(());
+    };
+    let text =
+        fetch_text(&sums.browser_download_url).map_err(|e| format!("無法取得 SHA256SUMS：{e}"))?;
+    let want = expected_sum(&text, &asset.name)
+        .ok_or_else(|| format!("SHA256SUMS 沒有列出 {}", asset.name))?;
     if sha256_hex(file)? != want {
         return Err("下載的檔案和 SHA256SUMS 不符（檔案損壞或被改過）".into());
     }
@@ -126,7 +143,12 @@ fn verify(rel: &Release, asset: &Asset, file: &Path) -> Result<(), String> {
 }
 
 fn download(url: &str, to: &Path) -> Result<(), String> {
-    let o = curl().args(["--max-time", "900", "-o"]).arg(to).arg(url).output().map_err(|e| format!("找不到 curl：{e}"))?;
+    let o = curl()
+        .args(["--max-time", "900", "-o"])
+        .arg(to)
+        .arg(url)
+        .output()
+        .map_err(|e| format!("找不到 curl：{e}"))?;
     if o.status.success() {
         Ok(())
     } else {
@@ -156,7 +178,11 @@ pub fn kind() -> Kind {
     }
     if cfg!(windows) {
         let s = exe.display().to_string().to_lowercase().replace('/', "\\");
-        return if s.contains("\\program files") || s.contains("\\appdata\\local\\programs\\") { Kind::Installer } else { Kind::Portable(exe) };
+        return if s.contains("\\program files") || s.contains("\\appdata\\local\\programs\\") {
+            Kind::Installer
+        } else {
+            Kind::Portable(exe)
+        };
     }
     Kind::Manual
 }
@@ -165,7 +191,10 @@ pub fn kind() -> Kind {
 pub fn asset_for<'a>(rel: &'a Release, kind: &Kind) -> Option<&'a Asset> {
     let find = |f: &dyn Fn(&str) -> bool| rel.assets.iter().find(|a| f(&a.name.to_lowercase()));
     match kind {
-        Kind::AppImage(_) => find(&|n| n.ends_with(".appimage") && (n.contains("amd64") || n.contains("x86_64") || !cfg!(target_arch = "aarch64"))),
+        Kind::AppImage(_) => find(&|n| {
+            n.ends_with(".appimage")
+                && (n.contains("amd64") || n.contains("x86_64") || !cfg!(target_arch = "aarch64"))
+        }),
         Kind::Installer => find(&|n| n.ends_with("-setup.exe")),
         Kind::Portable(_) => find(&|n| n.ends_with(".exe") && !n.contains("setup")),
         Kind::Manual => None,
@@ -179,11 +208,22 @@ pub fn apply(rel: &Release) -> Result<Outcome, String> {
 }
 
 pub fn apply_to(rel: &Release, kind: &Kind) -> Result<Outcome, String> {
-    let page = || Outcome::OpenPage(if rel.html_url.is_empty() { "https://github.com/pg56714/git-tabs/releases/latest".to_string() } else { rel.html_url.clone() });
-    let Some(asset) = asset_for(rel, kind) else { return Ok(page()) };
+    let page = || {
+        Outcome::OpenPage(if rel.html_url.is_empty() {
+            "https://github.com/pg56714/git-tabs/releases/latest".to_string()
+        } else {
+            rel.html_url.clone()
+        })
+    };
+    let Some(asset) = asset_for(rel, kind) else {
+        return Ok(page());
+    };
     match kind {
         Kind::AppImage(target) | Kind::Portable(target) => {
-            let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = target
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             // Next to the target, so the final rename stays on one disk.
             let new = target.with_file_name(format!("{name}.new"));
             download(&asset.browser_download_url, &new).map_err(|e| format!("下載失敗：{e}"))?;
@@ -201,7 +241,9 @@ pub fn apply_to(rel: &Release, kind: &Kind) -> Result<Outcome, String> {
                 let _ = std::fs::remove_file(&to);
                 return Err(e);
             }
-            Command::new(&to).spawn().map_err(|e| format!("無法啟動安裝程式：{e}"))?;
+            Command::new(&to)
+                .spawn()
+                .map_err(|e| format!("無法啟動安裝程式：{e}"))?;
             Ok(Outcome::Quit)
         }
         Kind::Manual => Ok(page()),
@@ -214,7 +256,8 @@ fn check_program(p: &Path) -> Result<(), String> {
     let mut head = [0u8; 4];
     let mut f = std::fs::File::open(p).map_err(|e| e.to_string())?;
     let len = f.metadata().map_err(|e| e.to_string())?.len();
-    f.read_exact(&mut head).map_err(|_| "下載的檔案不完整".to_string())?;
+    f.read_exact(&mut head)
+        .map_err(|_| "下載的檔案不完整".to_string())?;
     if len < 1_000_000 || !(head == *b"\x7fELF" || head[..2] == *b"MZ") {
         return Err("下載的檔案不是程式（可能被中斷或是錯誤頁面）".into());
     }
@@ -227,9 +270,13 @@ fn replace(new: &Path, target: &Path) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(new, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        std::fs::set_permissions(new, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
     }
-    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let old = target.with_file_name(format!("{name}.old"));
     let _ = std::fs::remove_file(&old);
     if target.exists() {
@@ -245,7 +292,10 @@ fn replace(new: &Path, target: &Path) -> Result<(), String> {
 /// Removes what a finished update left next to the program (the old file, on Windows).
 pub fn tidy() {
     if let Kind::AppImage(p) | Kind::Portable(p) = kind() {
-        let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = p
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let _ = std::fs::remove_file(p.with_file_name(format!("{name}.old")));
     }
 }
@@ -292,14 +342,33 @@ mod tests {
     fn each_kind_gets_its_own_file() {
         let r = release("https://x");
         assert_eq!(r.version(), "9.9.9");
-        assert!(asset_for(&r, &Kind::Installer).unwrap().name.ends_with("-setup.exe"));
-        assert_eq!(asset_for(&r, &Kind::Portable("a".into())).unwrap().name, "git-tabs_windows_x64.exe");
-        assert!(asset_for(&r, &Kind::AppImage("a".into())).unwrap().name.ends_with(".AppImage"));
+        assert!(
+            asset_for(&r, &Kind::Installer)
+                .unwrap()
+                .name
+                .ends_with("-setup.exe")
+        );
+        assert_eq!(
+            asset_for(&r, &Kind::Portable("a".into())).unwrap().name,
+            "git-tabs_windows_x64.exe"
+        );
+        assert!(
+            asset_for(&r, &Kind::AppImage("a".into()))
+                .unwrap()
+                .name
+                .ends_with(".AppImage")
+        );
         assert!(asset_for(&r, &Kind::Manual).is_none());
     }
 
     fn url(p: &Path) -> String {
-        format!("file:///{}", p.display().to_string().replace('\\', "/").trim_start_matches('/'))
+        format!(
+            "file:///{}",
+            p.display()
+                .to_string()
+                .replace('\\', "/")
+                .trim_start_matches('/')
+        )
     }
 
     fn fake_program(p: &Path, tag: &str) {
@@ -326,11 +395,19 @@ mod tests {
         let out = apply_to(&rel, &Kind::AppImage(target.clone())).unwrap();
         assert_eq!(out, Outcome::Restart(target.clone()));
         assert!(std::fs::read(&target).unwrap().starts_with(b"\x7fELFNEW"));
-        assert!(std::fs::read(d.path().join("git-tabs.AppImage.old")).unwrap().starts_with(b"\x7fELFOLD"));
+        assert!(
+            std::fs::read(d.path().join("git-tabs.AppImage.old"))
+                .unwrap()
+                .starts_with(b"\x7fELFOLD")
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o111, 0o111, "executable");
+            assert_eq!(
+                std::fs::metadata(&target).unwrap().permissions().mode() & 0o111,
+                0o111,
+                "executable"
+            );
         }
         // Same version: nothing to do.
         assert!(check("9.9.9").unwrap().is_none());
@@ -363,39 +440,76 @@ mod tests {
         let sums = "ABC123  git-tabs_windows_x64.exe
 0f0f *other.AppImage
 ";
-        assert_eq!(expected_sum(sums, "git-tabs_windows_x64.exe").as_deref(), Some("abc123"));
-        assert_eq!(expected_sum(sums, "other.AppImage").as_deref(), Some("0f0f"));
+        assert_eq!(
+            expected_sum(sums, "git-tabs_windows_x64.exe").as_deref(),
+            Some("abc123")
+        );
+        assert_eq!(
+            expected_sum(sums, "other.AppImage").as_deref(),
+            Some("0f0f")
+        );
         assert_eq!(expected_sum(sums, "missing.exe"), None);
     }
 
     #[test]
     fn a_checksum_mismatch_blocks_the_swap() {
         let d = tempfile::tempdir().unwrap();
-        let (served, sums, target) = (d.path().join("served.AppImage"), d.path().join("SHA256SUMS"), d.path().join("git-tabs.AppImage"));
+        let (served, sums, target) = (
+            d.path().join("served.AppImage"),
+            d.path().join("SHA256SUMS"),
+            d.path().join("git-tabs.AppImage"),
+        );
         fake_program(&served, "NEW");
         fake_program(&target, "OLD");
         let rel = |sums_url: String| Release {
             tag_name: "v9.9.9".into(),
             html_url: String::new(),
             assets: vec![
-                Asset { name: "git-tabs_9.9.9_amd64.AppImage".into(), browser_download_url: url(&served) },
-                Asset { name: "SHA256SUMS".into(), browser_download_url: sums_url },
+                Asset {
+                    name: "git-tabs_9.9.9_amd64.AppImage".into(),
+                    browser_download_url: url(&served),
+                },
+                Asset {
+                    name: "SHA256SUMS".into(),
+                    browser_download_url: sums_url,
+                },
             ],
         };
         // A wrong checksum: refused, and the old file stays.
-        std::fs::write(&sums, format!("{}  git-tabs_9.9.9_amd64.AppImage
-", "0".repeat(64))).unwrap();
+        std::fs::write(
+            &sums,
+            format!(
+                "{}  git-tabs_9.9.9_amd64.AppImage
+",
+                "0".repeat(64)
+            ),
+        )
+        .unwrap();
         let err = apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).unwrap_err();
         assert!(err.contains("SHA256SUMS"), "{err}");
         assert!(std::fs::read(&target).unwrap().starts_with(b"\x7fELFOLD"));
         assert!(!d.path().join("git-tabs.AppImage.new").exists());
         // A file the list does not name: refused too.
-        std::fs::write(&sums, format!("{}  other.AppImage
-", sha256_hex(&served).unwrap())).unwrap();
+        std::fs::write(
+            &sums,
+            format!(
+                "{}  other.AppImage
+",
+                sha256_hex(&served).unwrap()
+            ),
+        )
+        .unwrap();
         assert!(apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).is_err());
         // The right checksum: swapped.
-        std::fs::write(&sums, format!("{}  git-tabs_9.9.9_amd64.AppImage
-", sha256_hex(&served).unwrap())).unwrap();
+        std::fs::write(
+            &sums,
+            format!(
+                "{}  git-tabs_9.9.9_amd64.AppImage
+",
+                sha256_hex(&served).unwrap()
+            ),
+        )
+        .unwrap();
         assert!(apply_to(&rel(url(&sums)), &Kind::AppImage(target.clone())).is_ok());
         assert!(std::fs::read(&target).unwrap().starts_with(b"\x7fELFNEW"));
     }
