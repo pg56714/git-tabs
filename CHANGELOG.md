@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.13.1 (2026-11-18)
+
+### Fixes
+
+- **macos:** start the tabs after the window buttons, and switch tabs with Ctrl+Tab since Cmd+Tab is the system app switcher ([6a5c5e5](https://github.com/pg56714/git-tabs/commit/6a5c5e5ba9b29bc685fde98074c9e4f56fa835d4))
+
+### Other
+
+- **readme:** note that the palette and commit shortcuts use Cmd on macOS ([c02322b](https://github.com/pg56714/git-tabs/commit/c02322b735a2343e1ed14355fa44dc68b40e0bd7))
+
 ## v0.13.0 (2026-11-18)
 
 ### Features
