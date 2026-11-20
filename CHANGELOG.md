@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.0 (2026-11-20)
+
+### Features
+
+- **ui:** show a scrollbar on every scrollable list and pane ([cac77ca](https://github.com/pg56714/git-tabs/commit/cac77cacf8eede71741658eb6db068970a661594))
+
+### Other
+
+- fix the clippy warnings and rustfmt differences ([abaf0d2](https://github.com/pg56714/git-tabs/commit/abaf0d21831cbbd3062430cd7834dc7bf5bad754))
+
 ## v0.13.1 (2026-11-18)
 
 ### Fixes
