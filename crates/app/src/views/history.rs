@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use gitcore::parse::Commit;
 use gpui_kit::component::input::Input;
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, Bounds, Context, Hsla, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, PathBuilder, SharedString, StatefulInteractiveElement as _, Styled as _,
@@ -620,6 +621,7 @@ impl GitTabs {
                 .on_action(cx.listener(|this, _: &NextFile, _, cx| this.move_commit(1, cx)))
                 .on_action(cx.listener(|this, _: &PreviousFile, _, cx| this.move_commit(-1, cx)))
                 .child(list)
+                .vertical_scrollbar(&self.commit_scroll)
                 .when_some(empty_msg, |d, m| {
                     d.child(
                         div()
@@ -735,309 +737,327 @@ impl GitTabs {
             .and_then(|x| x.stashes.iter().find(|s| s.sha == d.sha))
             .map(|s| s.index as usize);
         let repo_path = self.repo().map(|r| r.path.clone()).unwrap_or_default();
+        let detail_scroll = self.detail_scroll.clone();
         div()
-            .id("commit-tab")
+            .relative()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.detail_scroll)
-            .px(px(18.))
-            .py(px(14.))
-            .gap(px(10.))
-            .child({
-                // AUTHOR and COMMITTER side by side as in Fork; one block when they are the same.
-                let same = d.author == d.committer
-                    && d.email == d.committer_email
-                    && d.time == d.commit_time;
-                let slug = self
-                    .repo()
-                    .and_then(|r| r.summary.as_ref())
-                    .and_then(|s| s.remote_url.as_deref())
-                    .and_then(gitcore::avatar::github_slug);
-                let person = |label: &'static str,
-                              name: &str,
-                              email: &str,
-                              time: i64,
-                              hint: Option<(&str, &str)>| {
-                    div()
-                        .flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap(px(12.))
-                        .items_center()
-                        .child(avatar(name, email, hint, 40., &self.avatars))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .child(div().text_size(px(10.5)).text_color(p.faint).child(label))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .gap_2()
-                                        .child(
-                                            div()
-                                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                                .child(name.to_string()),
-                                        )
-                                        .child(sub(&p, email.to_string())),
-                                )
-                                .child(sub(&p, date_time(time))),
-                        )
-                };
-                div()
-                    .flex()
-                    .gap(px(18.))
-                    .child(person(
-                        "AUTHOR",
-                        &d.author,
-                        &d.email,
-                        d.time,
-                        slug.as_deref().map(|s| (s, d.sha.as_str())),
-                    ))
-                    .when(!same, |r| {
-                        r.child(person(
-                            "COMMITTER",
-                            &d.committer,
-                            &d.committer_email,
-                            d.commit_time,
-                            None,
-                        ))
-                    })
-            })
             .child(
                 div()
+                    .id("commit-tab")
                     .flex()
                     .flex_col()
-                    .gap(px(4.))
-                    .text_size(px(12.))
-                    .text_color(p.muted)
-                    .when(!d.refs.is_empty(), |c| {
-                        c.child(kv(
-                            "REFS",
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.detail_scroll)
+                    .px(px(18.))
+                    .py(px(14.))
+                    .gap(px(10.))
+                    .child({
+                        // AUTHOR and COMMITTER side by side as in Fork; one block when they are the same.
+                        let same = d.author == d.committer
+                            && d.email == d.committer_email
+                            && d.time == d.commit_time;
+                        let slug = self
+                            .repo()
+                            .and_then(|r| r.summary.as_ref())
+                            .and_then(|s| s.remote_url.as_deref())
+                            .and_then(gitcore::avatar::github_slug);
+                        let person =
+                            |label: &'static str,
+                             name: &str,
+                             email: &str,
+                             time: i64,
+                             hint: Option<(&str, &str)>| {
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(px(12.))
+                                    .items_center()
+                                    .child(avatar(name, email, hint, 40., &self.avatars))
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.5))
+                                                    .text_color(p.faint)
+                                                    .child(label),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .gap_2()
+                                                    .child(
+                                                        div()
+                                                            .font_weight(
+                                                                gpui_kit::FontWeight::SEMIBOLD,
+                                                            )
+                                                            .child(name.to_string()),
+                                                    )
+                                                    .child(sub(&p, email.to_string())),
+                                            )
+                                            .child(sub(&p, date_time(time))),
+                                    )
+                            };
+                        div()
+                            .flex()
+                            .gap(px(18.))
+                            .child(person(
+                                "AUTHOR",
+                                &d.author,
+                                &d.email,
+                                d.time,
+                                slug.as_deref().map(|s| (s, d.sha.as_str())),
+                            ))
+                            .when(!same, |r| {
+                                r.child(person(
+                                    "COMMITTER",
+                                    &d.committer,
+                                    &d.committer_email,
+                                    d.commit_time,
+                                    None,
+                                ))
+                            })
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .text_size(px(12.))
+                            .text_color(p.muted)
+                            .when(!d.refs.is_empty(), |c| {
+                                c.child(kv(
+                                    "REFS",
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .text_color(p.text)
+                                        .children({
+                                            ref_views(&d.refs).into_iter().map(move |v| match v {
+                                                RefView::Branch {
+                                                    name,
+                                                    current,
+                                                    remotes,
+                                                } => ref_group(&p, name, current, remotes, false),
+                                                RefView::Remote(name) => {
+                                                    ref_pill(&p, name, "remote", false)
+                                                }
+                                                RefView::Detached => {
+                                                    ref_pill(&p, "", "detached", false)
+                                                }
+                                                RefView::Tag(name) => {
+                                                    ref_pill(&p, name, "tag", false)
+                                                }
+                                            })
+                                        })
+                                        .into_any_element(),
+                                ))
+                            })
+                            .child(kv(
+                                "SHA",
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .text_color(p.text)
+                                    .font_family("Cascadia Mono")
+                                    .child(sha.clone())
+                                    .child(
+                                        div()
+                                            .id("copy-sha")
+                                            .flex_none()
+                                            .cursor_pointer()
+                                            .tooltip_text(crate::i18n::t("複製 SHA"))
+                                            .child(icon(Ico::Copy, 14., p.muted))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.copy(s1.clone(), &short(&s1), cx)
+                                            })),
+                                    )
+                                    .when_some(gh_url, |d, url| {
+                                        d.child(
+                                            div()
+                                                .id("open-sha-gh")
+                                                .flex_none()
+                                                .cursor_pointer()
+                                                .tooltip_text(crate::i18n::tr(
+                                                    "在 GitHub 開啟 '{}'",
+                                                    &[],
+                                                    &[short(&sha).to_string()],
+                                                ))
+                                                .child(icon(Ico::Github, 14., p.muted))
+                                                .on_click(move |_, _, _| {
+                                                    let _ = gitcore::open_url(&url);
+                                                }),
+                                        )
+                                    })
+                                    .into_any_element(),
+                            ))
+                            .child(kv(
+                                "PARENTS",
+                                div()
+                                    .flex()
+                                    .gap(px(8.))
+                                    .text_color(p.text)
+                                    .font_family("Cascadia Mono")
+                                    .children(d.parents.iter().map(|pa| {
+                                        let pa2 = pa.clone();
+                                        div()
+                                            .id(SharedString::from(format!("par-{pa}")))
+                                            .text_color(p.accent)
+                                            .cursor_pointer()
+                                            .child(short(pa))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.pick_commit(pa2.clone(), cx)
+                                            }))
+                                    }))
+                                    .when(d.parents.is_empty(), |c| {
+                                        c.child(crate::i18n::t("（第一個 commit）"))
+                                    })
+                                    .into_any_element(),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .mt(px(6.))
+                            .text_size(px(15.))
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .child(subject),
+                    )
+                    .when(!body.is_empty(), |c| {
+                        c.child(
+                            div()
+                                .font_family("Cascadia Mono")
+                                .text_size(px(12.5))
+                                .text_color(p.muted)
+                                .child(body),
+                        )
+                    })
+                    .child(match stash_ix {
+                        // A stash: what can be done with it, instead of what can be done with a commit.
+                        Some(ix) => {
+                            let (pa, pb) = (repo_path.clone(), repo_path.clone());
                             div()
                                 .flex()
                                 .flex_wrap()
-                                .text_color(p.text)
-                                .children({
-                                    ref_views(&d.refs).into_iter().map(move |v| match v {
-                                        RefView::Branch {
-                                            name,
-                                            current,
-                                            remotes,
-                                        } => ref_group(&p, name, current, remotes, false),
-                                        RefView::Remote(name) => {
-                                            ref_pill(&p, name, "remote", false)
-                                        }
-                                        RefView::Detached => ref_pill(&p, "", "detached", false),
-                                        RefView::Tag(name) => ref_pill(&p, name, "tag", false),
-                                    })
-                                })
-                                .into_any_element(),
-                        ))
-                    })
-                    .child(kv(
-                        "SHA",
-                        div()
+                                .gap(px(6.))
+                                .child(act("s-ap", crate::i18n::t("套用")).on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.simple_op(
+                                            &pa,
+                                            "stash-apply",
+                                            ix.to_string(),
+                                            crate::i18n::t("套用 stash"),
+                                            Some(crate::i18n::t("已套用 stash").into()),
+                                            cx,
+                                        )
+                                    },
+                                )))
+                                .child(act("s-pop", "Pop").on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.simple_op(
+                                            &pb,
+                                            "stash-pop",
+                                            ix.to_string(),
+                                            "Pop stash",
+                                            Some(crate::i18n::t("已套用並刪除 stash").into()),
+                                            cx,
+                                        )
+                                    },
+                                )))
+                                .child(act("s-dr", crate::i18n::t("刪除")).on_click(
+                                    cx.listener(move |this, _, _, cx| this.stash_drop(ix, cx)),
+                                ))
+                        }
+                        None => div()
                             .flex()
-                            .items_center()
-                            .gap_2()
-                            .text_color(p.text)
-                            .font_family("Cascadia Mono")
-                            .child(sha.clone())
-                            .child(
-                                div()
-                                    .id("copy-sha")
-                                    .flex_none()
-                                    .cursor_pointer()
-                                    .tooltip_text(crate::i18n::t("複製 SHA"))
-                                    .child(icon(Ico::Copy, 14., p.muted))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.copy(s1.clone(), &short(&s1), cx)
-                                    })),
-                            )
-                            .when_some(gh_url, |d, url| {
-                                d.child(
-                                    div()
-                                        .id("open-sha-gh")
-                                        .flex_none()
-                                        .cursor_pointer()
-                                        .tooltip_text(crate::i18n::tr(
-                                            "在 GitHub 開啟 '{}'",
-                                            &[],
-                                            &[short(&sha).to_string()],
-                                        ))
-                                        .child(icon(Ico::Github, 14., p.muted))
-                                        .on_click(move |_, _, _| {
-                                            let _ = gitcore::open_url(&url);
-                                        }),
-                                )
-                            })
-                            .into_any_element(),
-                    ))
-                    .child(kv(
-                        "PARENTS",
-                        div()
-                            .flex()
-                            .gap(px(8.))
-                            .text_color(p.text)
-                            .font_family("Cascadia Mono")
-                            .children(d.parents.iter().map(|pa| {
-                                let pa2 = pa.clone();
-                                div()
-                                    .id(SharedString::from(format!("par-{pa}")))
-                                    .text_color(p.accent)
-                                    .cursor_pointer()
-                                    .child(short(pa))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.pick_commit(pa2.clone(), cx)
-                                    }))
-                            }))
-                            .when(d.parents.is_empty(), |c| {
-                                c.child(crate::i18n::t("（第一個 commit）"))
-                            })
-                            .into_any_element(),
-                    )),
-            )
-            .child(
-                div()
-                    .mt(px(6.))
-                    .text_size(px(15.))
-                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .child(subject),
-            )
-            .when(!body.is_empty(), |c| {
-                c.child(
-                    div()
-                        .font_family("Cascadia Mono")
-                        .text_size(px(12.5))
-                        .text_color(p.muted)
-                        .child(body),
-                )
-            })
-            .child(match stash_ix {
-                // A stash: what can be done with it, instead of what can be done with a commit.
-                Some(ix) => {
-                    let (pa, pb) = (repo_path.clone(), repo_path.clone());
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.))
-                        .child(act("s-ap", crate::i18n::t("套用")).on_click(cx.listener(
-                            move |this, _, _, cx| {
-                                this.simple_op(
-                                    &pa,
-                                    "stash-apply",
-                                    ix.to_string(),
-                                    crate::i18n::t("套用 stash"),
-                                    Some(crate::i18n::t("已套用 stash").into()),
-                                    cx,
-                                )
-                            },
-                        )))
-                        .child(
-                            act("s-pop", "Pop").on_click(cx.listener(move |this, _, _, cx| {
-                                this.simple_op(
-                                    &pb,
-                                    "stash-pop",
-                                    ix.to_string(),
-                                    "Pop stash",
-                                    Some(crate::i18n::t("已套用並刪除 stash").into()),
-                                    cx,
-                                )
-                            })),
-                        )
-                        .child(
-                            act("s-dr", crate::i18n::t("刪除")).on_click(
-                                cx.listener(move |this, _, _, cx| this.stash_drop(ix, cx)),
-                            ),
-                        )
-                }
-                None => {
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.))
-                        .child(act("a-cp", "Cherry-pick").on_click(
-                            cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx)),
-                        ))
-                        .child(act("a-rv", "Revert").on_click(
-                            cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx)),
-                        ))
-                        .child(act("a-co", "Checkout").on_click(
-                            cx.listener(move |this, _, _, cx| this.checkout_commit(s4.clone(), cx)),
-                        ))
-                        .child(act("a-br", crate::i18n::t("Branch")).on_click(cx.listener({
-                            let s = sha.clone();
-                            move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
-                        })))
-                        .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(
-                            cx.listener(move |this, _, w, cx| this.create_tag(s5.clone(), w, cx)),
-                        ))
-                        .child(act("a-rs", crate::i18n::t("Reset 到這裡")).on_click(
-                            cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx)),
-                        ))
-                }
-            })
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(p.border)
-                    .pt(px(6.))
-                    .children(d.files.iter().map(|f| {
-                        let path = f.path.clone();
-                        div()
-                            .id(SharedString::from(format!("hf-{}", f.path)))
-                            .flex()
-                            .items_center()
+                            .flex_wrap()
                             .gap(px(6.))
-                            .px(px(4.))
-                            .py(px(3.))
-                            .rounded(px(5.))
-                            .cursor_pointer()
-                            .whitespace_nowrap()
-                            .hover(move |s| s.bg(p.hover))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.select(ListKind::C, path.clone(), cx);
-                                this.set_hist_tab(HistTab::Changes, cx);
-                            }))
-                            .child(st_badge(&p, f.status))
-                            .child(
+                            .child(act("a-cp", "Cherry-pick").on_click(
+                                cx.listener(move |this, _, _, cx| this.cherry_pick(s2.clone(), cx)),
+                            ))
+                            .child(act("a-rv", "Revert").on_click(
+                                cx.listener(move |this, _, _, cx| this.revert(s3.clone(), cx)),
+                            ))
+                            .child(act("a-co", "Checkout").on_click(cx.listener(
+                                move |this, _, _, cx| this.checkout_commit(s4.clone(), cx),
+                            )))
+                            .child(act("a-br", crate::i18n::t("Branch")).on_click(cx.listener({
+                                let s = sha.clone();
+                                move |this, _, w, cx| this.new_branch(Some(s.clone()), w, cx)
+                            })))
+                            .child(act("a-tg", crate::i18n::t("加 Tag")).on_click(cx.listener(
+                                move |this, _, w, cx| this.create_tag(s5.clone(), w, cx),
+                            )))
+                            .child(act("a-rs", crate::i18n::t("Reset 到這裡")).on_click(
+                                cx.listener(move |this, _, _, cx| this.reset_to(s6.clone(), cx)),
+                            )),
+                    })
+                    .child(
+                        div()
+                            .border_t_1()
+                            .border_color(p.border)
+                            .pt(px(6.))
+                            .children(d.files.iter().map(|f| {
+                                let path = f.path.clone();
                                 div()
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .text_size(px(12.))
-                                    .font_family("Cascadia Mono")
-                                    .child(f.path.clone()),
-                            )
-                            .child(div().flex_1())
-                            .when_some(f.add, |d, a| {
-                                d.child(
+                                    .id(SharedString::from(format!("hf-{}", f.path)))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .px(px(4.))
+                                    .py(px(3.))
+                                    .rounded(px(5.))
+                                    .cursor_pointer()
+                                    .whitespace_nowrap()
+                                    .hover(move |s| s.bg(p.hover))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.select(ListKind::C, path.clone(), cx);
+                                        this.set_hist_tab(HistTab::Changes, cx);
+                                    }))
+                                    .child(st_badge(&p, f.status))
+                                    .child(
+                                        div()
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .text_size(px(12.))
+                                            .font_family("Cascadia Mono")
+                                            .child(f.path.clone()),
+                                    )
+                                    .child(div().flex_1())
+                                    .when_some(f.add, |d, a| {
+                                        d.child(
+                                            div()
+                                                .text_size(px(12.))
+                                                .text_color(p.ok)
+                                                .child(format!("+{a}")),
+                                        )
+                                    })
+                                    .when_some(f.del, |d, a| {
+                                        d.child(
+                                            div()
+                                                .text_size(px(12.))
+                                                .text_color(p.danger)
+                                                .child(format!("−{a}")),
+                                        )
+                                    })
+                            }))
+                            .when(d.files.is_empty(), |c| {
+                                c.child(
                                     div()
-                                        .text_size(px(12.))
-                                        .text_color(p.ok)
-                                        .child(format!("+{a}")),
+                                        .px(px(12.))
+                                        .py(px(6.))
+                                        .child(sub(&p, crate::i18n::t("沒有檔案變更"))),
                                 )
-                            })
-                            .when_some(f.del, |d, a| {
-                                d.child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(p.danger)
-                                        .child(format!("−{a}")),
-                                )
-                            })
-                    }))
-                    .when(d.files.is_empty(), |c| {
-                        c.child(
-                            div()
-                                .px(px(12.))
-                                .py(px(6.))
-                                .child(sub(&p, crate::i18n::t("沒有檔案變更"))),
-                        )
-                    }),
+                            }),
+                    ),
             )
+            .vertical_scrollbar(&detail_scroll)
             .into_any_element()
     }
 
@@ -1132,6 +1152,7 @@ impl GitTabs {
                     .collect()
             }
         })
+        .track_scroll(&self.ftree_scroll)
         .size_full();
         let right: AnyElement = match (&sel, shown) {
             (None, Some(FileShown::Note(why))) => empty(&p, "", &why, None),
@@ -1171,6 +1192,7 @@ impl GitTabs {
                         }
                     },
                 )
+                .track_scroll(&self.fc_scroll)
                 .size_full();
                 div()
                     .flex()
@@ -1205,9 +1227,11 @@ impl GitTabs {
                         div()
                             .flex_1()
                             .min_h_0()
+                            .relative()
                             .overflow_hidden()
                             .py(px(4.))
-                            .child(body),
+                            .child(body)
+                            .vertical_scrollbar(&self.fc_scroll),
                     )
                     .into_any_element()
             }
@@ -1222,11 +1246,13 @@ impl GitTabs {
         .child(
             div()
                 .id("hist-ftree")
+                .relative()
                 .flex_none()
                 .w(px(hf))
                 .h_full()
                 .py(px(6.))
-                .child(tree),
+                .child(tree)
+                .vertical_scrollbar(&self.ftree_scroll),
         )
         .child(splitter(&p, "split-ft", SplitKind::HistFiles, true))
         .child(right)
@@ -1277,13 +1303,20 @@ impl GitTabs {
         )
         .child(
             div()
-                .id("hist-tree")
+                .relative()
                 .flex_none()
                 .w(px(hf))
                 .h_full()
-                .overflow_y_scroll()
-                .py(px(6.))
-                .child(tree),
+                .child(
+                    div()
+                        .id("hist-tree")
+                        .size_full()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.htree_scroll)
+                        .py(px(6.))
+                        .child(tree),
+                )
+                .vertical_scrollbar(&self.htree_scroll),
         )
         .child(splitter(&p, "split-hf", SplitKind::HistFiles, true))
         .child(right)

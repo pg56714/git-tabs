@@ -1,5 +1,6 @@
 //! The left navigation: views, branches, remotes, tags, stashes, worktrees.
 
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
@@ -847,13 +848,19 @@ impl GitTabs {
         );
 
         div()
-            .id("sidebar")
+            .relative()
             .size_full()
-            .py(px(8.))
             .bg(p.panel2)
-            .overflow_y_scroll()
-            .track_scroll(&self.side_scroll)
-            .children(rows)
+            .child(
+                div()
+                    .id("sidebar")
+                    .size_full()
+                    .py(px(8.))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.side_scroll)
+                    .children(rows),
+            )
+            .vertical_scrollbar(&self.side_scroll)
             .into_any_element()
     }
 

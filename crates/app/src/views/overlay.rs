@@ -1,6 +1,7 @@
 //! Context menu, dialogs, command palette, toasts and the command-log bar.
 
 use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, Context, Hsla, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
@@ -268,7 +269,7 @@ impl GitTabs {
                             .gap(px(10.))
                             .px(px(16.))
                             .pb(px(14.))
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .min_h_0()
                             .child(body),
                     )
@@ -611,7 +612,7 @@ impl GitTabs {
                         div()
                             .id("palette-items")
                             .max_h(px((f32::from(self.window_size.height) * 0.5).max(160.)))
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .p(px(6.))
                             .children(rows)
                             .when(items.is_empty(), |d| {
@@ -701,8 +702,7 @@ impl GitTabs {
             div()
                 .id("log-list")
                 .max_h(px(200.))
-                .overflow_y_scroll()
-                .track_scroll(&self.log_scroll)
+                .overflow_y_scrollbar()
                 .px(px(10.))
                 .pt(px(4.))
                 .pb(px(8.))

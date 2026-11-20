@@ -1,6 +1,7 @@
 //! The "Changes" view: file lists, review progress, commit box, diff.
 
 use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
@@ -341,66 +342,72 @@ impl GitTabs {
             )
             .child(
                 div()
-                    .id("files-scroll")
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.files_scroll)
-                    .pb(px(8.))
-                    .child(section(
-                        "sec-u",
-                        crate::i18n::t("未暫存"),
-                        un_n,
-                        (un_n > 0).then(|| {
-                            btn(
-                                &p,
-                                "stage-all",
-                                Bk::Normal,
-                                true,
-                                crate::i18n::t("全部 Stage"),
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| this.stage_all(cx)))
-                            .into_any_element()
-                        }),
-                    ))
-                    .child(un_tree)
-                    .when(un_n == 0, |d| {
-                        d.child(
-                            div()
-                                .px(px(16.))
-                                .text_size(px(12.))
-                                .text_color(p.faint)
-                                .child(crate::i18n::t("（沒有）")),
-                        )
-                    })
-                    .child(section(
-                        "sec-s",
-                        crate::i18n::t("已暫存"),
-                        st_n,
-                        (st_n > 0).then(|| {
-                            btn(
-                                &p,
-                                "unstage-all",
-                                Bk::Normal,
-                                true,
-                                crate::i18n::t("全部取消"),
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx)))
-                            .into_any_element()
-                        }),
-                    ))
-                    .child(st_tree)
-                    .when(st_n == 0, |d| {
-                        d.child(
-                            div()
-                                .px(px(16.))
-                                .text_size(px(12.))
-                                .text_color(p.faint)
-                                .child(crate::i18n::t(
-                                    "（沒有。按 Stage 把要 commit 的檔案放進來）",
-                                )),
-                        )
-                    }),
+                    .child(
+                        div()
+                            .id("files-scroll")
+                            .size_full()
+                            .overflow_y_scroll()
+                            .track_scroll(&self.files_scroll)
+                            .pb(px(8.))
+                            .child(section(
+                                "sec-u",
+                                crate::i18n::t("未暫存"),
+                                un_n,
+                                (un_n > 0).then(|| {
+                                    btn(
+                                        &p,
+                                        "stage-all",
+                                        Bk::Normal,
+                                        true,
+                                        crate::i18n::t("全部 Stage"),
+                                    )
+                                    .on_click(cx.listener(|this, _, _, cx| this.stage_all(cx)))
+                                    .into_any_element()
+                                }),
+                            ))
+                            .child(un_tree)
+                            .when(un_n == 0, |d| {
+                                d.child(
+                                    div()
+                                        .px(px(16.))
+                                        .text_size(px(12.))
+                                        .text_color(p.faint)
+                                        .child(crate::i18n::t("（沒有）")),
+                                )
+                            })
+                            .child(section(
+                                "sec-s",
+                                crate::i18n::t("已暫存"),
+                                st_n,
+                                (st_n > 0).then(|| {
+                                    btn(
+                                        &p,
+                                        "unstage-all",
+                                        Bk::Normal,
+                                        true,
+                                        crate::i18n::t("全部取消"),
+                                    )
+                                    .on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx)))
+                                    .into_any_element()
+                                }),
+                            ))
+                            .child(st_tree)
+                            .when(st_n == 0, |d| {
+                                d.child(
+                                    div()
+                                        .px(px(16.))
+                                        .text_size(px(12.))
+                                        .text_color(p.faint)
+                                        .child(crate::i18n::t(
+                                            "（沒有。按 Stage 把要 commit 的檔案放進來）",
+                                        )),
+                                )
+                            }),
+                    )
+                    .vertical_scrollbar(&self.files_scroll),
             )
             .child(
                 div()

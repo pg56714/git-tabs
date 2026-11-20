@@ -1,6 +1,7 @@
 //! The big dialogs: settings, add repo and blame.
 
 use gpui_kit::component::input::Input;
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, ClickEvent, Context, Hsla, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
@@ -1047,7 +1048,7 @@ impl GitTabs {
                     div()
                         .id("ar-list")
                         .max_h(px(260.))
-                        .overflow_y_scroll()
+                        .overflow_y_scrollbar()
                         .border_1()
                         .border_color(p.border)
                         .rounded(px(8.))
@@ -1294,7 +1295,7 @@ impl GitTabs {
         } else {
             let lines = std::sync::Arc::new(m.lines.clone());
             let n = lines.len();
-            uniform_list("blame", n, move |range, _, _| {
+            let list = uniform_list("blame", n, move |range, _, _| {
                 range
                     .map(|i| {
                         let l = &lines[i];
@@ -1343,8 +1344,14 @@ impl GitTabs {
                     })
                     .collect()
             })
-            .h(px(520.))
-            .into_any_element()
+            .track_scroll(&self.blame_scroll)
+            .size_full();
+            div()
+                .relative()
+                .h(px(520.))
+                .child(list)
+                .vertical_scrollbar(&self.blame_scroll)
+                .into_any_element()
         };
         let _ = date_time(0);
         let close = btn(&p, "bl-close", Bk::Normal, false, crate::i18n::t("關閉"))

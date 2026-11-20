@@ -1,5 +1,6 @@
 //! The Reflog list.
 
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
@@ -34,11 +35,12 @@ impl GitTabs {
                     .child(sub(&p, crate::i18n::t("HEAD 的移動紀錄。不小心 reset、rebase 或刪掉 branch 時，可以從這裡找回 commit。"))),
             )
             .child(
+                div().relative().flex_1().min_h_0().child(
                 div()
                     .id("reflog")
-                    .flex_1()
-                    .min_h_0()
+                    .size_full()
                     .overflow_y_scroll()
+                    .track_scroll(&self.reflog_scroll)
                     .children(rows.iter().map(|e| {
                         let (s1, s2, s3, s4) = (e.sha.clone(), e.sha.clone(), e.sha.clone(), e.sha.clone());
                         div()
@@ -79,6 +81,7 @@ impl GitTabs {
                             )
                     }))
                     .when(rows.is_empty(), |d| d.child(empty(&p, "", crate::i18n::t("沒有紀錄"), None))),
+                ).vertical_scrollbar(&self.reflog_scroll),
             )
             .into_any_element()
     }
