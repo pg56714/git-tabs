@@ -4,5 +4,3 @@ target/
 .DS_Store
 .claude/
 release-notes.md
-node_modules/
-src-tauri/
