@@ -97,6 +97,9 @@ const TABLE: &[(&str, &str)] = &[
     ("取消 Stage", "Unstage"),
     ("`{}` 的修改", "the changes to `{}`"),
     ("{} 個檔案的修改", "the changes to {} files"),
+    ("Stage {} 個檔案", "Stage {} files"),
+    ("取消 Stage {} 個檔案", "Unstage {} files"),
+    ("Discard {} 個檔案的修改", "Discard changes to {} files"),
     (
         "\n其中 {untracked} 個是新檔案，會直接**刪除**。",
         "\n{untracked} of them are new files and will be **deleted**.",

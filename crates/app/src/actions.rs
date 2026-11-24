@@ -250,6 +250,7 @@ impl GitTabs {
         if paths.is_empty() {
             return;
         }
+        self.multi = None;
         let set: HashSet<String> = paths.iter().cloned().collect();
         self.quick(
             &path,
@@ -284,6 +285,7 @@ impl GitTabs {
         if paths.is_empty() {
             return;
         }
+        self.multi = None;
         let set: HashSet<String> = paths.iter().cloned().collect();
         self.quick(
             &path,
@@ -383,6 +385,7 @@ impl GitTabs {
             cx,
             move |this, _, cx| {
                 let paths = paths.clone();
+                this.multi = None;
                 this.op(
                     &repo,
                     crate::i18n::t("Discard"),

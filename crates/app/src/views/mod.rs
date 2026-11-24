@@ -53,6 +53,7 @@ pub fn bind_keys(cx: &mut gpui_kit::App) {
         KeyBinding::new("left", PreviousHunk, Some("Nav")),
         KeyBinding::new("enter", ToggleSeenAction, Some("Nav")),
         KeyBinding::new("s", StageToggle, Some("Nav")),
+        KeyBinding::new(key("a"), SelectAllFiles, Some("Nav")),
         KeyBinding::new("down", PaletteDown, Some("Palette")),
         KeyBinding::new("up", PaletteUp, Some("Palette")),
         KeyBinding::new("enter", PaletteRun, Some("Palette")),

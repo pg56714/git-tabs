@@ -78,20 +78,11 @@ impl GitTabs {
             _ => "Merge",
         };
         let empty_status = r.status.is_empty();
-        let sel_u = sel
-            .as_ref()
-            .filter(|s| s.list == ListKind::U)
-            .map(|s| s.path.clone());
-        let sel_s = sel
-            .as_ref()
-            .filter(|s| s.list == ListKind::S)
-            .map(|s| s.path.clone());
         let files_w = self.sizes.files;
-        let (un_tree, st_tree) = (
-            self.render_filetree(ListKind::U, &un, sel_u.as_deref(), cx),
-            self.render_filetree(ListKind::S, &st, sel_s.as_deref(), cx),
-        );
-        let (un_n, st_n) = (un.len(), st.len());
+        let change_list = {
+            let items = self.change_items(&un, &st);
+            self.render_change_list(items, cx)
+        };
         let amend = self.amend;
         let committing = self.committing;
         let err = self.commit_err.clone();
@@ -286,22 +277,6 @@ impl GitTabs {
         };
 
         // ---- left: lists + commit box
-        let section = |id: &'static str, title: &str, n: usize, btn_el: Option<AnyElement>| {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .px(px(10.))
-                .pt(px(8.))
-                .pb(px(4.))
-                .text_size(px(12.))
-                .text_color(p.muted)
-                .child(div().child(title.to_string()))
-                .child(sub(&p, n.to_string()))
-                .child(div().flex_1())
-                .when_some(btn_el, |d, b| d.child(b))
-                .id(id)
-        };
         let left = div()
             .flex()
             .flex_col()
@@ -346,66 +321,10 @@ impl GitTabs {
                     .flex_1()
                     .min_h_0()
                     .child(
-                        div()
-                            .id("files-scroll")
-                            .size_full()
-                            .overflow_y_scroll()
+                        change_list
                             .track_scroll(&self.files_scroll)
-                            .pb(px(8.))
-                            .child(section(
-                                "sec-u",
-                                crate::i18n::t("未暫存"),
-                                un_n,
-                                (un_n > 0).then(|| {
-                                    btn(
-                                        &p,
-                                        "stage-all",
-                                        Bk::Normal,
-                                        true,
-                                        crate::i18n::t("全部 Stage"),
-                                    )
-                                    .on_click(cx.listener(|this, _, _, cx| this.stage_all(cx)))
-                                    .into_any_element()
-                                }),
-                            ))
-                            .child(un_tree)
-                            .when(un_n == 0, |d| {
-                                d.child(
-                                    div()
-                                        .px(px(16.))
-                                        .text_size(px(12.))
-                                        .text_color(p.faint)
-                                        .child(crate::i18n::t("（沒有）")),
-                                )
-                            })
-                            .child(section(
-                                "sec-s",
-                                crate::i18n::t("已暫存"),
-                                st_n,
-                                (st_n > 0).then(|| {
-                                    btn(
-                                        &p,
-                                        "unstage-all",
-                                        Bk::Normal,
-                                        true,
-                                        crate::i18n::t("全部取消"),
-                                    )
-                                    .on_click(cx.listener(|this, _, _, cx| this.unstage_all(cx)))
-                                    .into_any_element()
-                                }),
-                            ))
-                            .child(st_tree)
-                            .when(st_n == 0, |d| {
-                                d.child(
-                                    div()
-                                        .px(px(16.))
-                                        .text_size(px(12.))
-                                        .text_color(p.faint)
-                                        .child(crate::i18n::t(
-                                            "（沒有。按 Stage 把要 commit 的檔案放進來）",
-                                        )),
-                                )
-                            }),
+                            .size_full()
+                            .pb(px(8.)),
                     )
                     .vertical_scrollbar(&self.files_scroll),
             )
@@ -513,6 +432,7 @@ impl GitTabs {
                     cx.listener(|this, _: &ToggleSeenAction, _, cx| this.toggle_seen(true, cx)),
                 )
                 .on_action(cx.listener(|this, _: &StageToggle, _, cx| this.stage_toggle(cx)))
+                .on_action(cx.listener(|this, _: &SelectAllFiles, _, cx| this.select_all_files(cx)))
                 .child(diff_side),
         );
         div()

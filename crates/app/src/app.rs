@@ -42,6 +42,7 @@ mod acts {
             PreviousHunk,
             ToggleSeenAction,
             StageToggle,
+            SelectAllFiles,
             NextTab,
             PreviousTab,
             PaletteDown,
@@ -118,6 +119,8 @@ pub struct GitTabs {
     pub git_version: String,
     pub seen: HashMap<String, String>,
     pub collapsed: HashSet<String>,
+    /// Files picked together in one list of the Changes view (Ctrl+A, Ctrl/Shift+click).
+    pub multi: Option<(ListKind, HashSet<String>)>,
     pub folded: HashSet<String>,
     pub window_size: gpui_kit::Size<gpui_kit::Pixels>,
     /// Where the window is, to open it there again next time.
@@ -130,7 +133,7 @@ pub struct GitTabs {
     pub pending_first_run: Option<Vec<gitcore::config::Identity>>,
     pub tab_scroll: gpui_kit::ScrollHandle,
     pub side_scroll: gpui_kit::ScrollHandle,
-    pub files_scroll: gpui_kit::ScrollHandle,
+    pub files_scroll: gpui_kit::UniformListScrollHandle,
     pub detail_scroll: gpui_kit::ScrollHandle,
     pub commit_scroll: gpui_kit::UniformListScrollHandle,
     pub ftree_scroll: gpui_kit::UniformListScrollHandle,
@@ -317,6 +320,7 @@ impl GitTabs {
             git_version: String::new(),
             seen,
             collapsed: HashSet::new(),
+            multi: None,
             folded: HashSet::from(["Tags".to_string()]),
             window_size: window.viewport_size(),
             window_place,
@@ -1259,10 +1263,99 @@ impl GitTabs {
     }
 
     pub fn select(&mut self, list: ListKind, path: String, cx: &mut Context<Self>) {
+        self.multi = None;
         if let Some(r) = self.repo_mut() {
             r.sel = Some(Sel { list, path });
         }
         self.load_diff(cx);
+        cx.notify();
+    }
+
+    /// The picked files of `list` as a set, for drawing (it is not checked against the lists).
+    pub fn multi_set(&self, list: ListKind) -> HashSet<String> {
+        match &self.multi {
+            Some((k, set)) if *k == list => set.clone(),
+            _ => HashSet::new(),
+        }
+    }
+
+    /// The files picked together in `list`, limited to files that are still listed there.
+    pub fn multi_paths(&self, list: ListKind) -> Vec<String> {
+        let (Some((k, set)), Some(r)) = (&self.multi, self.repo()) else {
+            return vec![];
+        };
+        if *k != list {
+            return vec![];
+        }
+        Self::ordered_files(r)
+            .into_iter()
+            .filter(|f| f.list == list && set.contains(&f.path))
+            .map(|f| f.path)
+            .collect()
+    }
+
+    /// Ctrl+A: picks every file of the list the open file is in (the unstaged one by default).
+    pub fn select_all_files(&mut self, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        if r.view != View::Changes {
+            return;
+        }
+        let list = match r.sel.as_ref().map(|s| s.list) {
+            Some(ListKind::S) => ListKind::S,
+            _ => ListKind::U,
+        };
+        let set: HashSet<String> = Self::ordered_files(r)
+            .into_iter()
+            .filter(|f| f.list == list)
+            .map(|f| f.path)
+            .collect();
+        self.multi = (!set.is_empty()).then_some((list, set));
+        cx.notify();
+    }
+
+    /// Ctrl+click: adds the file to the picked ones, or takes it out.
+    pub fn toggle_multi(&mut self, list: ListKind, path: String, cx: &mut Context<Self>) {
+        let mut set = match self.multi.take() {
+            Some((k, s)) if k == list => s,
+            _ => {
+                // The open file is the first pick.
+                let mut s = HashSet::new();
+                if let Some(sel) = self
+                    .repo()
+                    .and_then(|r| r.sel.clone())
+                    .filter(|s| s.list == list)
+                {
+                    s.insert(sel.path);
+                }
+                s
+            }
+        };
+        if !set.remove(&path) {
+            set.insert(path);
+        }
+        self.multi = (!set.is_empty()).then_some((list, set));
+        cx.notify();
+    }
+
+    /// Shift+click: picks everything between the open file and this one.
+    pub fn range_multi(&mut self, list: ListKind, path: String, cx: &mut Context<Self>) {
+        let Some(r) = self.repo() else { return };
+        let files: Vec<String> = Self::ordered_files(r)
+            .into_iter()
+            .filter(|f| f.list == list)
+            .map(|f| f.path)
+            .collect();
+        let from = r
+            .sel
+            .as_ref()
+            .filter(|s| s.list == list)
+            .and_then(|s| files.iter().position(|p| *p == s.path));
+        let to = files.iter().position(|p| *p == path);
+        let (Some(a), Some(b)) = (from.or(to), to) else {
+            return;
+        };
+        let (lo, hi) = (a.min(b), a.max(b));
+        self.multi = Some((list, files[lo..=hi].iter().cloned().collect()));
         cx.notify();
     }
 
@@ -1279,6 +1372,9 @@ impl GitTabs {
             .map_or(0, |i| i as isize);
         let j = (i + d).clamp(0, files.len() as isize - 1) as usize;
         let f = files[j].clone();
+        if self.repo().is_some_and(|r| r.view == View::Changes) {
+            self.scroll_to_change(f.list, &f.path);
+        }
         self.select(f.list, f.path, cx);
     }
 
@@ -1978,6 +2074,25 @@ pub fn window_fits(place: &WindowPlace, screens: &[[f32; 4]]) -> bool {
             .any(|[sx, sy, sw, sh]| gx >= *sx && gx < sx + sw && gy >= *sy && gy < sy + sh)
 }
 
+/// Pulls a saved window back onto the screen its title bar is on: no larger than that screen, and
+/// with every edge inside it. The drag area sits at the right end of the tab row, so a window that
+/// hangs over the screen's edge could not be grabbed and moved back.
+pub fn clamp_to_screen(rect: [f32; 4], screens: &[[f32; 4]]) -> [f32; 4] {
+    let [x, y, w, h] = rect;
+    let (gx, gy) = (x + w / 2., y + 12.);
+    let Some([sx, sy, sw, sh]) = screens
+        .iter()
+        .copied()
+        .find(|[sx, sy, sw, sh]| gx >= *sx && gx < sx + sw && gy >= *sy && gy < sy + sh)
+    else {
+        return rect;
+    };
+    let (w, h) = (w.min(sw), h.min(sh));
+    let x = x.clamp(sx, sx + sw - w);
+    let y = y.clamp(sy, sy + sh - h);
+    [x, y, w, h]
+}
+
 /// The bounds to open the window with.
 pub fn initial_window(saved: Option<WindowPlace>, cx: &gpui_kit::App) -> gpui_kit::WindowBounds {
     use gpui_kit::{Bounds, WindowBounds, point, px, size};
@@ -1995,7 +2110,7 @@ pub fn initial_window(saved: Option<WindowPlace>, cx: &gpui_kit::App) -> gpui_ki
         })
         .collect();
     if let Some(p) = saved.filter(|p| window_fits(p, &screens)) {
-        let [x, y, w, h] = p.rect;
+        let [x, y, w, h] = clamp_to_screen(p.rect, &screens);
         let b = Bounds::new(point(px(x), px(y)), size(px(w), px(h)));
         return if p.maximized {
             WindowBounds::Maximized(b)
@@ -2064,6 +2179,23 @@ mod tests {
         assert_eq!(default_window_size(Some((2560., 1440.))), (1400., 900.));
         assert_eq!(default_window_size(Some((1024., 768.))), (984., 678.));
         assert_eq!(default_window_size(None), (1400., 900.));
+    }
+
+    #[test]
+    fn a_saved_window_is_pulled_back_inside_its_screen() {
+        let one = [0., 0., 1920., 1080.];
+        assert_eq!(
+            clamp_to_screen([900., 300., 1400., 900.], &[one]),
+            [520., 180., 1400., 900.]
+        );
+        assert_eq!(
+            clamp_to_screen([100., 50., 3000., 2000.], &[one]),
+            [0., 0., 1920., 1080.]
+        );
+        assert_eq!(
+            clamp_to_screen([100., 100., 800., 600.], &[one]),
+            [100., 100., 800., 600.]
+        );
     }
 
     #[test]
