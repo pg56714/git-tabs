@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.15.0 (2026-11-24)
+
+### Features
+
+- **changes:** pick files with Ctrl+A or Ctrl/Shift+click and stage or discard them together, draw only the rows in view, scroll to the file the arrow keys select, and keep a restored window on screen ([e7376c3](https://github.com/pg56714/git-tabs/commit/e7376c303d72f1cf943afde2404a60b6edbcda37))
+
+### Fixes
+
+- **git:** run stage, unstage and discard in batches so thousands of files do not overflow the Windows command line ([bf5d2e1](https://github.com/pg56714/git-tabs/commit/bf5d2e196d2cb4dac3fea045d7fb3f3933d3c0d3))
+
+### Other
+
+- ignore node_modules and src-tauri again ([3ab0a61](https://github.com/pg56714/git-tabs/commit/3ab0a61182f0ad4aacebe88dce283fe00e582cbf))
+- drop the leftover node_modules and src-tauri ignores ([a428c09](https://github.com/pg56714/git-tabs/commit/a428c09c4de76651d167e15a71db595a2351f8d4))
+- ignore node_modules and leftover src-tauri output ([75e2bdc](https://github.com/pg56714/git-tabs/commit/75e2bdc02ac6a8040b6cc24a6f003cc469eb0c48))
+
 ## v0.14.0 (2026-11-20)
 
 ### Features
