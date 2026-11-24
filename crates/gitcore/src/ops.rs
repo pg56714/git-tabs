@@ -346,40 +346,70 @@ fn changed_files(repo: &Path, a: &str, b: Option<&str>) -> Result<Vec<ChangedFil
 
 // ---------- staging ----------
 
+/// Runs `git <head> -- <paths>` in batches: the command line may not pass ~32k characters on
+/// Windows (os error 206), and thousands of paths do.
+fn write_chunked<'a>(
+    repo: &Path,
+    head: &[&str],
+    paths: impl IntoIterator<Item = &'a String>,
+) -> Result<(), String> {
+    const LIMIT: usize = 24_000;
+    fn flush<'a>(repo: &Path, head: &[&'a str], batch: &mut Vec<&'a str>) -> Result<(), String> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+        let mut args: Vec<&str> = head.to_vec();
+        args.push("--");
+        args.append(batch);
+        write(repo, &args).map(|_| ())
+    }
+    let mut batch: Vec<&str> = Vec::new();
+    let mut len = 0;
+    for p in paths {
+        if len + p.len() + 1 > LIMIT {
+            flush(repo, head, &mut batch)?;
+            len = 0;
+        }
+        len += p.len() + 1;
+        batch.push(p.as_str());
+    }
+    flush(repo, head, &mut batch)
+}
+
 pub fn stage(repo: &Path, paths: &[String]) -> Result<(), String> {
-    let mut args = vec!["--literal-pathspecs", "add", "-A", "--"];
-    args.extend(paths.iter().map(String::as_str));
-    write(repo, &args).map(|_| ())
+    write_chunked(repo, &["--literal-pathspecs", "add", "-A"], paths)
 }
 
 pub fn unstage(repo: &Path, paths: &[String]) -> Result<(), String> {
     let has_head = read(repo, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok();
-    let mut args = if has_head {
-        vec!["--literal-pathspecs", "restore", "--staged", "--"]
+    let head: &[&str] = if has_head {
+        &["--literal-pathspecs", "restore", "--staged"]
     } else {
-        vec!["--literal-pathspecs", "rm", "--cached", "-r", "-q", "--"]
+        &["--literal-pathspecs", "rm", "--cached", "-r", "-q"]
     };
-    args.extend(paths.iter().map(String::as_str));
-    write(repo, &args).map(|_| ())
+    write_chunked(repo, head, paths)
 }
 
 /// Throws away worktree changes. Untracked files are deleted.
 pub fn discard(repo: &Path, paths: &[String]) -> Result<(), String> {
     let st = status(repo)?;
-    let (untracked, tracked): (Vec<&String>, Vec<&String>) = paths
+    let new: std::collections::HashSet<&str> = st
         .iter()
-        .partition(|p| st.iter().any(|s| s.untracked && &s.path == *p));
-    if !tracked.is_empty() {
-        let mut args = vec!["--literal-pathspecs", "restore", "--worktree", "--"];
-        args.extend(tracked.iter().map(|s| s.as_str()));
-        write(repo, &args)?;
-    }
-    if !untracked.is_empty() {
-        let mut args = vec!["--literal-pathspecs", "clean", "-f", "-q", "--"];
-        args.extend(untracked.iter().map(|s| s.as_str()));
-        write(repo, &args)?;
-    }
-    Ok(())
+        .filter(|s| s.untracked)
+        .map(|s| s.path.as_str())
+        .collect();
+    let (untracked, tracked): (Vec<&String>, Vec<&String>) =
+        paths.iter().partition(|p| new.contains(p.as_str()));
+    write_chunked(
+        repo,
+        &["--literal-pathspecs", "restore", "--worktree"],
+        tracked,
+    )?;
+    write_chunked(
+        repo,
+        &["--literal-pathspecs", "clean", "-f", "-q"],
+        untracked,
+    )
 }
 
 #[derive(Clone, Copy, PartialEq, serde::Deserialize)]

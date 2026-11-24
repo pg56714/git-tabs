@@ -1176,3 +1176,26 @@ fn a_file_name_with_brackets_is_that_file_and_not_a_pattern() {
 "
     );
 }
+
+/// Thousands of paths must not overflow the command line (Windows: os error 206).
+#[test]
+fn stage_unstage_and_discard_thousands_of_files_at_once() {
+    let _g = serial();
+    let (d, _ctx) = repo();
+    let dir = d
+        .path()
+        .join("a-rather-long-directory-name/with/a/few/levels/more");
+    std::fs::create_dir_all(&dir).unwrap();
+    let paths: Vec<String> = (0..1500)
+        .map(|i| {
+            let p =
+                format!("a-rather-long-directory-name/with/a/few/levels/more/file-number-{i}.txt");
+            std::fs::write(d.path().join(&p), "x").unwrap();
+            p
+        })
+        .collect();
+    gitcore::ops::stage(d.path(), &paths).unwrap();
+    gitcore::ops::unstage(d.path(), &paths).unwrap();
+    gitcore::ops::discard(d.path(), &paths).unwrap();
+    assert!(gitcore::ops::status(d.path()).unwrap().is_empty());
+}
