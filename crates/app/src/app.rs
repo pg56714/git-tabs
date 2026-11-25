@@ -156,6 +156,10 @@ pub struct GitTabs {
     pub update: Option<gitcore::update::Release>,
     pub updating: bool,
     pub checking: bool,
+    /// Ticks left until the start-up update check is tried again after it failed.
+    pub update_retry: Option<u64>,
+    /// How many times that check has failed since start.
+    pub update_fails: usize,
     _subs: Vec<Subscription>,
     diff_subs: Vec<Subscription>,
 }
@@ -356,6 +360,8 @@ impl GitTabs {
             update: None,
             updating: false,
             checking: false,
+            update_retry: None,
+            update_fails: 0,
             _subs: subs,
             diff_subs,
         };
@@ -877,9 +883,18 @@ impl GitTabs {
         if self.avatars.take_changed() {
             cx.notify();
         }
-        // Once at start, once the window is up; after that only when asked for in the settings.
+        // Once at start, once the window is up; after that only when asked for in the settings,
+        // or again later when the start-up check could not reach the server.
         if self.ticks == 2 {
             self.check_update(false, cx);
+        }
+        match self.update_retry {
+            Some(n) if n <= 1 => {
+                self.update_retry = None;
+                self.check_update(false, cx);
+            }
+            Some(n) => self.update_retry = Some(n - 1),
+            None => {}
         }
         if self.ticks.is_multiple_of(6) {
             if let Some(r) = self.repo()

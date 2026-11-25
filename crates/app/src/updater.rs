@@ -12,6 +12,9 @@ use crate::ui::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Waits, in 5 s ticks, before the 1st, 2nd and 3rd retry of a failed start-up check.
+const RETRY_TICKS: [u64; 3] = [12, 60, 360];
+
 impl GitTabs {
     /// Looks for a newer release in the background. At start it says nothing when there is none
     /// or the network is down; when asked for (`manual`) it always answers.
@@ -47,6 +50,14 @@ impl GitTabs {
                     ),
                     Err(e) if manual => {
                         this.toast(crate::i18n::t("檢查更新失敗"), ToastKind::Err, Some(e), cx)
+                    }
+                    Err(e) => {
+                        crate::debug::log("update", || format!("check failed: {e}"));
+                        // Quietly again after 1, 5 and 30 minutes (a tick is 5 s).
+                        if let Some(&ticks) = RETRY_TICKS.get(this.update_fails) {
+                            this.update_retry = Some(ticks);
+                        }
+                        this.update_fails += 1;
                     }
                     _ => {}
                 }
