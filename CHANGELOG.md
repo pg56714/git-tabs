@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.15.1 (2026-11-25)
+
+### Fixes
+
+- **update:** try the start-up update check again after 1, 5 and 30 minutes when it could not reach GitHub, and log why it failed ([fdbc90c](https://github.com/pg56714/git-tabs/commit/fdbc90c9cc0e094476877334dd89a2368fe1ae42))
+
 ## v0.15.0 (2026-11-24)
 
 ### Features
